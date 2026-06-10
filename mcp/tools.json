@@ -1,0 +1,16 @@
+[
+  {"name": "create_client", "route": "POST /api/v1/clients", "scope": "taxplan:advisor"},
+  {"name": "upload_return_document", "route": "POST /api/v1/client-tax-years/{id}/documents/form-1040", "scope": "taxplan:advisor"},
+  {"name": "get_extracted_return", "route": "GET /api/v1/extracted-returns/{id}", "scope": "taxplan:advisor"},
+  {"name": "correct_extracted_field", "route": "PATCH /api/v1/extracted-fields/{id}", "scope": "taxplan:advisor"},
+  {"name": "confirm_return", "route": "POST /api/v1/extracted-returns/{id}/confirm", "scope": "taxplan:advisor"},
+  {"name": "create_tax_plan", "route": "POST /api/v1/plans", "scope": "taxplan:advisor"},
+  {"name": "update_scenario_assumptions", "route": "PATCH /api/v1/plans/{id}/assumptions", "scope": "taxplan:advisor"},
+  {"name": "list_strategy_library", "route": "GET /api/v1/strategy-library", "scope": "taxplan:advisor"},
+  {"name": "add_client_strategy", "route": "POST /api/v1/plans/{id}/strategies", "scope": "taxplan:advisor"},
+  {"name": "compute_quarterly", "route": "POST /api/v1/quarterly/{id}/compute", "scope": "taxplan:advisor"},
+  {"name": "generate_plan_pdf", "route": "POST /api/v1/plans/{id}/pdf", "scope": "taxplan:advisor"},
+  {"name": "upsert_strategy_library", "route": "PUT /api/v1/admin/strategy-library", "scope": "taxplan:admin"},
+  {"name": "upsert_tax_bracket_set", "route": "PUT /api/v1/admin/tax-bracket-sets", "scope": "taxplan:admin"},
+  {"name": "scan_book", "route": "GET /api/v1/agents/scan-book", "scope": "taxplan:advisor"}
+]
