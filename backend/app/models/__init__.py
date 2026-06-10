@@ -1,4 +1,5 @@
 from app.db.base import Base
+from app.models.branding import WorkspaceBranding
 from app.models.client import Client
 from app.models.strategy import ClientStrategy, StrategyLibrary
 from app.models.tax_config import TaxBracketRow, TaxBracketSet
@@ -8,6 +9,7 @@ from app.models.tax_year import (
     Document,
     ExtractedField,
     ExtractedReturn,
+    PlanDocument,
     QuarterlyRecord,
     TaxSituationSnapshot,
 )
@@ -28,4 +30,6 @@ __all__ = [
     "TaxBracketSet",
     "TaxSituationSnapshot",
     "Workspace",
+    "PlanDocument",
+    "WorkspaceBranding",
 ]

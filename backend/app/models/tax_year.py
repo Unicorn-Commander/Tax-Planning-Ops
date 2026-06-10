@@ -148,3 +148,16 @@ class QuarterlyRecord(IdMixin, WorkspaceScopedMixin, TimestampMixin, Base):
     payment_made_cents: Mapped[int] = mapped_column(nullable=False, default=0)
     unpaid_rollforward_cents: Mapped[int] = mapped_column(nullable=False, default=0)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="projected")
+
+
+class PlanDocument(IdMixin, WorkspaceScopedMixin, TimestampMixin, Base):
+    __tablename__ = "plan_document"
+    __table_args__ = (Index("ix_plan_document_workspace_id", "workspace_id"),)
+
+    client_tax_year_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("client_tax_year.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    garage_key: Mapped[str] = mapped_column(Text, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)

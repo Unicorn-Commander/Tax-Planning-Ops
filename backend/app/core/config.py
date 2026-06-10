@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     GARAGE_BUCKET: str = "tax-planning-ops"
     OCR_QWENVL_URL: str = ""
     OCR_QWENVL_ENABLED: bool = False
+    PDF_SERVICE_URL: str = ""
 
     @field_validator("KEYCLOAK_JWKS_URL", mode="before")
     @classmethod
