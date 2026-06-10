@@ -20,6 +20,15 @@ class Settings(BaseSettings):
     ENV: Literal["dev", "test", "staging", "prod"] = "dev"
     DEBUG: bool = False
 
+    @field_validator("ENV", mode="before")
+    @classmethod
+    def _normalize_env(cls, value: str) -> str:
+        # Accept common aliases ("production"/"development") and normalize to the
+        # canonical set — deploy tooling/compose often passes the long form.
+        return {"production": "prod", "development": "dev", "stage": "staging"}.get(
+            str(value).lower(), str(value).lower()
+        )
+
     DATABASE_URL: str = Field(
         default="postgresql+asyncpg://tax_planning_ops_app:dev@localhost:55432/tax_planning_ops",
         description="Async DSN for the NOBYPASSRLS tax_planning_ops_app role.",
