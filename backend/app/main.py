@@ -13,6 +13,7 @@ from app.api.health import router as health_router
 from app.api.me import router as me_router
 from app.api.plans import router as plans_router
 from app.api.returns import router as returns_router
+from app.api.strategies import router as strategies_router
 from app.core.auth import JWTAuthMiddleware
 from app.core.config import get_settings
 from app.db.session import close_db
@@ -42,6 +43,7 @@ def create_app() -> FastAPI:
     app.include_router(clients_router, prefix="/api/v1")
     app.include_router(returns_router, prefix="/api/v1")
     app.include_router(plans_router, prefix="/api/v1")
+    app.include_router(strategies_router, prefix="/api/v1")
     return app
 
 

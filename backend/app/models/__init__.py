@@ -1,5 +1,6 @@
 from app.db.base import Base
 from app.models.client import Client
+from app.models.strategy import ClientStrategy, StrategyLibrary
 from app.models.tax_config import TaxBracketRow, TaxBracketSet
 from app.models.tax_year import (
     AuditJournal,
@@ -15,10 +16,12 @@ __all__ = [
     "AuditJournal",
     "Base",
     "Client",
+    "ClientStrategy",
     "ClientTaxYear",
     "Document",
     "ExtractedField",
     "ExtractedReturn",
+    "StrategyLibrary",
     "TaxBracketRow",
     "TaxBracketSet",
     "TaxSituationSnapshot",
