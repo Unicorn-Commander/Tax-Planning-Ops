@@ -48,6 +48,13 @@ class Settings(BaseSettings):
     CONTROL_PLANE_TOKEN: str = ""
     ENTITLEMENT_CHECK_ENABLED: bool = False
 
+    GARAGE_ENDPOINT: str = "http://unicorn-garage:3900"
+    GARAGE_ACCESS_KEY: str = ""
+    GARAGE_SECRET_KEY: str = ""
+    GARAGE_BUCKET: str = "tax-planning-ops"
+    OCR_QWENVL_URL: str = ""
+    OCR_QWENVL_ENABLED: bool = False
+
     @field_validator("KEYCLOAK_JWKS_URL", mode="before")
     @classmethod
     def derive_jwks_url(cls, value: str, info) -> str:  # type: ignore[no-untyped-def]

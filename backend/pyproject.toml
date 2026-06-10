@@ -32,5 +32,6 @@ plugins = ["pydantic.mypy"]
 module = [
     "jose",
     "jose.*",
+    "boto3",
 ]
 ignore_missing_imports = true
