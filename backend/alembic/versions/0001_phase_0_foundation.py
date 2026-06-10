@@ -82,8 +82,24 @@ def upgrade() -> None:
     op.execute("ALTER TABLE workspaces OWNER TO tax_planning_ops_owner")
     op.execute("ALTER TABLE client OWNER TO tax_planning_ops_owner")
     op.execute("GRANT USAGE ON SCHEMA public TO tax_planning_ops_app")
-    op.execute("GRANT SELECT ON workspaces TO tax_planning_ops_app")
+    # The app role may read + provision ONLY its own workspace mirror row
+    # (id from the verified JWT claim). No UPDATE/DELETE: control-plane owns it.
+    op.execute("GRANT SELECT, INSERT ON workspaces TO tax_planning_ops_app")
     op.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON client TO tax_planning_ops_app")
+
+    # RLS on the workspaces mirror: a tenant can see/insert only its own row
+    # (prevents cross-tenant enumeration of firm names + entitlement_flags).
+    # FK checks from child tables bypass RLS, so child inserts keep working.
+    op.execute("ALTER TABLE workspaces ENABLE ROW LEVEL SECURITY")
+    op.execute("ALTER TABLE workspaces FORCE ROW LEVEL SECURITY")
+    op.execute(
+        """
+        CREATE POLICY workspaces_self_isolation ON workspaces
+        FOR ALL TO tax_planning_ops_app
+        USING (id = current_workspace_id())
+        WITH CHECK (id = current_workspace_id())
+        """
+    )
 
     for table in WORKSPACE_TABLES:
         op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
@@ -99,6 +115,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.execute("DROP POLICY IF EXISTS workspaces_self_isolation ON workspaces")
     for table in reversed(WORKSPACE_TABLES):
         op.execute(f"DROP POLICY IF EXISTS {table}_workspace_isolation ON {table}")
         op.execute(f"ALTER TABLE {table} DISABLE ROW LEVEL SECURITY")

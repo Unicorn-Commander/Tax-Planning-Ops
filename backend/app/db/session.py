@@ -60,6 +60,30 @@ async def bind_session_context(
     )
 
 
+# Workspaces provisioned this process (skip the upsert after first sight).
+_provisioned: set[str] = set()
+
+
+async def ensure_workspace(session: AsyncSession, workspace_id: str, name: str | None) -> None:
+    """Mirror the control-plane workspace row on first authenticated use.
+
+    The id comes from the verified JWT claim, and the RLS WITH CHECK on
+    `workspaces` guarantees a token can only create its OWN row. Idempotent;
+    cached per process. This is what lets a brand-new firm transact without an
+    out-of-band provisioning step.
+    """
+    if workspace_id in _provisioned:
+        return
+    await session.execute(
+        text(
+            "INSERT INTO workspaces (id, name) VALUES (:id, :name) "
+            "ON CONFLICT (id) DO NOTHING"
+        ),
+        {"id": workspace_id, "name": name or f"Workspace {workspace_id[:8]}"},
+    )
+    _provisioned.add(workspace_id)
+
+
 def get_auth_context(request: Request) -> AuthContext:
     ctx = getattr(request.state, "auth_context", None)
     if not isinstance(ctx, AuthContext):
@@ -87,6 +111,8 @@ async def get_tenant_db(
     ctx = get_auth_context(request)
     async with async_session_maker() as session:
         await bind_session_context(session, str(ctx.workspace_id), ctx.uc_uid, settings)
+        workspace_name = ctx.claims.get("workspace_name") or ctx.claims.get("tenant_name")
+        await ensure_workspace(session, str(ctx.workspace_id), workspace_name)
         try:
             yield session
             await session.commit()

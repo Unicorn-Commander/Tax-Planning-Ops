@@ -4,13 +4,12 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.models.tax_config import TaxBracketSet
 from app.models.tax_year import ClientTaxYear
 from app.services.audit import append_audit_event, verify_audit_chain
+from app.services.tax_config import resolve_bracket_set
 
 
 def bracket_snapshot(bracket_set: TaxBracketSet) -> dict[str, Any]:
@@ -43,15 +42,8 @@ async def finalize_plan(
     plan = await db.get(ClientTaxYear, plan_tax_year_id)
     if plan is None or plan.role != "plan":
         raise LookupError("plan year not found")
-    bracket_set = await db.scalar(
-        select(TaxBracketSet)
-        .options(selectinload(TaxBracketSet.rows))
-        .where(
-            TaxBracketSet.workspace_id.is_(None),
-            TaxBracketSet.tax_year == plan.tax_year,
-            TaxBracketSet.jurisdiction == "federal",
-            TaxBracketSet.filing_status == plan.filing_status,
-        )
+    bracket_set = await resolve_bracket_set(
+        db, tax_year=plan.tax_year, filing_status=plan.filing_status
     )
     if bracket_set is None:
         raise LookupError("tax bracket set not found")

@@ -4,15 +4,14 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.engines.quarterly import QuarterlyConfig, QuarterlyInput, compute_quarterly
-from app.models.tax_config import TaxBracketSet
 from app.models.tax_year import ClientTaxYear, QuarterlyRecord
 from app.schemas.quarterly import ComputeQuarterlyRequest
 from app.services.audit import append_audit_event
+from app.services.tax_config import resolve_bracket_set
 
 
 async def compute_quarterly_for_plan(
@@ -26,15 +25,8 @@ async def compute_quarterly_for_plan(
     plan_year = await db.get(ClientTaxYear, plan_tax_year_id)
     if plan_year is None or plan_year.role != "plan":
         raise LookupError("plan year not found")
-    bracket_set = await db.scalar(
-        select(TaxBracketSet)
-        .options(selectinload(TaxBracketSet.rows))
-        .where(
-            TaxBracketSet.workspace_id.is_(None),
-            TaxBracketSet.tax_year == plan_year.tax_year,
-            TaxBracketSet.jurisdiction == "federal",
-            TaxBracketSet.filing_status == plan_year.filing_status,
-        )
+    bracket_set = await resolve_bracket_set(
+        db, tax_year=plan_year.tax_year, filing_status=plan_year.filing_status
     )
     if bracket_set is None:
         raise LookupError("tax config not found")

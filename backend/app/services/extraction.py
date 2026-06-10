@@ -13,7 +13,6 @@ from app.core.config import Settings
 from app.engines.form1040 import Form1040Inputs, calculate_form1040
 from app.integrations.garage import put_object
 from app.integrations.ocr_qwenvl import extract_1040
-from app.models.tax_config import TaxBracketSet
 from app.models.tax_year import (
     ClientTaxYear,
     Document,
@@ -23,7 +22,7 @@ from app.models.tax_year import (
 )
 from app.schemas.extraction import ClientTaxYearCreate, CorrectFieldRequest
 from app.services.audit import append_audit_event
-from app.services.tax_config import to_engine_config
+from app.services.tax_config import resolve_bracket_set, to_engine_config
 
 FIELD_TO_INPUT = {
     "f1040.line1z_wages": "wages_cents",
@@ -225,15 +224,10 @@ async def confirm_return(
             "no field values present on this return; review/correct fields first "
             "or pass compute_anyway=true to confirm an empty baseline"
         )
-    bracket_set = await db.scalar(
-        select(TaxBracketSet)
-        .options(selectinload(TaxBracketSet.rows))
-        .where(
-            TaxBracketSet.workspace_id.is_(None),
-            TaxBracketSet.tax_year == tax_year.tax_year,
-            TaxBracketSet.jurisdiction == "federal",
-            TaxBracketSet.filing_status == tax_year.filing_status,
-        )
+    bracket_set = await resolve_bracket_set(
+        db,
+        tax_year=tax_year.tax_year,
+        filing_status=tax_year.filing_status,
     )
     if bracket_set is None:
         raise LookupError("tax bracket set not found")

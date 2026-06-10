@@ -26,12 +26,20 @@ def _scopes_from_claims(claims: dict[str, Any]) -> set[str]:
     return scopes
 
 
-def _claim_workspace_ids(claims: dict[str, Any]) -> set[UUID]:
+def _claim_workspace_ids(claims: dict[str, Any]) -> tuple[UUID | None, set[UUID]]:
+    """Return (primary, all-authorized). Primary = the token's `workspace_id`/
+    `tenant_id` claim, used as the deterministic default when no header is sent
+    (a set's iteration order is not stable, which previously made the default
+    workspace effectively random for multi-workspace users)."""
     ids: set[UUID] = set()
+    primary: UUID | None = None
     for key in ("workspace_id", "tenant_id"):
         value = claims.get(key)
         if value:
-            ids.add(UUID(str(value)))
+            parsed = UUID(str(value))
+            if primary is None:
+                primary = parsed
+            ids.add(parsed)
     for item in claims.get("workspaces") or claims.get("tenants") or []:
         if isinstance(item, dict):
             value = item.get("workspaceId") or item.get("workspace_id") or item.get("id")
@@ -39,19 +47,22 @@ def _claim_workspace_ids(claims: dict[str, Any]) -> set[UUID]:
             value = item
         if value:
             ids.add(UUID(str(value)))
-    return ids
+    return primary, ids
 
 
 def resolve_workspace_id(
     claims: dict[str, Any], header_workspace_id: str | None
 ) -> tuple[UUID, set[UUID]]:
-    authorized = _claim_workspace_ids(claims)
+    primary, authorized = _claim_workspace_ids(claims)
     if not authorized:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="workspace claim missing",
         )
-    selected = UUID(str(header_workspace_id)) if header_workspace_id else next(iter(authorized))
+    if header_workspace_id:
+        selected = UUID(str(header_workspace_id))
+    else:
+        selected = primary or sorted(authorized, key=str)[0]
     if selected not in authorized:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

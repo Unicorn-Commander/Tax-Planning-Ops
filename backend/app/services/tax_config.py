@@ -16,7 +16,8 @@ from app.schemas.tax_config import TaxBracketSetIn
 def _auxiliary_from_json(payload: dict[str, Any]) -> AuxiliaryConfig:
     niit = payload.get("niit") or {}
     medicare = payload.get("additional_medicare") or {}
-    return AuxiliaryConfig(
+    qbi = payload.get("qbi") or {}
+    aux = AuxiliaryConfig(
         ltcg_brackets=[RateBracket(**row) for row in payload.get("ltcg_brackets", [])],
         niit_threshold_cents=niit.get("threshold_cents"),
         niit_rate=Decimal(str(niit.get("rate", "0"))),
@@ -24,6 +25,9 @@ def _auxiliary_from_json(payload: dict[str, Any]) -> AuxiliaryConfig:
         additional_medicare_rate=Decimal(str(medicare.get("rate", "0"))),
         capital_loss_limit_cents=int(payload.get("capital_loss_limit_cents", 0)),
     )
+    if qbi.get("limit_rate") is not None:
+        aux.qbi_limit_rate = Decimal(str(qbi["limit_rate"]))
+    return aux
 
 
 def to_engine_config(bracket_set: TaxBracketSet) -> TaxConfig:
@@ -41,6 +45,30 @@ def to_engine_config(bracket_set: TaxBracketSet) -> TaxConfig:
         ],
         auxiliary=_auxiliary_from_json(bracket_set.auxiliary_schedules),
     )
+
+
+async def resolve_bracket_set(
+    db: AsyncSession,
+    *,
+    tax_year: int,
+    filing_status: str,
+    jurisdiction: str = "federal",
+) -> TaxBracketSet | None:
+    """Prefer a firm override (workspace_id set, visible via RLS) over the
+    suite-default seed (workspace_id IS NULL). RLS already scopes overrides to
+    the caller's workspace, so we order workspace_id NULLS LAST and take the
+    first match — the firm row wins when present, else the seed."""
+    result = await db.execute(
+        select(TaxBracketSet)
+        .options(selectinload(TaxBracketSet.rows))
+        .where(
+            TaxBracketSet.tax_year == tax_year,
+            TaxBracketSet.jurisdiction == jurisdiction,
+            TaxBracketSet.filing_status == filing_status,
+        )
+        .order_by(TaxBracketSet.workspace_id.is_(None))
+    )
+    return result.scalars().first()
 
 
 async def list_bracket_sets(

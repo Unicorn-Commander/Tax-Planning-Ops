@@ -6,7 +6,6 @@ from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.engines.form1040 import Form1040Inputs, Form1040Result
 from app.engines.projection import project_tax_situation
@@ -14,7 +13,7 @@ from app.models.tax_config import TaxBracketSet
 from app.models.tax_year import ClientTaxYear, TaxSituationSnapshot
 from app.schemas.plans import ProjectionSnapshotRead
 from app.services.audit import append_audit_event
-from app.services.tax_config import to_engine_config
+from app.services.tax_config import resolve_bracket_set, to_engine_config
 
 
 async def _bracket_set(
@@ -23,15 +22,8 @@ async def _bracket_set(
     tax_year: int,
     filing_status: str,
 ) -> TaxBracketSet:
-    bracket_set = await db.scalar(
-        select(TaxBracketSet)
-        .options(selectinload(TaxBracketSet.rows))
-        .where(
-            TaxBracketSet.workspace_id.is_(None),
-            TaxBracketSet.tax_year == tax_year,
-            TaxBracketSet.jurisdiction == "federal",
-            TaxBracketSet.filing_status == filing_status,
-        )
+    bracket_set = await resolve_bracket_set(
+        db, tax_year=tax_year, filing_status=filing_status
     )
     if bracket_set is None:
         raise LookupError("tax bracket set not found")
