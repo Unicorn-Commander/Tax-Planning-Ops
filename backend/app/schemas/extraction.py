@@ -1,16 +1,22 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
+FilingStatus = Literal["single", "mfj", "mfs", "hoh", "qss"]
 
 
 class ClientTaxYearCreate(BaseModel):
     client_id: UUID
-    tax_year: int
-    role: str = "base"
-    filing_status: str
+    tax_year: int = Field(ge=1900, le=2100)
+    # Only base (filed) years are created directly; plan/future years are
+    # created via /plans so their 4 quarterly rows + snapshots are seeded and
+    # their invariants hold. Validated as an enum to reject typos that would
+    # otherwise surface as a confusing "bracket set not found" 404 at confirm.
+    role: Literal["base"] = "base"
+    filing_status: FilingStatus
     notes: str | None = None
 
 

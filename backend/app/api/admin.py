@@ -24,11 +24,13 @@ async def get_tax_bracket_sets(
 @router.put("/tax-bracket-sets", response_model=TaxBracketSetOut)
 async def put_tax_bracket_set(
     payload: TaxBracketSetIn,
-    _ctx: AuthContext = Depends(require_scopes(("taxplan:admin",))),
+    ctx: AuthContext = Depends(require_scopes(("taxplan:admin",))),
     db: AsyncSession = Depends(get_tenant_db),
 ) -> TaxBracketSet:
     try:
-        return await upsert_bracket_set(db, payload)
+        return await upsert_bracket_set(
+            db, payload, workspace_id=ctx.workspace_id, actor_uc_uid=ctx.uc_uid
+        )
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

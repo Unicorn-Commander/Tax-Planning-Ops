@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from app.engines.form1040 import AuxiliaryConfig, RateBracket, TaxConfig, validate_brackets
 from app.models.tax_config import TaxBracketRow, TaxBracketSet
 from app.schemas.tax_config import TaxBracketSetIn
+from app.services.audit import append_audit_event
 
 
 def _auxiliary_from_json(payload: dict[str, Any]) -> AuxiliaryConfig:
@@ -83,7 +84,13 @@ async def list_bracket_sets(
     return list(result.scalars().unique().all())
 
 
-async def upsert_bracket_set(db: AsyncSession, payload: TaxBracketSetIn) -> TaxBracketSet:
+async def upsert_bracket_set(
+    db: AsyncSession,
+    payload: TaxBracketSetIn,
+    *,
+    workspace_id: UUID,
+    actor_uc_uid: str,
+) -> TaxBracketSet:
     validation = validate_brackets(
         [
             RateBracket(
@@ -97,20 +104,21 @@ async def upsert_bracket_set(db: AsyncSession, payload: TaxBracketSetIn) -> TaxB
     if not validation.valid:
         raise ValueError("; ".join(validation.errors))
 
+    # A firm only ever writes its OWN override (never the suite-default NULL
+    # seed, never another tenant's row). Ignore any workspace_id in the body.
     existing = await db.scalar(
         select(TaxBracketSet)
         .options(selectinload(TaxBracketSet.rows))
         .where(
-            TaxBracketSet.workspace_id.is_(None)
-            if payload.workspace_id is None
-            else TaxBracketSet.workspace_id == payload.workspace_id,
+            TaxBracketSet.workspace_id == workspace_id,
             TaxBracketSet.tax_year == payload.tax_year,
             TaxBracketSet.jurisdiction == payload.jurisdiction,
             TaxBracketSet.filing_status == payload.filing_status,
         )
     )
+    is_update = existing is not None
     bracket_set = existing or TaxBracketSet()
-    bracket_set.workspace_id = payload.workspace_id
+    bracket_set.workspace_id = workspace_id
     bracket_set.tax_year = payload.tax_year
     bracket_set.jurisdiction = payload.jurisdiction
     bracket_set.filing_status = payload.filing_status
@@ -132,4 +140,19 @@ async def upsert_bracket_set(db: AsyncSession, payload: TaxBracketSetIn) -> TaxB
         )
     await db.flush()
     await db.refresh(bracket_set, attribute_names=["rows"])
+    await append_audit_event(
+        db,
+        workspace_id=workspace_id,
+        actor_uc_uid=actor_uc_uid,
+        event_type="tax_bracket_set_updated" if is_update else "tax_bracket_set_created",
+        aggregate_type="tax_bracket_set",
+        aggregate_id=bracket_set.id,
+        payload={
+            "tax_year": payload.tax_year,
+            "jurisdiction": payload.jurisdiction,
+            "filing_status": payload.filing_status,
+            "standard_deduction_cents": payload.standard_deduction_cents,
+            "row_count": len(payload.rows),
+        },
+    )
     return bracket_set
