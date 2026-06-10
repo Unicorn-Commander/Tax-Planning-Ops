@@ -12,3 +12,5 @@ greenlet
 python-multipart
 arq
 boto3
+
+pypdf

@@ -68,6 +68,14 @@ class Settings(BaseSettings):
     PDF_SERVICE_URL: str = ""
     ACCOUNTING_OPS_URL: str = ""
 
+    # LLM gateway (LiteLLM, OpenAI-compatible). Drives OCR field-structuring +
+    # the planning agents. On the dev box: http://unicorn-litellm:4000/v1.
+    LLM_GATEWAY_URL: str = ""
+    LLM_API_KEY: str = ""
+    LLM_TEXT_MODEL: str = "qwen3.6-35b-a3b"
+    LLM_VISION_MODEL: str = "gemma4-26b-a4b"
+    LLM_TIMEOUT_SECONDS: float = 90.0
+
     @field_validator("KEYCLOAK_JWKS_URL", mode="before")
     @classmethod
     def derive_jwks_url(cls, value: str, info) -> str:  # type: ignore[no-untyped-def]

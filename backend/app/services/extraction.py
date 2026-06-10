@@ -105,7 +105,7 @@ async def upload_return_document(
     db.add(extracted)
     await db.flush()
 
-    ocr_payload = await extract_1040(stored.key, settings)
+    ocr_payload = await extract_1040(blob, settings)
     seen_keys: set[str] = set()
     if ocr_payload is None:
         document.status = "extracted"
