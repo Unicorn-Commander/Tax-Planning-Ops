@@ -1,0 +1,1 @@
+# keep public/ present for the Dockerfile production COPY
