@@ -27,6 +27,8 @@ class ClientTaxYear(IdMixin, WorkspaceScopedMixin, TimestampMixin, Base):
     filing_status: Mapped[str] = mapped_column(String(16), nullable=False)
     source_year_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     is_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    finalized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    pinned_bracket_config: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 

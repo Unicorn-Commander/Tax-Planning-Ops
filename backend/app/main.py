@@ -11,6 +11,7 @@ from app.api.agents import router as agents_router
 from app.api.auth import router as auth_router
 from app.api.clients import router as clients_router
 from app.api.health import router as health_router
+from app.api.lifecycle import router as lifecycle_router
 from app.api.me import router as me_router
 from app.api.pdf import router as pdf_router
 from app.api.plans import router as plans_router
@@ -41,6 +42,7 @@ def create_app() -> FastAPI:
     app.add_middleware(JWTAuthMiddleware, settings=settings)
     app.include_router(agents_router, prefix="/api/v1")
     app.include_router(auth_router, prefix="/api/v1")
+    app.include_router(lifecycle_router, prefix="/api/v1")
     app.include_router(admin_router, prefix="/api/v1")
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(me_router, prefix="/api/v1")
