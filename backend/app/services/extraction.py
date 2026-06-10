@@ -184,7 +184,11 @@ async def correct_field(
     field.corrected_value_cents = payload.corrected_value_cents
     if payload.value_text is not None:
         field.value_text = payload.value_text
-    field.status = "corrected"
+    if payload.corrected_value_cents is None:
+        # Clearing an override is not an override — don't fabricate a manual flag.
+        field.status = "auto" if field.value_cents is not None else "missing"
+    else:
+        field.status = "corrected"
     await db.flush()
     return field
 

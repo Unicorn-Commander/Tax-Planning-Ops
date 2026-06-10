@@ -13,7 +13,6 @@ import {
 import api from "@/lib/api";
 import { useAuthStore, type WorkspaceMembership } from "@/lib/store";
 import {
-  WORKSPACE_HEADER_NAME,
   clearWorkspaceStorage,
   getStoredWorkspaceId,
   getStoredWorkspaces,
@@ -57,12 +56,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         const ids = Array.isArray(response.data?.authorized_workspace_ids)
           ? response.data.authorized_workspace_ids
           : [];
-        const next = ids.map((id: string, index: number) => ({
+        const activeId = response.data?.workspace_id;
+        const next = ids.map((id: string) => ({
           workspaceId: id,
-          slug: `workspace-${index + 1}`,
-          displayName: index === 0 ? "Primary workspace" : `Workspace ${index + 1}`,
-          role: "advisor",
-          isDefault: id === response.data?.workspace_id,
+          // Honest label until the control-plane exposes workspace names — show
+          // the short id, not a fabricated "Primary workspace" ordinal.
+          displayName: id.slice(0, 8),
+          role: "member",
+          isDefault: id === activeId,
         }));
         setWorkspaces(next);
         setStoredWorkspaces(next);
@@ -81,30 +82,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const switchWorkspace = useCallback(
     (workspaceId: string) => {
       if (!workspaces.some((ws) => ws.workspaceId === workspaceId)) return;
-      setActiveWorkspaceId(workspaceId);
       setStoredWorkspaceId(workspaceId);
+      setActiveWorkspaceId(workspaceId);
+      // All API traffic goes through the axios instance, whose interceptor
+      // reads the stored workspace id; reload so every screen refetches under
+      // the newly selected workspace (previously the UI showed stale data).
+      if (typeof window !== "undefined") window.location.reload();
     },
     [workspaces],
   );
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const originalFetch = window.fetch;
-    window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-      const workspaceId = getStoredWorkspaceId();
-      if (workspaceId) {
-        const headers = new Headers(init?.headers ?? {});
-        if (!headers.has(WORKSPACE_HEADER_NAME)) {
-          headers.set(WORKSPACE_HEADER_NAME, workspaceId);
-        }
-        init = { ...init, headers };
-      }
-      return originalFetch(input, init);
-    };
-    return () => {
-      window.fetch = originalFetch;
-    };
-  }, [activeWorkspaceId]);
 
   const activeWorkspace = useMemo(
     () => workspaces.find((ws) => ws.workspaceId === activeWorkspaceId) ?? null,
