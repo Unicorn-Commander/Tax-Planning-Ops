@@ -1,0 +1,1 @@
+"""Thin substrate adapters."""

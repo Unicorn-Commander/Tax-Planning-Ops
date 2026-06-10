@@ -1,0 +1,28 @@
+{
+  "name": "tax-planning-ops",
+  "displayName": "Tax-Planning-Ops",
+  "version": "0.1.0",
+  "audience": "tax-planning-ops",
+  "requiredScopes": ["taxplan:advisor"],
+  "adminScopes": ["taxplan:admin"],
+  "tools": [
+    "create_client",
+    "upload_return_document",
+    "get_extracted_return",
+    "correct_extracted_field",
+    "confirm_return",
+    "create_tax_plan",
+    "get_projection",
+    "update_scenario_assumptions",
+    "list_strategy_library",
+    "add_client_strategy",
+    "set_strategy_status",
+    "compute_quarterly",
+    "record_quarterly_payment",
+    "generate_plan_pdf",
+    "upsert_strategy_library",
+    "upsert_tax_bracket_set",
+    "scan_book"
+  ],
+  "status": "phase-0-registered"
+}
