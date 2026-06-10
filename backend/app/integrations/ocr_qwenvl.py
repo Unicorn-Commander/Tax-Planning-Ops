@@ -68,8 +68,8 @@ async def extract_1040(pdf_bytes: bytes, settings: Settings) -> dict[str, Any] |
     parsed = await chat_json(
         settings,
         [{"role": "user", "content": _PROMPT + text[:24000]}],
-        model=settings.LLM_TEXT_MODEL,
-        max_tokens=800,
+        model=settings.LLM_OCR_MODEL,
+        max_tokens=900,
     )
     if not isinstance(parsed, dict):
         return None
@@ -94,7 +94,7 @@ async def extract_1040(pdf_bytes: bytes, settings: Settings) -> dict[str, Any] |
 
     return {
         "profile": PROFILE,
-        "extractor": f"text-layer+{settings.LLM_TEXT_MODEL}",
+        "extractor": f"text-layer+{settings.LLM_OCR_MODEL}",
         "overall_confidence": 0.92 if fields else 0.0,
         "fields": fields,
     }

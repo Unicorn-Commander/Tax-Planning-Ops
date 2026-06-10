@@ -72,8 +72,9 @@ class Settings(BaseSettings):
     # the planning agents. On the dev box: http://unicorn-litellm:4000/v1.
     LLM_GATEWAY_URL: str = ""
     LLM_API_KEY: str = ""
-    LLM_TEXT_MODEL: str = "qwen3.6-35b-a3b"
-    LLM_VISION_MODEL: str = "gemma4-26b-a4b"
+    LLM_TEXT_MODEL: str = "qwen3.6-35b-a3b"  # agents/reasoning (thinking helps)
+    LLM_VISION_MODEL: str = "gemma4-26b-a4b"  # image-scan fallback (omni)
+    LLM_OCR_MODEL: str = "gemma4-26b-a4b"  # 1040 field structuring — non-reasoning, deterministic
     LLM_TIMEOUT_SECONDS: float = 90.0
 
     @field_validator("KEYCLOAK_JWKS_URL", mode="before")
