@@ -125,3 +125,26 @@ class AuditJournal(IdMixin, WorkspaceScopedMixin, Base):
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     prev_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+
+
+class QuarterlyRecord(IdMixin, WorkspaceScopedMixin, TimestampMixin, Base):
+    __tablename__ = "quarterly_record"
+    __table_args__ = (
+        Index("ix_quarterly_record_workspace_id", "workspace_id"),
+        Index("ix_quarterly_record_plan_quarter", "client_tax_year_id", "quarter", unique=True),
+    )
+
+    client_tax_year_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("client_tax_year.id", ondelete="CASCADE"), nullable=False
+    )
+    quarter: Mapped[int] = mapped_column(Integer, nullable=False)
+    due_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    period_income_cents: Mapped[int] = mapped_column(nullable=False, default=0)
+    period_withholding_cents: Mapped[int] = mapped_column(nullable=False, default=0)
+    ytd_income_cents: Mapped[int] = mapped_column(nullable=False, default=0)
+    annualized_income_cents: Mapped[int] = mapped_column(nullable=False, default=0)
+    required_payment_cents: Mapped[int] = mapped_column(nullable=False, default=0)
+    safe_harbor_basis: Mapped[str] = mapped_column(String(32), nullable=False)
+    payment_made_cents: Mapped[int] = mapped_column(nullable=False, default=0)
+    unpaid_rollforward_cents: Mapped[int] = mapped_column(nullable=False, default=0)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="projected")

@@ -56,7 +56,12 @@ def _federal_aux(year: int, status: str) -> dict:
         ],
         "qbi": {"enabled": True},
         "salt": {"cap_cents": 1000000},
-        "safe_harbor": {"high_agi_threshold_cents": 15000000},
+        "safe_harbor": {
+            "current_year_rate": "0.9000",
+            "prior_year_rate": "1.0000",
+            "high_agi_prior_year_rate": "1.1000",
+            "high_agi_threshold_cents": 15000000,
+        },
         "quarterly_due_dates": [
             f"{year}-04-15",
             f"{year}-06-15",

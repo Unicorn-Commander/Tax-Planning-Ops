@@ -8,6 +8,7 @@ from app.models.tax_year import (
     Document,
     ExtractedField,
     ExtractedReturn,
+    QuarterlyRecord,
     TaxSituationSnapshot,
 )
 from app.models.workspace import Workspace
@@ -21,6 +22,7 @@ __all__ = [
     "Document",
     "ExtractedField",
     "ExtractedReturn",
+    "QuarterlyRecord",
     "StrategyLibrary",
     "TaxBracketRow",
     "TaxBracketSet",
