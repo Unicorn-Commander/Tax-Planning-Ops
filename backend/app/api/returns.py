@@ -13,6 +13,7 @@ from app.schemas.auth import AuthContext
 from app.schemas.extraction import (
     ClientTaxYearCreate,
     ClientTaxYearRead,
+    ConfirmReturnRequest,
     ConfirmReturnResponse,
     CorrectFieldRequest,
     ExtractedFieldRead,
@@ -96,6 +97,7 @@ async def patch_field(
 )
 async def post_confirm_return(
     extracted_return_id: UUID,
+    payload: ConfirmReturnRequest | None = None,
     ctx: AuthContext = Depends(require_scopes(("taxplan:advisor",))),
     db: AsyncSession = Depends(get_tenant_db),
 ) -> ConfirmReturnResponse:
@@ -105,9 +107,14 @@ async def post_confirm_return(
             workspace_id=ctx.workspace_id,
             actor_uc_uid=ctx.uc_uid,
             extracted_return_id=extracted_return_id,
+            compute_anyway=bool(payload and payload.compute_anyway),
         )
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
     return ConfirmReturnResponse(
         extracted_return_id=extracted_return_id,
         snapshot_id=snapshot.id,

@@ -45,6 +45,11 @@ FIELD_TO_INPUT = {
     "f1040.line24_total_tax": "reported_total_tax_cents",
 }
 
+# Every canonical 1040 line the review screen offers. Rows are pre-created on
+# upload (status "missing") so the advisor can hand-key a return even when OCR
+# is disabled or returned nothing for a line.
+CANONICAL_1040_FIELD_KEYS = tuple(FIELD_TO_INPUT.keys())
+
 
 async def create_tax_year(
     db: AsyncSession,
@@ -98,6 +103,7 @@ async def upload_return_document(
     await db.flush()
 
     ocr_payload = await extract_1040(stored.key, settings)
+    seen_keys: set[str] = set()
     if ocr_payload is None:
         document.status = "extracted"
         extracted.extraction_status = "needs_review"
@@ -110,10 +116,12 @@ async def upload_return_document(
         extracted.overall_confidence = float(ocr_payload.get("overall_confidence", 0))
         extracted.extraction_raw = ocr_payload
         for field in ocr_payload.get("fields", []):
+            key = str(field["field_key"])
+            seen_keys.add(key)
             db.add(
                 ExtractedField(
                     extracted_return_id=extracted.id,
-                    field_key=str(field["field_key"]),
+                    field_key=key,
                     value_cents=field.get("value_cents"),
                     value_text=field.get("value_text"),
                     confidence=float(field.get("confidence", 0)),
@@ -121,6 +129,22 @@ async def upload_return_document(
                     bbox=field.get("bbox"),
                 )
             )
+    # Pre-create every canonical line OCR did not return so the advisor can
+    # review and hand-key the full return (the degraded path creates all rows).
+    for key in CANONICAL_1040_FIELD_KEYS:
+        if key in seen_keys:
+            continue
+        db.add(
+            ExtractedField(
+                extracted_return_id=extracted.id,
+                field_key=key,
+                value_cents=None,
+                value_text=None,
+                confidence=0.0,
+                status="missing",
+                bbox=None,
+            )
+        )
     await append_audit_event(
         db,
         workspace_id=workspace_id,
@@ -168,11 +192,15 @@ def _inputs_from_fields(tax_year: ClientTaxYear, fields: list[ExtractedField]) -
         target = FIELD_TO_INPUT.get(field.field_key)
         if not target:
             continue
-        values[target] = (
+        value = (
             field.corrected_value_cents
             if field.corrected_value_cents is not None
             else field.value_cents
         )
+        if value is None:
+            # Unfilled canonical line (status "missing"): engine defaults apply.
+            continue
+        values[target] = value
     return Form1040Inputs(**values)
 
 
@@ -182,11 +210,21 @@ async def confirm_return(
     workspace_id: UUID,
     actor_uc_uid: str,
     extracted_return_id: UUID,
+    compute_anyway: bool = False,
 ) -> TaxSituationSnapshot:
     extracted = await get_extracted_return(db, extracted_return_id)
     tax_year = await db.get(ClientTaxYear, extracted.client_tax_year_id)
     if tax_year is None:
         raise LookupError("tax year not found")
+    has_any_value = any(
+        field.corrected_value_cents is not None or field.value_cents is not None
+        for field in extracted.fields
+    )
+    if not has_any_value and not compute_anyway:
+        raise ValueError(
+            "no field values present on this return; review/correct fields first "
+            "or pass compute_anyway=true to confirm an empty baseline"
+        )
     bracket_set = await db.scalar(
         select(TaxBracketSet)
         .options(selectinload(TaxBracketSet.rows))

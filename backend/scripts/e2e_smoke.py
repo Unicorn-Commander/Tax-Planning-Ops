@@ -104,10 +104,10 @@ def main() -> int:
     print(f"     extraction status={extraction.get('extraction_status')} fields={len(fields)}")
 
     corrections = {
-        "f1040.line1a_wages": 18500000,  # $185,000
+        "f1040.line1z_wages": 18500000,  # $185,000
         "f1040.line2b_taxable_interest": 120000,  # $1,200
-        "f1040.line3a_qualified_dividends": 350000,  # $3,500
-        "f1040.line3b_ordinary_dividends": 350000,
+        "f1040.line3a_qualified_div": 350000,  # $3,500
+        "f1040.line3b_ordinary_div": 350000,
         "f1040.line7_capital_gain": 1200000,  # $12,000 LTCG
         "f1040.line11_agi": 20170000,
         "f1040.line24_total_tax": 4000000,

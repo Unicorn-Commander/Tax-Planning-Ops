@@ -56,6 +56,13 @@ class CorrectFieldRequest(BaseModel):
     value_text: str | None = None
 
 
+class ConfirmReturnRequest(BaseModel):
+    # Explicit advisor acknowledgment required to confirm a baseline that has
+    # no field values at all (spec: nothing flows into the calc engine from an
+    # unconfirmed/empty base without an explicit "compute anyway" ack).
+    compute_anyway: bool = False
+
+
 class ConfirmReturnResponse(BaseModel):
     extracted_return_id: UUID
     snapshot_id: UUID
