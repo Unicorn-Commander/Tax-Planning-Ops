@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
 COPY requirements.in requirements.txt ./
 RUN pip install -r requirements.in
 COPY . .
+RUN chmod +x docker-entrypoint.sh
 
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["./docker-entrypoint.sh"]

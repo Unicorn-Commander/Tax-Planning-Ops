@@ -78,9 +78,12 @@ async def generate_plan_pdf(
     ).scalars().all()
     payload = assemble_plan_pdf_payload(
         branding=BrandingPayload(
-            firm_name=branding.firm_name,
+            firm_name=branding.firm_name or "Tax Planning Firm",
             logo_blob_key=branding.logo_blob_key,
-            primary_color=branding.primary_color,
+            primary_color=(
+                branding.primary_color
+                or BrandingPayload.model_fields["primary_color"].default
+            ),
             advisor_signature=branding.advisor_signature,
         ),
         client_name=client.display_name,

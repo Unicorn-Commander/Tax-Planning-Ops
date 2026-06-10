@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncGenerator
 
 from fastapi import Depends, HTTPException, Request, status
@@ -13,6 +14,13 @@ from app.schemas.auth import AuthContext
 _settings = get_settings()
 
 
+def _json_serializer(value: object) -> str:
+    # UUID/datetime/Decimal appear in JSONB payloads (audit, assumptions,
+    # extraction_raw); str-default here matches compute_audit_hash's
+    # canonicalization so stored payloads re-hash identically on verify.
+    return json.dumps(value, default=str)
+
+
 def _make_engine(dsn: str):  # type: ignore[no-untyped-def]
     return create_async_engine(
         dsn,
@@ -21,6 +29,7 @@ def _make_engine(dsn: str):  # type: ignore[no-untyped-def]
         pool_size=10,
         max_overflow=20,
         pool_recycle=3600,
+        json_serializer=_json_serializer,
     )
 
 

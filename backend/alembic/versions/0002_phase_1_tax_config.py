@@ -8,6 +8,7 @@ Create Date: 2026-06-10
 from __future__ import annotations
 
 from collections.abc import Sequence
+from decimal import Decimal
 import json
 
 from alembic import op
@@ -205,7 +206,14 @@ def upgrade() -> None:
                     VALUES
                         (CAST(:row_id AS uuid), CAST(:set_id AS uuid), :lo, :hi, :rate, :ordinal)
                     """
-                ).bindparams(row_id=row_id, set_id=set_id, lo=lo, hi=hi, rate=rate, ordinal=ordinal)
+                ).bindparams(
+                    sa.bindparam("row_id", value=row_id),
+                    sa.bindparam("set_id", value=set_id),
+                    sa.bindparam("lo", value=lo, type_=sa.BigInteger()),
+                    sa.bindparam("hi", value=hi, type_=sa.BigInteger()),
+                    sa.bindparam("rate", value=Decimal(rate), type_=sa.Numeric(5, 4)),
+                    sa.bindparam("ordinal", value=ordinal, type_=sa.Integer()),
+                )
             )
 
 

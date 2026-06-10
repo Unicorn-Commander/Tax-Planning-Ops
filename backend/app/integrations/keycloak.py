@@ -27,7 +27,13 @@ class KeycloakVerifier:
                 "iss": "standalone",
                 "aud": self.settings.KEYCLOAK_AUDIENCE,
             }
-        header = jwt.get_unverified_header(token)
+        try:
+            header = jwt.get_unverified_header(token)
+        except Exception as exc:  # noqa: BLE001 - malformed token must read as 401
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="invalid bearer token",
+            ) from exc
         key = await self._resolve_key(header.get("kid"))
         if key is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="unknown jwt key")

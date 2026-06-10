@@ -22,11 +22,26 @@ WORKSPACE_TABLES = ["client"]
 
 
 def upgrade() -> None:
-    op.execute("CREATE ROLE tax_planning_ops_owner LOGIN BYPASSRLS")
+    # Idempotent role creation: on deploys where Postgres is bootstrapped with
+    # POSTGRES_USER=tax_planning_ops_owner the owner role already exists, and
+    # roles are cluster-wide so re-runs must not fail.
     op.execute(
         """
-        CREATE ROLE tax_planning_ops_app
-        LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE
+        DO $$ BEGIN
+            IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'tax_planning_ops_owner') THEN
+                CREATE ROLE tax_planning_ops_owner LOGIN BYPASSRLS;
+            END IF;
+        END $$
+        """
+    )
+    op.execute(
+        """
+        DO $$ BEGIN
+            IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'tax_planning_ops_app') THEN
+                CREATE ROLE tax_planning_ops_app
+                LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+            END IF;
+        END $$
         """
     )
     op.execute(
@@ -91,5 +106,21 @@ def downgrade() -> None:
     op.drop_table("client")
     op.drop_table("workspaces")
     op.execute("DROP FUNCTION IF EXISTS current_workspace_id()")
-    op.execute("DROP ROLE IF EXISTS tax_planning_ops_app")
-    op.execute("DROP ROLE IF EXISTS tax_planning_ops_owner")
+    # Roles may be cluster-bootstrap roles (POSTGRES_USER) or own objects in
+    # other databases; never let a role drop block a downgrade.
+    op.execute(
+        """
+        DO $$ BEGIN
+            DROP ROLE IF EXISTS tax_planning_ops_app;
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END $$
+        """
+    )
+    op.execute(
+        """
+        DO $$ BEGIN
+            DROP ROLE IF EXISTS tax_planning_ops_owner;
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END $$
+        """
+    )

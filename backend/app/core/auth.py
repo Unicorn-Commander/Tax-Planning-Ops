@@ -6,7 +6,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, Request, status
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
-from starlette.responses import Response
+from starlette.responses import JSONResponse, Response
 
 from app.core.config import Settings
 from app.integrations.control_plane import check_entitlement
@@ -66,6 +66,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         "/openapi.json",
         "/redoc",
         "/livez",
+        "/api/v1/livez",
         "/api/v1/auth/keycloak",
     )
 
@@ -82,26 +83,38 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if request.method == "OPTIONS" or request.url.path.startswith(self.SKIP_PREFIXES):
             return await call_next(request)
-        auth_header = request.headers.get("Authorization", "")
-        if not auth_header.startswith("Bearer "):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="missing bearer token",
+        # HTTPException raised inside BaseHTTPMiddleware bypasses FastAPI's
+        # exception handlers (it would surface as a 500), so translate to a
+        # JSON response here.
+        try:
+            auth_header = request.headers.get("Authorization", "")
+            if not auth_header.startswith("Bearer "):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="missing bearer token",
+                )
+            claims = await self.verifier.verify(auth_header.removeprefix("Bearer ").strip())
+            workspace_id, authorized = resolve_workspace_id(
+                claims, request.headers.get(WORKSPACE_HEADER)
             )
-        claims = await self.verifier.verify(auth_header.removeprefix("Bearer ").strip())
-        workspace_id, authorized = resolve_workspace_id(
-            claims, request.headers.get(WORKSPACE_HEADER)
-        )
-        entitled = await check_entitlement(workspace_id, self.settings)
-        if not entitled:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="module not entitled")
-        request.state.auth_context = AuthContext(
-            claims=claims,
-            uc_uid=str(claims.get("uc_uid") or claims.get("sub") or ""),
-            workspace_id=workspace_id,
-            authorized_workspace_ids=authorized,
-            scopes=_scopes_from_claims(claims),
-        )
+            entitled = await check_entitlement(workspace_id, self.settings)
+            if not entitled:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, detail="module not entitled"
+                )
+            request.state.auth_context = AuthContext(
+                claims=claims,
+                uc_uid=str(claims.get("uc_uid") or claims.get("sub") or ""),
+                workspace_id=workspace_id,
+                authorized_workspace_ids=authorized,
+                scopes=_scopes_from_claims(claims),
+            )
+        except HTTPException as exc:
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={"detail": exc.detail},
+                headers={"WWW-Authenticate": "Bearer"} if exc.status_code == 401 else None,
+            )
         return await call_next(request)
 
 
