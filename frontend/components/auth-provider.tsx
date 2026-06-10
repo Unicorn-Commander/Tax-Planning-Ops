@@ -10,6 +10,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const setUser = useAuthStore((state) => state.setUser);
 
   useEffect(() => {
+    // Dev-only auto-login (gated by env; off in production). Lets local/headless
+    // previews render authed screens against a STANDALONE backend without the
+    // Keycloak round-trip.
+    if (
+      process.env.NEXT_PUBLIC_DEV_AUTOLOGIN === "1" &&
+      !localStorage.getItem("access_token")
+    ) {
+      localStorage.setItem("access_token", "dev");
+      localStorage.setItem(
+        "user",
+        JSON.stringify({ sub: "standalone-user", name: "Demo Advisor", email: "advisor@northstar.test" }),
+      );
+    }
     const token = localStorage.getItem("access_token");
     const userJson = localStorage.getItem("user");
     if (token && userJson) {
