@@ -56,14 +56,24 @@ async def post_form1040_document(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail="PDF required",
         )
-    return await upload_return_document(
-        db,
-        workspace_id=ctx.workspace_id,
-        actor_uc_uid=ctx.uc_uid,
-        client_tax_year_id=client_tax_year_id,
-        upload=file,
-        settings=settings,
-    )
+    if file.size is not None and file.size > settings.MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"file exceeds {settings.MAX_UPLOAD_BYTES} bytes",
+        )
+    try:
+        return await upload_return_document(
+            db,
+            workspace_id=ctx.workspace_id,
+            actor_uc_uid=ctx.uc_uid,
+            client_tax_year_id=client_tax_year_id,
+            upload=file,
+            settings=settings,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
 
 
 @router.get("/extracted-returns/{extracted_return_id}", response_model=ExtractedReturnRead)

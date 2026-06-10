@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     CONTROL_PLANE_TOKEN: str = ""
     ENTITLEMENT_CHECK_ENABLED: bool = False
 
+    MAX_UPLOAD_BYTES: int = 25_000_000  # 25 MB cap on uploaded 1040 PDFs
+
     GARAGE_ENDPOINT: str = "http://unicorn-garage:3900"
     GARAGE_ACCESS_KEY: str = ""
     GARAGE_SECRET_KEY: str = ""

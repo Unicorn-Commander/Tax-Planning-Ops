@@ -44,6 +44,15 @@ class KeycloakVerifier:
                 algorithms=self.settings.JWT_ALLOWED_ALGORITHMS,
                 audience=self.settings.KEYCLOAK_AUDIENCE,
                 issuer=self.settings.KEYCLOAK_ISSUER,
+                options={
+                    # python-jose verifies claim VALUES but does not require the
+                    # claims to exist — force presence so a token missing aud/exp
+                    # (e.g. a never-expiring token) is rejected.
+                    "require_aud": True,
+                    "require_exp": True,
+                    "require_iat": True,
+                    "require_iss": True,
+                },
             )
             return dict(claims)
         except Exception as exc:  # noqa: BLE001 - jose raises several auth exceptions

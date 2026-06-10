@@ -152,7 +152,13 @@ def upgrade() -> None:
 
     for table in [*WORKSPACE_TABLES, "extracted_field"]:
         op.execute(f"ALTER TABLE {table} OWNER TO tax_planning_ops_owner")
-        op.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON {table} TO tax_planning_ops_app")
+        if table == "audit_journal":
+            # Tamper-evidence: the hash-chained journal is append-only. The app
+            # role may read and insert but never UPDATE/DELETE a row (enforced
+            # at the DB, not just in code).
+            op.execute(f"GRANT SELECT, INSERT ON {table} TO tax_planning_ops_app")
+        else:
+            op.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON {table} TO tax_planning_ops_app")
 
     for table in WORKSPACE_TABLES:
         op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")

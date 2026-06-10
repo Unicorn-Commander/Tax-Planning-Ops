@@ -1,0 +1,17 @@
+# Keep secrets and bulk out of the build context / image.
+.venv/
+.dev-oidc/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+!.env.example
+.env.bak*
+tests/
+.coverage
+htmlcov/
+*.log
+.git/

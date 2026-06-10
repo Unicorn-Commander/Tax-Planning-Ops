@@ -72,6 +72,10 @@ async def upload_return_document(
     settings: Settings,
 ) -> ExtractedReturn:
     blob = await upload.read()
+    if len(blob) > settings.MAX_UPLOAD_BYTES:
+        raise ValueError(f"file exceeds {settings.MAX_UPLOAD_BYTES} bytes")
+    if not blob.startswith(b"%PDF"):
+        raise ValueError("uploaded file is not a valid PDF (missing %PDF header)")
     digest = hashlib.sha256(blob).hexdigest()
     blob_key = f"{workspace_id}/{client_tax_year_id}/source/{digest}.pdf"
     stored = await put_object(
