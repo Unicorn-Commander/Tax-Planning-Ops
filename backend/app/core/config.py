@@ -73,9 +73,20 @@ class Settings(BaseSettings):
     LLM_GATEWAY_URL: str = ""
     LLM_API_KEY: str = ""
     LLM_TEXT_MODEL: str = "qwen3.6-35b-a3b"  # agents/reasoning (thinking helps)
-    LLM_VISION_MODEL: str = "gemma4-26b-a4b"  # image-scan fallback (omni)
-    LLM_OCR_MODEL: str = "gemma4-26b-a4b"  # 1040 field structuring — non-reasoning, deterministic
+    LLM_OCR_MODEL: str = "gemma4-26b-a4b"  # text-layer 1040 structuring — non-reasoning
     LLM_TIMEOUT_SECONDS: float = 90.0
+
+    # Vision tier (scanned/image 1040s): a VLM served WITH a vision projector.
+    # Defaults to the main gateway; point VISION_GATEWAY at the dev gateway
+    # (bigboy-litellm:4001 with a `midboy1/` model prefix) or wherever the
+    # mmproj-enabled model lives. Empty model disables the VLM tier.
+    LLM_VISION_GATEWAY_URL: str = ""  # falls back to LLM_GATEWAY_URL when empty
+    LLM_VISION_MODEL: str = ""  # e.g. "midboy1/qwen3.6-vl" — set once confirmed
+    OCR_RENDER_DPI: int = 200
+
+    # Alt image tier: a traditional OCR microservice (PaddleOCR/docTR on the
+    # GTX 1070). POSTs page images, returns text → fed to LLM_OCR_MODEL.
+    OCR_SERVICE_URL: str = ""
 
     @field_validator("KEYCLOAK_JWKS_URL", mode="before")
     @classmethod

@@ -35,5 +35,7 @@ module = [
     "jose",
     "jose.*",
     "boto3",
+    "fitz",
+    "pypdf",
 ]
 ignore_missing_imports = true

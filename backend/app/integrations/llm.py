@@ -30,11 +30,18 @@ async def chat(
     model: str | None = None,
     temperature: float = 0.0,
     max_tokens: int = 1500,
+    base_url: str | None = None,
 ) -> str | None:
-    """Single chat completion → assistant text, or None on any failure."""
-    if not llm_enabled(settings):
+    """Single chat completion → assistant text, or None on any failure.
+
+    `base_url` overrides the default gateway (e.g. for the vision tier on a
+    different LiteLLM instance). `messages` content may be a string OR a list of
+    OpenAI content parts (text + image_url) for vision calls.
+    """
+    gateway = (base_url or settings.LLM_GATEWAY_URL).rstrip("/")
+    if not gateway:
         return None
-    url = settings.LLM_GATEWAY_URL.rstrip("/") + "/chat/completions"
+    url = gateway + "/chat/completions"
     headers = {"Content-Type": "application/json"}
     if settings.LLM_API_KEY:
         headers["Authorization"] = f"Bearer {settings.LLM_API_KEY}"
@@ -90,3 +97,11 @@ def extract_json(text: str) -> Any | None:
 async def chat_json(settings: Settings, messages: list[dict[str, Any]], **kw: Any) -> Any | None:
     reply = await chat(settings, messages, **kw)
     return extract_json(reply) if reply else None
+
+
+def image_part(png_bytes: bytes) -> dict[str, Any]:
+    """OpenAI vision content part from raw PNG bytes."""
+    import base64
+
+    b64 = base64.b64encode(png_bytes).decode()
+    return {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}}
