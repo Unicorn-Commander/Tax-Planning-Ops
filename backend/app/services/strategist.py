@@ -17,20 +17,25 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.engine_configs import ty2025_qbi_config, ty2025_scorp_config, ty2025_se_tax_config
-from app.engines.amt import ty2025_amt_config
 from app.engines.comprehensive import ComprehensiveInput, calculate_comprehensive
-from app.engines.ctc import ty2025_ctc_config
 from app.engines.form1040 import Form1040Inputs
-from app.engines.irmaa import IRMAAInput, calculate_irmaa, ty2025_irmaa_config
+from app.engines.irmaa import IRMAAInput, calculate_irmaa
 from app.engines.opportunity import find_opportunities
 from app.engines.optimizers import optimize_roth_conversion, optimize_scorp_salary
-from app.engines.ss_taxability import ty2025_ss_config
 from app.integrations.llm import chat, llm_enabled, strip_think
 from app.models.client import Client
 from app.models.tax_year import ClientTaxYear, TaxSituationSnapshot
 from app.services.entities import business_for_comprehensive, list_entities
 from app.services.tax_config import resolve_bracket_set, to_engine_config
+from app.year_configs import (
+    amt_config_for,
+    ctc_config_for,
+    irmaa_config_for,
+    qbi_config_for,
+    scorp_config_for,
+    se_config_for,
+    ss_config_for,
+)
 
 _DISCLAIMER = (
     "Advisor working memo — illustrative planning estimates, not tax advice or a "
@@ -130,16 +135,19 @@ async def generate_strategist_memo(
             qbi_businesses=qbi_businesses,
             net_capital_gain_for_qbi_cents=net_cap_gain,
         ),
-        config, ss_config=ty2025_ss_config(), ctc_config=ty2025_ctc_config(),
-        amt_config=ty2025_amt_config(), se_config=ty2025_se_tax_config(),
-        qbi_config=ty2025_qbi_config(),
+        config,
+        ss_config=ss_config_for(tax_year.tax_year),
+        ctc_config=ctc_config_for(tax_year.tax_year),
+        amt_config=amt_config_for(tax_year.tax_year),
+        se_config=se_config_for(tax_year.tax_year),
+        qbi_config=qbi_config_for(tax_year.tax_year),
     )
     marginal = comp.federal.marginal_rate
     findings: list[dict[str, Any]] = []
 
     # Roth conversion — fill the current bracket cheaply, IRMAA-aware.
     roth = optimize_roth_conversion(
-        inputs, config, fill_to_rate=marginal, irmaa_config=ty2025_irmaa_config(),
+        inputs, config, fill_to_rate=marginal, irmaa_config=irmaa_config_for(tax_year.tax_year),
         irmaa_filing_status=_irmaa_status(tax_year.filing_status),
     )
     if roth.recommended_conversion_cents > 0:
@@ -168,8 +176,8 @@ async def generate_strategist_memo(
             net_business_income_cents=e.amount_cents + e.shareholder_w2_wages_cents,
             filing_status=tax_year.filing_status,
             taxable_income_before_qbi_cents=snapshot.taxable_income_cents,
-            marginal_rate=marginal, scorp_config=ty2025_scorp_config(),
-            qbi_config=ty2025_qbi_config(),
+            marginal_rate=marginal, scorp_config=scorp_config_for(tax_year.tax_year),
+            qbi_config=qbi_config_for(tax_year.tax_year),
             reasonable_min_salary_cents=max(e.shareholder_w2_wages_cents // 2, 0),
         )
         if opt.savings_vs_all_salary_cents > 0:
@@ -205,7 +213,7 @@ async def generate_strategist_memo(
         IRMAAInput(
             filing_status=_irmaa_status(tax_year.filing_status), magi_cents=snapshot.agi_cents
         ),
-        ty2025_irmaa_config(),
+        irmaa_config_for(tax_year.tax_year),
     )
     if (
         irmaa.distance_to_next_cliff_cents is not None

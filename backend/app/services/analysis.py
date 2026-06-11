@@ -23,11 +23,9 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.engine_configs import ty2025_qbi_config, ty2025_se_tax_config
-from app.engines.amt import ty2025_amt_config
 from app.engines.comprehensive import ComprehensiveInput, calculate_comprehensive
 from app.engines.form1040 import Form1040Inputs
-from app.engines.irmaa import IRMAAInput, calculate_irmaa, ty2025_irmaa_config
+from app.engines.irmaa import IRMAAInput, calculate_irmaa
 from app.engines.multiyear import MultiYearInput, project_multi_year
 from app.engines.opportunity import find_opportunities
 from app.engines.state_tax import StateTaxInput, calculate_state_tax
@@ -36,6 +34,7 @@ from app.models.tax_year import ClientTaxYear, TaxSituationSnapshot
 from app.services.entities import aggregate_business, aggregate_for_comprehensive, list_entities
 from app.services.tax_config import resolve_bracket_set, to_engine_config
 from app.state_configs import get_state_config
+from app.year_configs import amt_config_for, irmaa_config_for, qbi_config_for, se_config_for
 
 
 def _irmaa_status(filing_status: str) -> str:
@@ -115,9 +114,9 @@ async def get_client_analysis(
                 net_capital_gain_for_qbi_cents=net_capital_gain,
             ),
             config,
-            amt_config=ty2025_amt_config(),
-            se_config=ty2025_se_tax_config(),
-            qbi_config=ty2025_qbi_config(),
+            amt_config=amt_config_for(tax_year.tax_year),
+            se_config=se_config_for(tax_year.tax_year),
+            qbi_config=qbi_config_for(tax_year.tax_year),
         )
         analysis["amt"] = {
             "available": True,
@@ -192,7 +191,7 @@ async def get_client_analysis(
                 filing_status=_irmaa_status(tax_year.filing_status),
                 magi_cents=snapshot.agi_cents,
             ),
-            ty2025_irmaa_config(),
+            irmaa_config_for(tax_year.tax_year),
         )
         analysis["irmaa"] = {
             "available": True,
