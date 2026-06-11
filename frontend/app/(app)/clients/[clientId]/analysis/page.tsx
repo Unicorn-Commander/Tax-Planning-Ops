@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Activity, Brain, Briefcase, Building2, Calculator, FileText, HeartPulse, LineChart, Lightbulb, Receipt, Sparkles } from "lucide-react";
+import { Activity, Brain, Briefcase, Building2, Calculator, FileText, HeartPulse, Landmark, LineChart, Lightbulb, Receipt, Sparkles } from "lucide-react";
 import api from "@/lib/api";
 import { centsToUSD, percent } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
@@ -94,6 +94,16 @@ interface ComprehensiveReturnSection {
   has_c_corp?: boolean;
 }
 
+interface StateTaxSection {
+  available: true;
+  state: string;
+  has_income_tax: boolean;
+  state_tax_cents: number;
+  state_marginal_rate: string;
+  federal_plus_state_total_cents: number;
+  assumptions: string[];
+}
+
 interface StrategistFinding {
   title: string;
   category: string;
@@ -125,6 +135,7 @@ interface Analysis {
   multi_year: MultiYearSection | Unavailable;
   opportunities: OpportunitiesSection | Unavailable;
   business: BusinessSection | Unavailable;
+  state_tax: StateTaxSection | Unavailable;
 }
 
 interface Proposal {
@@ -202,7 +213,7 @@ export default function AnalysisTab() {
     );
   }
 
-  const { comprehensive_return, amt, irmaa, multi_year, opportunities, business } = analysis;
+  const { comprehensive_return, amt, irmaa, multi_year, opportunities, business, state_tax } = analysis;
   const maxYearTax =
     multi_year.available && multi_year.years.length > 0
       ? Math.max(...multi_year.years.map((y) => y.total_tax_cents), 1)
@@ -261,6 +272,39 @@ export default function AnalysisTab() {
                 />
               </div>
             ) : null}
+            {state_tax.available ? (
+              state_tax.has_income_tax ? (
+                <>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <Stat
+                      label={`State income tax (${state_tax.state})`}
+                      value={centsToUSD(state_tax.state_tax_cents)}
+                      icon={<Landmark className="h-4 w-4" />}
+                      sub={`${percent(state_tax.state_marginal_rate)} marginal`}
+                    />
+                    <Stat
+                      label="Federal + state total"
+                      value={centsToUSD(state_tax.federal_plus_state_total_cents)}
+                      icon={<Calculator className="h-4 w-4" />}
+                    />
+                  </div>
+                  {state_tax.assumptions.length > 0 ? (
+                    <p className="text-[12px] text-muted">{state_tax.assumptions.join(" · ")}</p>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <p className="text-[12.5px] text-muted">{state_tax.state} — no state income tax.</p>
+                  {state_tax.assumptions.length > 0 ? (
+                    <p className="text-[12px] text-muted">{state_tax.assumptions.join(" · ")}</p>
+                  ) : null}
+                </>
+              )
+            ) : (
+              <p className="text-[12px] text-muted">
+                {state_tax.reason ?? "State income tax not yet modeled for this client."}
+              </p>
+            )}
           </div>
         ) : (
           <NotAvailable reason={comprehensive_return.reason} />
