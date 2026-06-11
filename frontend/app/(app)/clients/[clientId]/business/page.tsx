@@ -9,7 +9,7 @@ import { useAction } from "@/lib/useAction";
 import { useClientOverview } from "@/components/client-overview";
 import { Card, CardHeader, Badge, Button, Field, MoneyInput, EmptyState, Disclaimer } from "@/components/ui";
 
-type EntityKind = "schedule_c" | "partnership_k1" | "s_corp_k1" | "schedule_e";
+type EntityKind = "schedule_c" | "partnership_k1" | "s_corp_k1" | "schedule_e" | "c_corp";
 
 interface BusinessEntity {
   id: string;
@@ -20,6 +20,8 @@ interface BusinessEntity {
   ubia_cents: number;
   guaranteed_payments_cents: number;
   shareholder_w2_wages_cents: number;
+  dividends_cents: number;
+  nol_available_cents: number;
   is_general_partner: boolean;
   is_sstb: boolean;
   is_qbi: boolean;
@@ -30,6 +32,7 @@ const KIND_LABEL: Record<EntityKind, string> = {
   partnership_k1: "Partnership K-1",
   s_corp_k1: "S-corp K-1",
   schedule_e: "Schedule E (rental)",
+  c_corp: "C-corp (1120)",
 };
 
 const KIND_BADGE: Record<EntityKind, string> = {
@@ -37,6 +40,7 @@ const KIND_BADGE: Record<EntityKind, string> = {
   partnership_k1: "Partnership K-1",
   s_corp_k1: "S-corp K-1",
   schedule_e: "Schedule E",
+  c_corp: "C-corp",
 };
 
 function amountLabel(kind: EntityKind): string {
@@ -48,6 +52,8 @@ function amountLabel(kind: EntityKind): string {
       return "K-1 ordinary income (box 1)";
     case "schedule_e":
       return "Net rental income";
+    case "c_corp":
+      return "Corporate taxable income";
   }
 }
 
@@ -84,6 +90,8 @@ export default function BusinessTab() {
   const [ubiaCents, setUbiaCents] = useState<number | null>(null);
   const [guaranteedPaymentsCents, setGuaranteedPaymentsCents] = useState<number | null>(null);
   const [shareholderW2Cents, setShareholderW2Cents] = useState<number | null>(null);
+  const [dividendsCents, setDividendsCents] = useState<number | null>(null);
+  const [nolAvailableCents, setNolAvailableCents] = useState<number | null>(null);
   const [isGeneralPartner, setIsGeneralPartner] = useState(false);
   const [isSstb, setIsSstb] = useState(false);
   const [isQbi, setIsQbi] = useState(true);
@@ -111,6 +119,8 @@ export default function BusinessTab() {
     setUbiaCents(null);
     setGuaranteedPaymentsCents(null);
     setShareholderW2Cents(null);
+    setDividendsCents(null);
+    setNolAvailableCents(null);
     setIsGeneralPartner(false);
     setIsSstb(false);
     setIsQbi(true);
@@ -128,7 +138,10 @@ export default function BusinessTab() {
       w2_wages_paid_cents: showQbiInputs ? w2WagesCents ?? 0 : 0,
       ubia_cents: showQbiInputs ? ubiaCents ?? 0 : 0,
       guaranteed_payments_cents: kind === "partnership_k1" ? guaranteedPaymentsCents ?? 0 : 0,
-      shareholder_w2_wages_cents: kind === "s_corp_k1" ? shareholderW2Cents ?? 0 : 0,
+      shareholder_w2_wages_cents:
+        kind === "s_corp_k1" || kind === "c_corp" ? shareholderW2Cents ?? 0 : 0,
+      dividends_cents: kind === "c_corp" ? dividendsCents ?? 0 : 0,
+      nol_available_cents: kind === "c_corp" ? nolAvailableCents ?? 0 : 0,
       is_general_partner: kind === "partnership_k1" ? isGeneralPartner : false,
       is_sstb: showSstb ? isSstb : false,
       is_qbi: kind === "schedule_e" ? isQbi : true,
@@ -193,6 +206,12 @@ export default function BusinessTab() {
                     ) : null}
                     {e.kind === "s_corp_k1" && e.shareholder_w2_wages_cents > 0 ? (
                       <p className="mt-1 text-[12px] text-muted tabular">Shareholder W-2 wages {centsToUSD(e.shareholder_w2_wages_cents)}</p>
+                    ) : null}
+                    {e.kind === "c_corp" &&
+                    (e.shareholder_w2_wages_cents > 0 || e.dividends_cents > 0 || e.nol_available_cents > 0) ? (
+                      <p className="mt-1 text-[12px] text-muted tabular">
+                        Owner salary {centsToUSD(e.shareholder_w2_wages_cents)} · dividends {centsToUSD(e.dividends_cents)} · NOL {centsToUSD(e.nol_available_cents)}
+                      </p>
                     ) : null}
                   </div>
                   <div className="shrink-0 text-right">
@@ -261,6 +280,20 @@ export default function BusinessTab() {
             <Field label="Shareholder W-2 wages">
               <MoneyInput valueCents={shareholderW2Cents} onChangeCents={setShareholderW2Cents} />
             </Field>
+          ) : null}
+
+          {kind === "c_corp" ? (
+            <>
+              <Field label="Owner salary (W-2)">
+                <MoneyInput valueCents={shareholderW2Cents} onChangeCents={setShareholderW2Cents} />
+              </Field>
+              <Field label="Dividends to owner">
+                <MoneyInput valueCents={dividendsCents} onChangeCents={setDividendsCents} />
+              </Field>
+              <Field label="NOL carryforward available">
+                <MoneyInput valueCents={nolAvailableCents} onChangeCents={setNolAvailableCents} />
+              </Field>
+            </>
           ) : null}
 
           {showSstb ? (

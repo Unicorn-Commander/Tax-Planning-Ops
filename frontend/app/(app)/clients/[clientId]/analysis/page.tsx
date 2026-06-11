@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Activity, Briefcase, Calculator, HeartPulse, LineChart, Lightbulb, Receipt, Sparkles } from "lucide-react";
+import { Activity, Brain, Briefcase, Building2, Calculator, FileText, HeartPulse, LineChart, Lightbulb, Receipt, Sparkles } from "lucide-react";
 import api from "@/lib/api";
 import { centsToUSD, percent } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
@@ -88,6 +88,31 @@ interface ComprehensiveReturnSection {
   refundable_credits_cents: number;
   balance_due_cents: number;
   includes_business: boolean;
+  // Present only when the client has a C-corp entity.
+  corporate_tax_cents?: number;
+  integrated_total_tax_cents?: number;
+  has_c_corp?: boolean;
+}
+
+interface StrategistFinding {
+  title: string;
+  category: string;
+  recommended_action: string;
+  estimated_impact_cents: number;
+  impact_kind: "savings" | "cost" | "info";
+  citation: string;
+  caveat: string;
+}
+interface Strategist {
+  client_name: string;
+  tax_year: number;
+  current_total_tax_cents: number;
+  marginal_rate: string;
+  findings: StrategistFinding[];
+  total_savings_identified_cents: number;
+  memo: string | null;
+  memo_available: boolean;
+  disclaimer: string;
 }
 
 interface Analysis {
@@ -121,6 +146,7 @@ export default function AnalysisTab() {
   const [analysisLoading, setAnalysisLoading] = useState(true);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [proposal, setProposal] = useState<Proposal | null>(null);
+  const [strategist, setStrategist] = useState<Strategist | null>(null);
 
   // The analysis endpoint is keyed by a client tax year id, not the client id.
   // Prefer the active plan year (same id strategies/quarterly use), fall back to
@@ -145,6 +171,12 @@ export default function AnalysisTab() {
     if (!taxYearId) return;
     const r = await api.post(`/agents/clients/${taxYearId}/propose-plan`, {});
     setProposal(r.data);
+  });
+
+  const runStrategist = useAction(async () => {
+    if (!taxYearId) return;
+    const r = await api.get(`/agents/clients/tax-years/${taxYearId}/strategist`);
+    setStrategist(r.data);
   });
 
   if (loading || analysisLoading) return <div className="h-64 skeleton rounded-[var(--radius-card)]" />;
@@ -214,9 +246,141 @@ export default function AnalysisTab() {
                 sub={`AMT ${centsToUSD(comprehensive_return.amt_cents)} · refundable ${centsToUSD(comprehensive_return.refundable_credits_cents)}`}
               />
             </div>
+            {comprehensive_return.has_c_corp ? (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Stat
+                  label="Corporate tax (21%)"
+                  value={centsToUSD(comprehensive_return.corporate_tax_cents)}
+                  icon={<Building2 className="h-4 w-4" />}
+                />
+                <Stat
+                  label="Integrated total tax"
+                  value={centsToUSD(comprehensive_return.integrated_total_tax_cents)}
+                  icon={<Calculator className="h-4 w-4" />}
+                  sub="corporate + personal — the C-corp double tax"
+                />
+              </div>
+            ) : null}
           </div>
         ) : (
           <NotAvailable reason={comprehensive_return.reason} />
+        )}
+      </Card>
+
+      {/* AI Strategist — the headline "real analysis" feature */}
+      <Card>
+        <CardHeader
+          title={
+            <span className="flex items-center gap-2">
+              <Brain className="h-4 w-4 text-primary" />
+              AI Strategist
+            </span>
+          }
+          subtitle="Agent-drafted CPA memo — findings, citations, and a savings estimate"
+          action={
+            strategist ? (
+              <div className="text-right">
+                <div className="text-[16px] font-semibold text-positive tabular">
+                  {centsToUSD(strategist.total_savings_identified_cents)}
+                </div>
+                <div className="text-[11px] text-muted">savings identified</div>
+              </div>
+            ) : null
+          }
+        />
+        {strategist ? (
+          <div className="space-y-5 p-5">
+            <Stat
+              label="Savings identified"
+              tone="positive"
+              value={centsToUSD(strategist.total_savings_identified_cents)}
+              icon={<Sparkles className="h-4 w-4" />}
+              sub={`${strategist.client_name} · ${strategist.tax_year} · current tax ${centsToUSD(
+                strategist.current_total_tax_cents,
+              )} · ${percent(strategist.marginal_rate)} marginal`}
+            />
+
+            {/* CPA-style memo */}
+            <div className="rounded-[var(--radius-md)] border border-line-2 bg-surface-2/50 px-4 py-4">
+              <div className="mb-2 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-muted">
+                <FileText className="h-3.5 w-3.5" />
+                Strategist memo
+              </div>
+              {strategist.memo ? (
+                <p className="whitespace-pre-wrap text-[13.5px] leading-relaxed text-ink">{strategist.memo}</p>
+              ) : (
+                <p className="text-[13.5px] text-muted">Memo unavailable — showing findings.</p>
+              )}
+            </div>
+
+            {/* Findings */}
+            {strategist.findings.length > 0 ? (
+              <div className="overflow-hidden rounded-[var(--radius-md)] border border-line-2">
+                <div className="divide-y divide-line-2">
+                  {strategist.findings.map((f, i) => (
+                    <div key={i} className="px-4 py-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[14.5px] font-medium text-ink">{f.title}</span>
+                            <Badge tone="neutral">{f.category}</Badge>
+                          </div>
+                          <p className="mt-1 text-[13px] text-ink-2">{f.recommended_action}</p>
+                          <p className="mt-1 text-[12px] text-muted">
+                            {f.citation}
+                            {f.caveat ? ` · ${f.caveat}` : ""}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <div
+                            className={
+                              "text-[15px] font-semibold tabular " +
+                              (f.impact_kind === "savings"
+                                ? "text-positive"
+                                : f.impact_kind === "cost"
+                                  ? "text-warning"
+                                  : "text-ink")
+                            }
+                          >
+                            {centsToUSD(f.estimated_impact_cents)}
+                          </div>
+                          <div className="text-[11px] text-muted">
+                            {f.impact_kind === "savings"
+                              ? "est. savings"
+                              : f.impact_kind === "cost"
+                                ? "est. cost"
+                                : "informational"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-[13.5px] text-muted">No findings identified.</p>
+            )}
+
+            <p className="border-t border-line-2 pt-4 text-[12px] leading-relaxed text-muted">{strategist.disclaimer}</p>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-3 p-5">
+            <p className="max-w-md text-[13.5px] text-muted">
+              Run the strategist to draft a CPA-style memo with prioritized, cited findings for this tax year.
+            </p>
+            <div className="shrink-0 text-right">
+              {runStrategist.error ? (
+                <p className="mb-1.5 text-[13px] text-negative">{runStrategist.error}</p>
+              ) : null}
+              <Button
+                icon={<Brain className="h-4 w-4" />}
+                loading={runStrategist.pending}
+                onClick={() => void runStrategist.run()}
+              >
+                Run strategist analysis
+              </Button>
+            </div>
+          </div>
         )}
       </Card>
 
