@@ -12,10 +12,12 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.engine_configs import ty2025_qbi_config, ty2025_se_tax_config
+from app.engine_configs import ty2025_corporate_config, ty2025_qbi_config, ty2025_se_tax_config
+from app.engines.corporate import CorporateTaxInput, calculate_corporate_tax
 from app.engines.passthrough import (
     PartnershipK1Entity,
     PassthroughInput,
@@ -133,25 +135,61 @@ def _to_passthrough_input(entities: list[BusinessEntity]) -> PassthroughInput:
     )
 
 
+class BusinessAggregation(BaseModel):
+    """Everything stored business entities contribute to the owner's return.
+
+    Passthroughs feed SE base / Schedule-1 / QBI; a C-corp instead pays its OWN
+    tax (`corporate_tax_cents`) and pushes the owner's salary to 1040 wages and
+    its dividends to qualified dividends (the double tax)."""
+
+    se_base_cents: int = 0
+    schedule_1_cents: int = 0
+    qbi_businesses: list[QBIBusiness] = []
+    owner_wages_add_cents: int = 0  # C-corp salaries → 1040 wages
+    owner_qualified_dividends_cents: int = 0  # C-corp dividends → 1040 qual div
+    corporate_tax_cents: int = 0
+    has_c_corp: bool = False
+
+
+def aggregate_for_comprehensive(entities: list[BusinessEntity]) -> BusinessAggregation:
+    if not entities:
+        return BusinessAggregation()
+    pt = aggregate_passthrough(_to_passthrough_input(entities))
+    agg = BusinessAggregation(
+        se_base_cents=pt.total_se_earnings_base_cents,
+        schedule_1_cents=pt.total_schedule_1_income_cents,
+        qbi_businesses=[
+            QBIBusiness(
+                name=c.name, qualified_business_income_cents=c.qbi_cents,
+                w2_wages_cents=c.w2_wages_cents, ubia_cents=c.ubia_cents, is_sstb=c.is_sstb,
+            )
+            for c in pt.qbi_components
+        ],
+    )
+    cfg = ty2025_corporate_config()
+    for e in entities:
+        if e.kind != "c_corp":
+            continue
+        agg.has_c_corp = True
+        agg.owner_wages_add_cents += e.shareholder_w2_wages_cents
+        agg.owner_qualified_dividends_cents += e.dividends_cents
+        corp = calculate_corporate_tax(
+            CorporateTaxInput(
+                pre_nol_taxable_income_cents=e.amount_cents,
+                nol_available_cents=e.nol_available_cents,
+            ),
+            cfg,
+        )
+        agg.corporate_tax_cents += corp.corporate_tax_cents
+    return agg
+
+
 def business_for_comprehensive(
     entities: list[BusinessEntity],
 ) -> tuple[int, int, list[QBIBusiness]]:
-    """Map stored entities → the pieces the comprehensive engine needs:
-    (SE earnings base, total Schedule-1 income, per-business QBI inputs)."""
-    if not entities:
-        return 0, 0, []
-    pt = aggregate_passthrough(_to_passthrough_input(entities))
-    qbi_businesses = [
-        QBIBusiness(
-            name=c.name,
-            qualified_business_income_cents=c.qbi_cents,
-            w2_wages_cents=c.w2_wages_cents,
-            ubia_cents=c.ubia_cents,
-            is_sstb=c.is_sstb,
-        )
-        for c in pt.qbi_components
-    ]
-    return pt.total_se_earnings_base_cents, pt.total_schedule_1_income_cents, qbi_businesses
+    """Back-compat tuple for the passthrough pieces (SE base, Schedule-1, QBI)."""
+    agg = aggregate_for_comprehensive(entities)
+    return agg.se_base_cents, agg.schedule_1_cents, agg.qbi_businesses
 
 
 def aggregate_business(
@@ -191,6 +229,7 @@ def aggregate_business(
         net_capital_gain_cents=net_capital_gain_cents,
         config=ty2025_qbi_config(),
     )
+    agg = aggregate_for_comprehensive(entities)
     return {
         "available": True,
         "schedule_1_income_cents": passthrough.total_schedule_1_income_cents,
@@ -202,5 +241,9 @@ def aggregate_business(
             {"component_cents": r.qbi_component_cents, "regime": r.regime}
             for r in qbi.per_business
         ],
+        "has_c_corp": agg.has_c_corp,
+        "corporate_tax_cents": agg.corporate_tax_cents,
+        "c_corp_owner_wages_cents": agg.owner_wages_add_cents,
+        "c_corp_dividends_cents": agg.owner_qualified_dividends_cents,
         "assumptions": passthrough.assumptions,
     }

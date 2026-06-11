@@ -32,7 +32,7 @@ from app.engines.multiyear import MultiYearInput, project_multi_year
 from app.engines.opportunity import find_opportunities
 from app.models.client import Client
 from app.models.tax_year import ClientTaxYear, TaxSituationSnapshot
-from app.services.entities import aggregate_business, business_for_comprehensive, list_entities
+from app.services.entities import aggregate_business, aggregate_for_comprehensive, list_entities
 from app.services.tax_config import resolve_bracket_set, to_engine_config
 
 
@@ -84,12 +84,23 @@ async def get_client_analysis(
     # Business entities fold into the comprehensive return: their income joins
     # Schedule 1, SE tax + the ½-SE deduction apply, and §199A QBI is computed.
     entities = await list_entities(db, client_tax_year_id=tax_year_id)
-    se_base, biz_schedule_1, qbi_businesses = business_for_comprehensive(entities)
-    net_capital_gain = max(inputs.qualified_dividends_cents, 0) + max(
-        inputs.capital_gain_loss_cents, 0
-    )
+    agg = aggregate_for_comprehensive(entities)
+    # C-corp salaries → 1040 wages; C-corp dividends → qualified (and ordinary)
+    # dividends. The corporate tax is added separately as the integrated total.
     comp_form1040 = inputs.model_copy(
-        update={"schedule_1_income_cents": inputs.schedule_1_income_cents + biz_schedule_1}
+        update={
+            "schedule_1_income_cents": inputs.schedule_1_income_cents + agg.schedule_1_cents,
+            "wages_cents": inputs.wages_cents + agg.owner_wages_add_cents,
+            "qualified_dividends_cents": (
+                inputs.qualified_dividends_cents + agg.owner_qualified_dividends_cents
+            ),
+            "ordinary_dividends_cents": (
+                inputs.ordinary_dividends_cents + agg.owner_qualified_dividends_cents
+            ),
+        }
+    )
+    net_capital_gain = max(comp_form1040.qualified_dividends_cents, 0) + max(
+        comp_form1040.capital_gain_loss_cents, 0
     )
 
     # --- Comprehensive return (federal + SS + CTC + AMT + SE/QBI when present) -
@@ -97,8 +108,8 @@ async def get_client_analysis(
         comp = calculate_comprehensive(
             ComprehensiveInput(
                 form1040=comp_form1040,
-                self_employment_base_cents=se_base,
-                qbi_businesses=qbi_businesses,
+                self_employment_base_cents=agg.se_base_cents,
+                qbi_businesses=agg.qbi_businesses,
                 net_capital_gain_for_qbi_cents=net_capital_gain,
             ),
             config,
@@ -128,6 +139,11 @@ async def get_client_analysis(
             "refundable_credits_cents": comp.refundable_credits_cents,
             "balance_due_cents": comp.balance_due_cents,
             "includes_business": bool(entities),
+            # C-corp double tax: the corporation's own 21% tax sits on top of the
+            # owner's personal tax on salary + dividends.
+            "corporate_tax_cents": agg.corporate_tax_cents,
+            "integrated_total_tax_cents": comp.total_tax_cents + agg.corporate_tax_cents,
+            "has_c_corp": agg.has_c_corp,
             "assumptions": comp.assumptions,
         }
     except (ValueError, KeyError, TypeError) as exc:

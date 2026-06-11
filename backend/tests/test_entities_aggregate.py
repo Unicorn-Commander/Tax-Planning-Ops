@@ -15,6 +15,7 @@ def _entity(kind: str, amount: int, **kw: object) -> BusinessEntity:
         name="", amount_cents=amount, w2_wages_paid_cents=0, ubia_cents=0,
         guaranteed_payments_cents=0, shareholder_w2_wages_cents=0,
         is_general_partner=True, is_sstb=False, is_qbi=False,
+        dividends_cents=0, nol_available_cents=0,
     )
     defaults.update(kw)
     return BusinessEntity(kind=kind, **defaults)  # type: ignore[arg-type]
@@ -63,3 +64,22 @@ def test_general_vs_limited_partner_se() -> None:
     assert limited["se_earnings_base_cents"] == 0
     # Both still flow to Schedule 1 and QBI.
     assert general["schedule_1_income_cents"] == limited["schedule_1_income_cents"] == 8_000_000
+
+
+def test_c_corp_routing() -> None:
+    # C-corp: $400k corporate taxable income, $137k owner salary, $50k dividends.
+    # Corp tax 21%·400k = $84,000. Salary → wages; dividends → qualified div.
+    # NOT SE, NOT QBI, NOT Schedule-1.
+    from app.services.entities import aggregate_for_comprehensive
+
+    agg = aggregate_for_comprehensive([
+        _entity("c_corp", 40_000_000, shareholder_w2_wages_cents=13_700_000,
+                dividends_cents=5_000_000),
+    ])
+    assert agg.has_c_corp is True
+    assert agg.corporate_tax_cents == 8_400_000  # 21% of $400k
+    assert agg.owner_wages_add_cents == 13_700_000
+    assert agg.owner_qualified_dividends_cents == 5_000_000
+    assert agg.se_base_cents == 0
+    assert agg.schedule_1_cents == 0
+    assert agg.qbi_businesses == []

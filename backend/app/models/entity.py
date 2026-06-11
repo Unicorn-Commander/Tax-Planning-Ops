@@ -39,3 +39,7 @@ class BusinessEntity(IdMixin, WorkspaceScopedMixin, TimestampMixin, Base):
     is_general_partner: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_sstb: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_qbi: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # C-corp only: dividends distributed to the owner (→ qualified dividends on
+    # the 1040) and the corporation's available NOL carryforward.
+    dividends_cents: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    nol_available_cents: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)

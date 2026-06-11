@@ -10,9 +10,26 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from app.engines.corporate import CorporateConfig
 from app.engines.qbi import QBIConfig, QBIThreshold
 from app.engines.scorp import SCorpConfig
 from app.engines.se_tax import SETaxConfig
+
+
+def ty2025_corporate_config() -> CorporateConfig:
+    return CorporateConfig(
+        tax_year=2025,
+        corporate_rate=Decimal("0.21"),  # flat federal C-corp rate
+        nol_limit_pct=Decimal("0.80"),  # §172 80%-of-taxable-income limit
+        qsbs_rate=Decimal("0.28"),  # §1202 28% rate on the taxable gain
+        qsbs_cap_new_cents=1_500_000_000,  # $15M (stock acquired after 7/4/2025)
+        qsbs_cap_old_cents=1_000_000_000,  # $10M (older stock)
+        qsbs_assets_ceiling_new_cents=7_500_000_000,  # $75M
+        qsbs_assets_ceiling_old_cents=5_000_000_000,  # $50M
+        aet_rate=Decimal("0.20"),  # §531 accumulated earnings tax
+        aet_credit_cents=25_000_000,  # $250,000
+        aet_credit_psc_cents=15_000_000,  # $150,000 (personal service corps)
+    )
 
 
 def ty2025_se_tax_config() -> SETaxConfig:
