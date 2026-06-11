@@ -22,7 +22,13 @@ async def keycloak_login(settings: Settings = Depends(get_settings)) -> Redirect
             "client_id": settings.KEYCLOAK_CLIENT_ID,
             "redirect_uri": settings.KEYCLOAK_REDIRECT_URI,
             "response_type": "code",
-            "scope": "openid profile email taxplan:advisor taxplan:admin",
+            # taxplan:advisor/admin are realm ROLES, not OAuth scopes — they
+            # arrive in the token via realm_access.roles (the default `roles`
+            # scope) and are read in core/auth.py. Requesting them as scopes
+            # makes Keycloak reject the authorize with invalid_scope. The
+            # uc_uid + workspace_id claims come from the default `unicorn-identity`
+            # scope, so the basic OIDC scopes are all we request.
+            "scope": "openid profile email",
         }
     )
     return RedirectResponse(f"{_oidc_base(settings)}/auth?{params}")
