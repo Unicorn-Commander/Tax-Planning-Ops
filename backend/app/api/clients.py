@@ -11,6 +11,7 @@ from app.db.session import get_tenant_db
 from app.models.client import Client
 from app.schemas.auth import AuthContext
 from app.schemas.client import ClientCreate, ClientRead
+from app.services.analysis import get_client_analysis
 from app.services.clients import create_client, list_clients
 from app.services.overview import get_client_overview
 
@@ -25,6 +26,23 @@ async def get_overview(
 ) -> dict[str, Any]:
     try:
         return await get_client_overview(db, client_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/tax-years/{tax_year_id}/analysis")
+async def get_analysis(
+    tax_year_id: UUID,
+    horizon_years: int = 5,
+    ctx: AuthContext = Depends(require_scopes(("taxplan:advisor",))),
+    db: AsyncSession = Depends(get_tenant_db),
+) -> dict[str, Any]:
+    """Live planning analysis (AMT, IRMAA, multi-year, opportunities) computed
+    from the latest snapshot — no stored columns required."""
+    try:
+        return await get_client_analysis(
+            db, workspace_id=ctx.workspace_id, tax_year_id=tax_year_id, horizon_years=horizon_years
+        )
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
