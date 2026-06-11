@@ -77,10 +77,24 @@ interface BusinessSection {
   assumptions?: string | null;
 }
 
+interface ComprehensiveReturnSection {
+  available: true;
+  base_snapshot_total_tax_cents: number;
+  total_tax_cents: number;
+  regular_total_tax_cents: number;
+  se_tax_cents: number;
+  amt_cents: number;
+  qbi_deduction_cents: number;
+  refundable_credits_cents: number;
+  balance_due_cents: number;
+  includes_business: boolean;
+}
+
 interface Analysis {
   client_name: string;
   tax_year: number;
   filing_status: string;
+  comprehensive_return: ComprehensiveReturnSection | Unavailable;
   amt: AmtSection | Unavailable;
   irmaa: IrmaaSection | Unavailable;
   multi_year: MultiYearSection | Unavailable;
@@ -156,7 +170,7 @@ export default function AnalysisTab() {
     );
   }
 
-  const { amt, irmaa, multi_year, opportunities, business } = analysis;
+  const { comprehensive_return, amt, irmaa, multi_year, opportunities, business } = analysis;
   const maxYearTax =
     multi_year.available && multi_year.years.length > 0
       ? Math.max(...multi_year.years.map((y) => y.total_tax_cents), 1)
@@ -164,6 +178,48 @@ export default function AnalysisTab() {
 
   return (
     <div className="space-y-6">
+      {/* Comprehensive return — the full picture */}
+      <Card>
+        <CardHeader
+          title="Comprehensive return"
+          subtitle="Federal + Social Security + credits + AMT + self-employment & QBI"
+        />
+        {comprehensive_return.available ? (
+          <div className="space-y-4 p-5">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <Stat
+                label="Total tax"
+                value={centsToUSD(comprehensive_return.total_tax_cents)}
+                icon={<Calculator className="h-4 w-4" />}
+                sub={
+                  comprehensive_return.includes_business
+                    ? `Base 1040 ${centsToUSD(comprehensive_return.base_snapshot_total_tax_cents)} + business`
+                    : "No business entities"
+                }
+              />
+              <Stat
+                label="Self-employment tax"
+                value={centsToUSD(comprehensive_return.se_tax_cents)}
+                icon={<Briefcase className="h-4 w-4" />}
+              />
+              <Stat
+                label="§199A QBI deduction"
+                value={centsToUSD(comprehensive_return.qbi_deduction_cents)}
+                icon={<Receipt className="h-4 w-4" />}
+              />
+              <Stat
+                label="Balance due"
+                value={centsToUSD(comprehensive_return.balance_due_cents)}
+                icon={<Activity className="h-4 w-4" />}
+                sub={`AMT ${centsToUSD(comprehensive_return.amt_cents)} · refundable ${centsToUSD(comprehensive_return.refundable_credits_cents)}`}
+              />
+            </div>
+          </div>
+        ) : (
+          <NotAvailable reason={comprehensive_return.reason} />
+        )}
+      </Card>
+
       {/* AMT exposure */}
       <Card>
         <CardHeader title="AMT exposure" subtitle="Alternative minimum tax vs. regular tax" />
