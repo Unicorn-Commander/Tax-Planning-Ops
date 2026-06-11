@@ -72,8 +72,10 @@ class Settings(BaseSettings):
     # the planning agents. On the dev box: http://unicorn-litellm:4000/v1.
     LLM_GATEWAY_URL: str = ""
     LLM_API_KEY: str = ""
-    LLM_TEXT_MODEL: str = "qwen3.6-35b-a3b"  # agents/reasoning (thinking helps)
-    LLM_OCR_MODEL: str = "gemma4-26b-a4b"  # text-layer 1040 structuring — non-reasoning
+    LLM_TEXT_MODEL: str = "qwen3.6-35b-a3b"  # agents/reasoning (thinking ON)
+    # 1040 structuring: qwen3.6 with thinking OFF — faster than gemma4 (~0.8 vs
+    # 1.4s, equally exact) and same model family as the agents → fewer router swaps.
+    LLM_OCR_MODEL: str = "qwen3.6-35b-a3b"
     LLM_TIMEOUT_SECONDS: float = 90.0
 
     # Vision tier (scanned/image 1040s): a VLM served WITH a vision projector.

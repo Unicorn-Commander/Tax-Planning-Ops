@@ -31,6 +31,7 @@ async def chat(
     temperature: float = 0.0,
     max_tokens: int = 1500,
     base_url: str | None = None,
+    no_think: bool = False,
 ) -> str | None:
     """Single chat completion → assistant text, or None on any failure.
 
@@ -45,12 +46,16 @@ async def chat(
     headers = {"Content-Type": "application/json"}
     if settings.LLM_API_KEY:
         headers["Authorization"] = f"Bearer {settings.LLM_API_KEY}"
-    payload = {
+    payload: dict[str, Any] = {
         "model": model or settings.LLM_TEXT_MODEL,
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
     }
+    if no_think:
+        # Qwen3 thinking off (llama.cpp --jinja honors this) → faster, clean
+        # output. ~0.8s vs 1.4s for gemma4 on 1040 structuring, equally exact.
+        payload["chat_template_kwargs"] = {"enable_thinking": False}
     try:
         async with httpx.AsyncClient(timeout=settings.LLM_TIMEOUT_SECONDS) as client:
             resp = await client.post(url, json=payload, headers=headers)

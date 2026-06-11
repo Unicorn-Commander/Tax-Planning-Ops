@@ -99,6 +99,7 @@ async def _structure_text(text: str, settings: Settings) -> dict[str, Any] | Non
         [{"role": "user", "content": _INSTRUCTION + "\n\nFORM TEXT:\n" + text[:24000]}],
         model=settings.LLM_OCR_MODEL,
         max_tokens=900,
+        no_think=True,
     )
     return parsed if isinstance(parsed, dict) else None
 
