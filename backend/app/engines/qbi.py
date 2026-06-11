@@ -121,3 +121,65 @@ def calculate_qbi(inputs: QBIInput, config: QBIConfig) -> QBIResult:
         overall_cap_cents=overall_cap,
         allowed_qbi_deduction_cents=allowed,
     )
+
+
+class QBIBusiness(BaseModel):
+    """One trade/business feeding the aggregate QBI deduction."""
+
+    name: str | None = None
+    qualified_business_income_cents: int = 0
+    w2_wages_cents: int = 0
+    ubia_cents: int = 0
+    is_sstb: bool = False
+
+
+class QBIAggregateResult(BaseModel):
+    per_business: list[QBIResult]
+    combined_qbi_component_cents: int  # sum of per-business components (pre overall cap)
+    overall_cap_cents: int
+    allowed_qbi_deduction_cents: int
+
+
+def calculate_qbi_aggregate(
+    businesses: list[QBIBusiness],
+    *,
+    filing_status: FilingStatus,
+    taxable_income_before_qbi_cents: int,
+    net_capital_gain_cents: int,
+    config: QBIConfig,
+) -> QBIAggregateResult:
+    """Multi-business §199A: each business's QBI component is limited
+    individually (its own W-2/UBIA wage limit and SSTB haircut, all keyed off
+    the SHARED taxable income), the components are summed, and the overall
+    20%-of-(taxable income − net capital gain) cap is applied ONCE to the sum."""
+    per_business: list[QBIResult] = []
+    combined = 0
+    for biz in businesses:
+        result = calculate_qbi(
+            QBIInput(
+                filing_status=filing_status,
+                qualified_business_income_cents=biz.qualified_business_income_cents,
+                w2_wages_cents=biz.w2_wages_cents,
+                ubia_cents=biz.ubia_cents,
+                taxable_income_before_qbi_cents=taxable_income_before_qbi_cents,
+                net_capital_gain_cents=net_capital_gain_cents,
+                is_sstb=biz.is_sstb,
+            ),
+            config,
+        )
+        per_business.append(result)
+        combined += result.qbi_component_cents
+
+    overall_cap = max(
+        _cents(
+            Decimal(max(taxable_income_before_qbi_cents - net_capital_gain_cents, 0))
+            * config.qbi_rate
+        ),
+        0,
+    )
+    return QBIAggregateResult(
+        per_business=per_business,
+        combined_qbi_component_cents=combined,
+        overall_cap_cents=overall_cap,
+        allowed_qbi_deduction_cents=min(combined, overall_cap),
+    )

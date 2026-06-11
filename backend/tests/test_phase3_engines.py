@@ -147,3 +147,47 @@ def test_scorp_config_guard() -> None:
     assert SC.ss_wage_base_cents == 17_610_000
     assert SC.additional_medicare_threshold_cents["single"] == 20_000_000
     assert SC.additional_medicare_threshold_cents["mfj"] == 25_000_000
+
+
+# --------------------- §199A multi-business aggregate --------------------
+
+
+def test_qbi_aggregate_below_threshold() -> None:
+    from app.engines.qbi import QBIBusiness, calculate_qbi_aggregate
+
+    out = calculate_qbi_aggregate(
+        [
+            QBIBusiness(qualified_business_income_cents=10_000_000),
+            QBIBusiness(qualified_business_income_cents=5_000_000),
+        ],
+        filing_status="single",
+        taxable_income_before_qbi_cents=15_000_000,
+        net_capital_gain_cents=0,
+        config=QBI,
+    )
+    # components 20% each: 2,000,000 + 1,000,000 = 3,000,000; cap 0.20·150k = 3,000,000.
+    assert out.combined_qbi_component_cents == 3_000_000
+    assert out.allowed_qbi_deduction_cents == 3_000_000
+
+
+def test_qbi_aggregate_wage_limit_per_business() -> None:
+    from app.engines.qbi import QBIBusiness, calculate_qbi_aggregate
+
+    out = calculate_qbi_aggregate(
+        [
+            # above-threshold business with wages → component 40,000 (vector B)
+            QBIBusiness(qualified_business_income_cents=30_000_000, w2_wages_cents=8_000_000,
+                        ubia_cents=20_000_000),
+            # above-threshold business with NO wages → wage limit 0 → component 0
+            QBIBusiness(qualified_business_income_cents=10_000_000),
+        ],
+        filing_status="mfj",
+        taxable_income_before_qbi_cents=60_000_000,
+        net_capital_gain_cents=4_000_000,
+        config=QBI,
+    )
+    assert out.per_business[0].qbi_component_cents == 4_000_000
+    assert out.per_business[1].qbi_component_cents == 0
+    assert out.combined_qbi_component_cents == 4_000_000
+    assert out.overall_cap_cents == 11_200_000
+    assert out.allowed_qbi_deduction_cents == 4_000_000
