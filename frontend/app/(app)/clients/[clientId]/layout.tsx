@@ -19,6 +19,7 @@ function Header({ clientId }: { clientId: string }) {
     { href: base, label: "Overview" },
     { href: `${base}/returns`, label: "Return" },
     { href: `${base}/strategies`, label: "Strategies" },
+    { href: `${base}/analysis`, label: "Analysis" },
     { href: `${base}/quarterly`, label: "Quarterly" },
     { href: `${base}/pdf`, label: "Plan PDF" },
   ];
