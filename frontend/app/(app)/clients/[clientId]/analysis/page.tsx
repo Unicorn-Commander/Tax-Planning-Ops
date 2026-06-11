@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Activity, Calculator, HeartPulse, LineChart, Lightbulb, Sparkles } from "lucide-react";
+import { Activity, Briefcase, Calculator, HeartPulse, LineChart, Lightbulb, Receipt, Sparkles } from "lucide-react";
 import api from "@/lib/api";
 import { centsToUSD, percent } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
@@ -62,6 +62,21 @@ interface OpportunitiesSection {
   items: OpportunityItem[];
 }
 
+interface QbiPerBusiness {
+  component_cents: number;
+  regime: string;
+}
+interface BusinessSection {
+  available: true;
+  schedule_1_income_cents: number;
+  se_earnings_base_cents: number;
+  se_tax_cents: number;
+  half_se_deduction_cents: number;
+  qbi_deduction_cents: number;
+  qbi_per_business: QbiPerBusiness[];
+  assumptions?: string | null;
+}
+
 interface Analysis {
   client_name: string;
   tax_year: number;
@@ -70,6 +85,7 @@ interface Analysis {
   irmaa: IrmaaSection | Unavailable;
   multi_year: MultiYearSection | Unavailable;
   opportunities: OpportunitiesSection | Unavailable;
+  business: BusinessSection | Unavailable;
 }
 
 interface Proposal {
@@ -140,7 +156,7 @@ export default function AnalysisTab() {
     );
   }
 
-  const { amt, irmaa, multi_year, opportunities } = analysis;
+  const { amt, irmaa, multi_year, opportunities, business } = analysis;
   const maxYearTax =
     multi_year.available && multi_year.years.length > 0
       ? Math.max(...multi_year.years.map((y) => y.total_tax_cents), 1)
@@ -220,6 +236,59 @@ export default function AnalysisTab() {
           </div>
         ) : (
           <NotAvailable reason={irmaa.reason} />
+        )}
+      </Card>
+
+      {/* Business — SE tax & QBI */}
+      <Card>
+        <CardHeader
+          title="Business (SE tax & QBI)"
+          subtitle="Self-employment tax & §199A qualified business income deduction"
+          action={
+            business.available ? (
+              <div className="text-right">
+                <div className="text-[16px] font-semibold text-ink tabular">{centsToUSD(business.se_tax_cents)}</div>
+                <div className="text-[11px] text-muted">SE tax</div>
+              </div>
+            ) : null
+          }
+        />
+        {business.available ? (
+          <div className="space-y-4 p-5">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Stat
+                label="SE tax"
+                value={centsToUSD(business.se_tax_cents)}
+                icon={<Receipt className="h-4 w-4" />}
+                sub={`On ${centsToUSD(business.se_earnings_base_cents)} net earnings`}
+              />
+              <Stat
+                label="½ SE deduction"
+                tone="positive"
+                value={centsToUSD(business.half_se_deduction_cents)}
+                icon={<Calculator className="h-4 w-4" />}
+              />
+              <Stat
+                label="QBI deduction"
+                tone="positive"
+                value={centsToUSD(business.qbi_deduction_cents)}
+                icon={<Briefcase className="h-4 w-4" />}
+                sub={
+                  business.qbi_per_business.length > 0
+                    ? business.qbi_per_business.map((b) => `${centsToUSD(b.component_cents)} (${b.regime})`).join(" · ")
+                    : undefined
+                }
+              />
+              <Stat
+                label="Schedule-1 income"
+                value={centsToUSD(business.schedule_1_income_cents)}
+                icon={<LineChart className="h-4 w-4" />}
+              />
+            </div>
+            {business.assumptions ? <p className="text-[12px] text-muted">{business.assumptions}</p> : null}
+          </div>
+        ) : (
+          <NotAvailable reason={business.reason ?? "Add business entities to see SE-tax & QBI planning."} />
         )}
       </Card>
 
