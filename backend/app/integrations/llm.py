@@ -7,6 +7,7 @@ None when unconfigured so every caller can fall back gracefully.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -17,6 +18,13 @@ import httpx
 from app.core.config import Settings
 
 logger = logging.getLogger("tax_planning_ops.llm")
+
+# A swap-on-demand backend (llama-swap) returns 502/503 for the first request
+# while it cold-loads a model (~6s for the 35B vision model). Retry a couple
+# times with backoff so async OCR jobs ride through the load instead of failing.
+_RETRY_STATUS = {502, 503, 504}
+_MAX_ATTEMPTS = 3
+_BACKOFF_SECONDS = 4.0
 
 
 def llm_enabled(settings: Settings) -> bool:
@@ -56,15 +64,40 @@ async def chat(
         # Qwen3 thinking off (llama.cpp --jinja honors this) → faster, clean
         # output. ~0.8s vs 1.4s for gemma4 on 1040 structuring, equally exact.
         payload["chat_template_kwargs"] = {"enable_thinking": False}
-    try:
-        async with httpx.AsyncClient(timeout=settings.LLM_TIMEOUT_SECONDS) as client:
-            resp = await client.post(url, json=payload, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
-        return str(data["choices"][0]["message"]["content"])
-    except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
-        logger.warning("llm chat failed (%s): %s", model, exc)
-        return None
+    last_exc: Exception | None = None
+    for attempt in range(_MAX_ATTEMPTS):
+        try:
+            async with httpx.AsyncClient(timeout=settings.LLM_TIMEOUT_SECONDS) as client:
+                resp = await client.post(url, json=payload, headers=headers)
+                # Retry transient cold-load/swap responses with backoff.
+                if resp.status_code in _RETRY_STATUS and attempt < _MAX_ATTEMPTS - 1:
+                    logger.info(
+                        "llm %s returned %s (cold-load?), retry %d/%d",
+                        model, resp.status_code, attempt + 1, _MAX_ATTEMPTS - 1,
+                    )
+                    await asyncio.sleep(_BACKOFF_SECONDS)
+                    continue
+                resp.raise_for_status()
+                data = resp.json()
+            return str(data["choices"][0]["message"]["content"])
+        except httpx.HTTPStatusError as exc:
+            last_exc = exc
+            if exc.response.status_code in _RETRY_STATUS and attempt < _MAX_ATTEMPTS - 1:
+                await asyncio.sleep(_BACKOFF_SECONDS)
+                continue
+            break
+        except (httpx.TransportError, httpx.TimeoutException) as exc:
+            # Connection reset / EOF (upstream restarting) — worth a retry.
+            last_exc = exc
+            if attempt < _MAX_ATTEMPTS - 1:
+                await asyncio.sleep(_BACKOFF_SECONDS)
+                continue
+            break
+        except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
+            last_exc = exc
+            break
+    logger.warning("llm chat failed (%s): %s", model, last_exc)
+    return None
 
 
 _THINK = re.compile(r"<think>.*?</think>", re.DOTALL)
