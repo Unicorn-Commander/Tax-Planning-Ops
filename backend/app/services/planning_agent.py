@@ -76,7 +76,10 @@ async def _narrative(
         settings,
         [{"role": "user", "content": prompt}],
         model=settings.LLM_TEXT_MODEL,
-        max_tokens=1200,
+        max_tokens=900,
+        # Narrative only — the engine already did the math, so thinking just
+        # burns the token budget (and can truncate before the prose). Off → clean.
+        no_think=True,
     )
     return strip_think(reply)
 
