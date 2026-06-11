@@ -133,6 +133,27 @@ def _to_passthrough_input(entities: list[BusinessEntity]) -> PassthroughInput:
     )
 
 
+def business_for_comprehensive(
+    entities: list[BusinessEntity],
+) -> tuple[int, int, list[QBIBusiness]]:
+    """Map stored entities → the pieces the comprehensive engine needs:
+    (SE earnings base, total Schedule-1 income, per-business QBI inputs)."""
+    if not entities:
+        return 0, 0, []
+    pt = aggregate_passthrough(_to_passthrough_input(entities))
+    qbi_businesses = [
+        QBIBusiness(
+            name=c.name,
+            qualified_business_income_cents=c.qbi_cents,
+            w2_wages_cents=c.w2_wages_cents,
+            ubia_cents=c.ubia_cents,
+            is_sstb=c.is_sstb,
+        )
+        for c in pt.qbi_components
+    ]
+    return pt.total_se_earnings_base_cents, pt.total_schedule_1_income_cents, qbi_businesses
+
+
 def aggregate_business(
     entities: list[BusinessEntity],
     *,

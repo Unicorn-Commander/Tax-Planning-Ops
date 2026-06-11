@@ -23,6 +23,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.engine_configs import ty2025_qbi_config, ty2025_se_tax_config
 from app.engines.amt import ty2025_amt_config
 from app.engines.comprehensive import ComprehensiveInput, calculate_comprehensive
 from app.engines.form1040 import Form1040Inputs
@@ -31,7 +32,7 @@ from app.engines.multiyear import MultiYearInput, project_multi_year
 from app.engines.opportunity import find_opportunities
 from app.models.client import Client
 from app.models.tax_year import ClientTaxYear, TaxSituationSnapshot
-from app.services.entities import aggregate_business, list_entities
+from app.services.entities import aggregate_business, business_for_comprehensive, list_entities
 from app.services.tax_config import resolve_bracket_set, to_engine_config
 
 
@@ -80,10 +81,30 @@ async def get_client_analysis(
         "filing_status": tax_year.filing_status,
     }
 
-    # --- AMT exposure (via the comprehensive orchestrator) ------------------
+    # Business entities fold into the comprehensive return: their income joins
+    # Schedule 1, SE tax + the ½-SE deduction apply, and §199A QBI is computed.
+    entities = await list_entities(db, client_tax_year_id=tax_year_id)
+    se_base, biz_schedule_1, qbi_businesses = business_for_comprehensive(entities)
+    net_capital_gain = max(inputs.qualified_dividends_cents, 0) + max(
+        inputs.capital_gain_loss_cents, 0
+    )
+    comp_form1040 = inputs.model_copy(
+        update={"schedule_1_income_cents": inputs.schedule_1_income_cents + biz_schedule_1}
+    )
+
+    # --- Comprehensive return (federal + SS + CTC + AMT + SE/QBI when present) -
     try:
         comp = calculate_comprehensive(
-            ComprehensiveInput(form1040=inputs), config, amt_config=ty2025_amt_config()
+            ComprehensiveInput(
+                form1040=comp_form1040,
+                self_employment_base_cents=se_base,
+                qbi_businesses=qbi_businesses,
+                net_capital_gain_for_qbi_cents=net_capital_gain,
+            ),
+            config,
+            amt_config=ty2025_amt_config(),
+            se_config=ty2025_se_tax_config(),
+            qbi_config=ty2025_qbi_config(),
         )
         analysis["amt"] = {
             "available": True,
@@ -94,8 +115,24 @@ async def get_client_analysis(
             "total_tax_cents": comp.total_tax_cents,
             "assumptions": comp.assumptions,
         }
+        analysis["comprehensive_return"] = {
+            "available": True,
+            "base_snapshot_total_tax_cents": snapshot.total_tax_cents,
+            "total_tax_cents": comp.total_tax_cents,
+            "regular_total_tax_cents": comp.regular_total_tax_cents,
+            "se_tax_cents": comp.se_tax_cents,
+            "amt_cents": comp.amt_cents,
+            "qbi_deduction_cents": (
+                comp.qbi.allowed_qbi_deduction_cents if comp.qbi else 0
+            ),
+            "refundable_credits_cents": comp.refundable_credits_cents,
+            "balance_due_cents": comp.balance_due_cents,
+            "includes_business": bool(entities),
+            "assumptions": comp.assumptions,
+        }
     except (ValueError, KeyError, TypeError) as exc:
         analysis["amt"] = {"available": False, "reason": str(exc)}
+        analysis["comprehensive_return"] = {"available": False, "reason": str(exc)}
 
     # --- IRMAA tier + cliff planning ---------------------------------------
     try:
@@ -150,14 +187,15 @@ async def get_client_analysis(
         analysis["multi_year"] = {"available": False, "reason": str(exc)}
 
     # --- Multi-entity business aggregation (SE tax + §199A QBI) -------------
+    # Reuses the entities loaded above; QBI here is keyed off the base taxable
+    # income for the standalone view (the folded number lives in
+    # comprehensive_return).
     try:
-        entities = await list_entities(db, client_tax_year_id=tax_year_id)
         analysis["business"] = aggregate_business(
             entities,
             filing_status=tax_year.filing_status,
             taxable_income_before_qbi_cents=snapshot.taxable_income_cents,
-            net_capital_gain_cents=max(inputs.qualified_dividends_cents, 0)
-            + max(inputs.capital_gain_loss_cents, 0),
+            net_capital_gain_cents=net_capital_gain,
         )
     except (ValueError, KeyError, TypeError) as exc:
         analysis["business"] = {"available": False, "reason": str(exc)}

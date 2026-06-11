@@ -22,6 +22,8 @@ from pydantic import BaseModel, Field
 from app.engines.amt import AMTConfig, AMTInput, AMTResult, calculate_amt
 from app.engines.ctc import CTCConfig, CTCInput, CTCResult, calculate_ctc
 from app.engines.form1040 import Form1040Inputs, Form1040Result, TaxConfig, calculate_form1040
+from app.engines.qbi import QBIAggregateResult, QBIBusiness, QBIConfig, calculate_qbi_aggregate
+from app.engines.se_tax import SETaxConfig, SETaxInput, SETaxResult, calculate_se_tax
 from app.engines.ss_taxability import SSConfig, SSInput, SSResult, calculate_taxable_ss
 
 
@@ -37,6 +39,13 @@ class ComprehensiveInput(BaseModel):
     salt_deduction_cents: int = 0  # AMT add-back
     amt_other_preferences_cents: int = 0  # ISO bargain element, PAB interest, …
     used_standard_deduction: bool | None = None  # default: standard >= itemized
+    # Multi-entity business inputs (from the passthrough aggregation). The
+    # caller is responsible for including the business income in
+    # form1040.schedule_1_income_cents; this engine adds the SE tax, the
+    # ½-SE-tax above-the-line deduction, and the §199A QBI deduction.
+    self_employment_base_cents: int = 0  # net SE earnings (Sch C + GP K-1 + guaranteed pmts)
+    qbi_businesses: list[QBIBusiness] = Field(default_factory=list)
+    net_capital_gain_for_qbi_cents: int = 0
 
 
 class ComprehensiveResult(BaseModel):
@@ -44,8 +53,11 @@ class ComprehensiveResult(BaseModel):
     social_security: SSResult | None
     ctc: CTCResult | None
     amt: AMTResult | None
+    self_employment: SETaxResult | None
+    qbi: QBIAggregateResult | None
     regular_total_tax_cents: int
     amt_cents: int
+    se_tax_cents: int
     refundable_credits_cents: int
     total_tax_cents: int
     balance_due_cents: int
@@ -72,6 +84,8 @@ def calculate_comprehensive(
     ss_config: SSConfig | None = None,
     ctc_config: CTCConfig | None = None,
     amt_config: AMTConfig | None = None,
+    se_config: SETaxConfig | None = None,
+    qbi_config: QBIConfig | None = None,
 ) -> ComprehensiveResult:
     assumptions: list[str] = []
     base_inputs = payload.form1040
@@ -94,6 +108,50 @@ def calculate_comprehensive(
         assumptions.append(
             f"social_security_taxable computed at {ss_result.taxable_percentage:.0%} of "
             f"gross benefits ({ss_result.tier} tier)."
+        )
+
+    # 1b. Self-employment tax → the ½-SE deduction reduces AGI (added to
+    # adjustments). The SE income itself is already in schedule_1 (caller). SE
+    # tax is added to the total at the end (it is a Schedule-2 "other tax").
+    se_result: SETaxResult | None = None
+    se_tax = 0
+    if se_config is not None and payload.self_employment_base_cents > 0:
+        se_result = calculate_se_tax(
+            SETaxInput(net_self_employment_profit_cents=payload.self_employment_base_cents),
+            se_config,
+        )
+        se_tax = se_result.total_se_tax_cents
+        base_inputs = base_inputs.model_copy(
+            update={
+                "adjustments_cents": base_inputs.adjustments_cents
+                + se_result.half_se_deduction_cents
+            }
+        )
+        assumptions.append(
+            f"self_employment_tax {se_tax}c on {payload.self_employment_base_cents}c SE base; "
+            f"½-SE deduction {se_result.half_se_deduction_cents}c reduced AGI."
+        )
+
+    # 1c. Multi-business §199A QBI → sets the qbi_deduction. Needs taxable income
+    # before QBI, so run the engine once with qbi=0 first.
+    qbi_result: QBIAggregateResult | None = None
+    if qbi_config is not None and payload.qbi_businesses:
+        pre = calculate_form1040(
+            base_inputs.model_copy(update={"qbi_deduction_cents": 0}), config
+        )
+        qbi_result = calculate_qbi_aggregate(
+            payload.qbi_businesses,
+            filing_status=base_inputs.filing_status,
+            taxable_income_before_qbi_cents=pre.taxable_income_cents,
+            net_capital_gain_cents=payload.net_capital_gain_for_qbi_cents,
+            config=qbi_config,
+        )
+        base_inputs = base_inputs.model_copy(
+            update={"qbi_deduction_cents": qbi_result.allowed_qbi_deduction_cents}
+        )
+        assumptions.append(
+            f"qbi_deduction {qbi_result.allowed_qbi_deduction_cents}c "
+            f"(§199A across {len(payload.qbi_businesses)} business(es))."
         )
 
     other_credits = max(base_inputs.nonrefundable_credits_cents, 0)
@@ -164,7 +222,7 @@ def calculate_comprehensive(
         amt_cents = amt_result.amt_cents
         assumptions.extend(amt_result.assumptions)
 
-    total_tax = final.total_tax_cents + amt_cents
+    total_tax = final.total_tax_cents + amt_cents + se_tax
     payments = base_inputs.withholding_cents + base_inputs.estimated_payments_cents
     balance_due = total_tax - payments - refundable
 
@@ -174,8 +232,11 @@ def calculate_comprehensive(
         social_security=ss_result,
         ctc=ctc_result,
         amt=amt_result,
+        self_employment=se_result,
+        qbi=qbi_result,
         regular_total_tax_cents=final.total_tax_cents,
         amt_cents=amt_cents,
+        se_tax_cents=se_tax,
         refundable_credits_cents=refundable,
         total_tax_cents=total_tax,
         balance_due_cents=balance_due,

@@ -123,3 +123,37 @@ def test_all_engines_compose() -> None:
     )
     assert res.total_tax_cents == res.federal.total_tax_cents + res.amt_cents
     assert res.amt_cents == 0
+
+
+def test_self_employed_se_tax_and_qbi_folded() -> None:
+    # Sole prop: $100k net SE profit (in schedule_1), no other income.
+    # SE tax = $14,129; ½-SE ded $7,065 → AGI = 100,000 − 7,065 = 92,935.
+    # taxable before QBI = 92,935 − 15,000 std = 77,935.
+    # QBI = min(20%·100,000=20,000, 20%·77,935=15,587) → 15,587 (overall cap binds).
+    # taxable income = 92,935 − 15,000 − 15,587 = 62,348.
+    # ordinary tax = 1,000 + 800 (20%·4,000... ) ; full: 100,000·10%? no —
+    #   10%·10,000 + 20%·40,000 + 30%·12,348 = 1,000 + 8,000 + 3,704.4 = wait scaled ×100:
+    #   taxable 6,234,800c → 100,000 + 800,000 + 0.30·1,234,800 = 1,270,440c income tax.
+    # total = 1,270,440 + 0 AMT + 1,412,900 SE = 2,683,340c.
+    from app.engine_configs import ty2025_qbi_config, ty2025_se_tax_config
+    from app.engines.qbi import QBIBusiness
+
+    res = calculate_comprehensive(
+        ComprehensiveInput(
+            form1040=Form1040Inputs(filing_status="single", schedule_1_income_cents=10_000_000),
+            self_employment_base_cents=10_000_000,
+            qbi_businesses=[QBIBusiness(qualified_business_income_cents=10_000_000)],
+        ),
+        _config(),
+        amt_config=ty2025_amt_config(),
+        se_config=ty2025_se_tax_config(),
+        qbi_config=ty2025_qbi_config(),
+    )
+    assert res.se_tax_cents == 1_412_900
+    assert res.self_employment is not None
+    assert res.self_employment.half_se_deduction_cents == 706_500
+    assert res.qbi is not None
+    assert res.qbi.allowed_qbi_deduction_cents == 1_558_700  # overall cap binds
+    assert res.federal.taxable_income_cents == 6_234_800
+    assert res.federal.total_tax_cents == 1_270_440  # regular income tax only
+    assert res.total_tax_cents == 2_683_340  # + SE tax
