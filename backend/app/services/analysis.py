@@ -31,6 +31,7 @@ from app.engines.multiyear import MultiYearInput, project_multi_year
 from app.engines.opportunity import find_opportunities
 from app.models.client import Client
 from app.models.tax_year import ClientTaxYear, TaxSituationSnapshot
+from app.services.entities import aggregate_business, list_entities
 from app.services.tax_config import resolve_bracket_set, to_engine_config
 
 
@@ -147,6 +148,19 @@ async def get_client_analysis(
         }
     except (ValueError, KeyError, TypeError) as exc:
         analysis["multi_year"] = {"available": False, "reason": str(exc)}
+
+    # --- Multi-entity business aggregation (SE tax + §199A QBI) -------------
+    try:
+        entities = await list_entities(db, client_tax_year_id=tax_year_id)
+        analysis["business"] = aggregate_business(
+            entities,
+            filing_status=tax_year.filing_status,
+            taxable_income_before_qbi_cents=snapshot.taxable_income_cents,
+            net_capital_gain_cents=max(inputs.qualified_dividends_cents, 0)
+            + max(inputs.capital_gain_loss_cents, 0),
+        )
+    except (ValueError, KeyError, TypeError) as exc:
+        analysis["business"] = {"available": False, "reason": str(exc)}
 
     # --- Opportunity scan ---------------------------------------------------
     try:
