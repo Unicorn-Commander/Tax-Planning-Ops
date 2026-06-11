@@ -20,7 +20,7 @@ from typing import Any
 import httpx
 
 from app.core.config import Settings
-from app.integrations.llm import chat_json, image_part, llm_enabled
+from app.integrations.llm import chat, chat_json, image_part, llm_enabled
 
 logger = logging.getLogger("tax_planning_ops.ocr")
 
@@ -120,21 +120,29 @@ async def _ocr_service_text(images: list[bytes], settings: Settings) -> str:
     return "\n".join(chunks).strip()
 
 
-async def _vlm_extract(images: list[bytes], settings: Settings) -> dict[str, Any] | None:
-    """VLM reads the rendered pages and returns the structured JSON directly."""
+async def _vlm_text(images: list[bytes], settings: Settings) -> str:
+    """VLM (qwen3.6-vision, mmproj) transcribes the rendered scan pages to text.
+    Kept separate from structuring so the deterministic LLM_OCR_MODEL does the
+    JSON — more robust than asking a reasoning VLM for JSON directly."""
     gateway = settings.LLM_VISION_GATEWAY_URL or settings.LLM_GATEWAY_URL
     if not (gateway and settings.LLM_VISION_MODEL):
-        return None
-    content: list[dict[str, Any]] = [{"type": "text", "text": _INSTRUCTION}]
+        return ""
+    content: list[dict[str, Any]] = [
+        {
+            "type": "text",
+            "text": "Transcribe every line of text in this IRS Form 1040 image exactly, "
+            "including line numbers and dollar amounts. Plain text only.",
+        }
+    ]
     content += [image_part(png) for png in images]
-    parsed = await chat_json(
+    reply = await chat(
         settings,
         [{"role": "user", "content": content}],
         model=settings.LLM_VISION_MODEL,
         base_url=gateway,
-        max_tokens=900,
+        max_tokens=2000,
     )
-    return parsed if isinstance(parsed, dict) else None
+    return reply or ""
 
 
 async def extract_1040(pdf_bytes: bytes, settings: Settings) -> dict[str, Any] | None:
@@ -158,8 +166,10 @@ async def extract_1040(pdf_bytes: bytes, settings: Settings) -> dict[str, Any] |
                 parsed = await _structure_text(ocr_text, settings)
                 extractor = f"ocr-service+{settings.LLM_OCR_MODEL}"
         if not parsed and images:
-            parsed = await _vlm_extract(images, settings)
-            extractor = f"vlm+{settings.LLM_VISION_MODEL}"
+            vision_text = await _vlm_text(images, settings)
+            if vision_text:
+                parsed = await _structure_text(vision_text, settings)
+                extractor = f"vlm({settings.LLM_VISION_MODEL})+{settings.LLM_OCR_MODEL}"
 
     fields = _to_fields(parsed)
     if not fields:

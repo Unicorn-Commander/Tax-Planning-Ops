@@ -80,8 +80,11 @@ class Settings(BaseSettings):
     # Defaults to the main gateway; point VISION_GATEWAY at the dev gateway
     # (bigboy-litellm:4001 with a `midboy1/` model prefix) or wherever the
     # mmproj-enabled model lives. Empty model disables the VLM tier.
+    # Confirmed live: qwen3.6 mmproj-enabled vision at midboy1:8088 (llama-swap),
+    # models Qwen3.6-35B-A3B-Vision (RTX 6000) + -p40 (P40). Set the gateway in
+    # deploy: LLM_VISION_GATEWAY_URL=http://100.121.80.175:8088/v1
     LLM_VISION_GATEWAY_URL: str = ""  # falls back to LLM_GATEWAY_URL when empty
-    LLM_VISION_MODEL: str = ""  # e.g. "midboy1/qwen3.6-vl" — set once confirmed
+    LLM_VISION_MODEL: str = "Qwen3.6-35B-A3B-Vision"
     OCR_RENDER_DPI: int = 200
 
     # Alt image tier: a traditional OCR microservice (PaddleOCR/docTR on the
