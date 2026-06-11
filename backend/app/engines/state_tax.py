@@ -62,8 +62,9 @@ class StateTaxResult(BaseModel):
     assumptions: list[str] = Field(default_factory=list)
 
 
-def _cents(value: Decimal) -> int:
-    return int(value.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+def _dollars(value: Decimal) -> int:
+    # State returns round the tax to whole dollars.
+    return int((value / 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP)) * 100
 
 
 def _status_key(config_map: dict[str, list[RateBracket]] | dict[str, int], status: str) -> str:
@@ -101,14 +102,15 @@ def calculate_state_tax(inputs: StateTaxInput, config: StateTaxConfig) -> StateT
     state_taxable = max(base - subtractions, 0)
 
     if config.flat_rate is not None:
-        base_tax = _cents(Decimal(state_taxable) * config.flat_rate)
+        base_tax = _dollars(Decimal(state_taxable) * config.flat_rate)
         marginal = config.flat_rate
     else:
         brackets = config.brackets_by_status.get(
             _status_key(config.brackets_by_status, inputs.filing_status), []
         )
         if brackets:
-            base_tax, marginal = bracket_walk(state_taxable, brackets)
+            raw, marginal = bracket_walk(state_taxable, brackets)
+            base_tax = _dollars(Decimal(raw))
         else:
             base_tax, marginal = 0, Decimal("0")
 
@@ -119,7 +121,7 @@ def calculate_state_tax(inputs: StateTaxInput, config: StateTaxConfig) -> StateT
         )
         over = max(applies_base - s.threshold_cents, 0)
         if over > 0:
-            surtax += _cents(Decimal(over) * s.rate)
+            surtax += _dollars(Decimal(over) * s.rate)
             marginal = marginal + s.rate  # top marginal includes the surtax
 
     assumptions.append(

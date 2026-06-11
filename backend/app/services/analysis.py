@@ -30,10 +30,12 @@ from app.engines.form1040 import Form1040Inputs
 from app.engines.irmaa import IRMAAInput, calculate_irmaa, ty2025_irmaa_config
 from app.engines.multiyear import MultiYearInput, project_multi_year
 from app.engines.opportunity import find_opportunities
+from app.engines.state_tax import StateTaxInput, calculate_state_tax
 from app.models.client import Client
 from app.models.tax_year import ClientTaxYear, TaxSituationSnapshot
 from app.services.entities import aggregate_business, aggregate_for_comprehensive, list_entities
 from app.services.tax_config import resolve_bracket_set, to_engine_config
+from app.state_configs import get_state_config
 
 
 def _irmaa_status(filing_status: str) -> str:
@@ -146,6 +148,39 @@ async def get_client_analysis(
             "has_c_corp": agg.has_c_corp,
             "assumptions": comp.assumptions,
         }
+
+        # State income tax (from the client's primary state).
+        state_code = (client.primary_state if client else None) or ""
+        state_cfg = get_state_config(state_code, tax_year.tax_year)
+        if state_cfg is not None:
+            st = calculate_state_tax(
+                StateTaxInput(
+                    filing_status=tax_year.filing_status,
+                    federal_agi_cents=comp.federal.agi_cents,
+                    federal_taxable_income_cents=comp.federal.taxable_income_cents,
+                    social_security_taxable_cents=comp_form1040.social_security_taxable_cents,
+                    retirement_income_cents=(
+                        comp_form1040.ira_taxable_cents + comp_form1040.pensions_taxable_cents
+                    ),
+                ),
+                state_cfg,
+            )
+            analysis["state_tax"] = {
+                "available": True,
+                "state": st.state,
+                "has_income_tax": st.has_income_tax,
+                "state_tax_cents": st.total_state_tax_cents,
+                "state_marginal_rate": str(st.marginal_rate),
+                "federal_plus_state_total_cents": (
+                    comp.total_tax_cents + agg.corporate_tax_cents + st.total_state_tax_cents
+                ),
+                "assumptions": st.assumptions,
+            }
+        else:
+            analysis["state_tax"] = {
+                "available": False,
+                "reason": f"State '{state_code}' not yet modeled (federal-only).",
+            }
     except (ValueError, KeyError, TypeError) as exc:
         analysis["amt"] = {"available": False, "reason": str(exc)}
         analysis["comprehensive_return"] = {"available": False, "reason": str(exc)}
