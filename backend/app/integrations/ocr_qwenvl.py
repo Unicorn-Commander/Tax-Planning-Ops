@@ -1,11 +1,13 @@
 """Form 1040 extraction — tiered, sovereign, all on-prem.
 
-  Tier 1  digital PDF  → pypdf text layer + LLM_OCR_MODEL (gemma4) structuring
+  Tier 1  digital PDF  → pypdf text layer + LLM_OCR_MODEL (qwen3.6 no-think)
+                          structuring
   Tier 2  scanned PDF  → render pages (pymupdf) → traditional OCR microservice
                           (OCR_SERVICE_URL, e.g. PaddleOCR on a GTX 1070) → text
                           → LLM_OCR_MODEL structuring
-  Tier 3  scanned PDF  → render pages → VLM (LLM_VISION_MODEL, a mmproj-enabled
-                          model on the P40s) reads + structures directly
+  Tier 3  scanned PDF  → render pages → VLM (LLM_VISION_MODEL = `qwen3.6-vision`
+                          on midboy1's RTX 6000, via the gateway) transcribes →
+                          LLM_OCR_MODEL structures the transcription to JSON
 
 Returns the OCR payload shape the extraction service expects, or None to fall
 back to the manual hand-key path.
@@ -142,6 +144,10 @@ async def _vlm_text(images: list[bytes], settings: Settings) -> str:
         model=settings.LLM_VISION_MODEL,
         base_url=gateway,
         max_tokens=2000,
+        # Thinking OFF: through the gateway the vision model honors this and
+        # returns clean transcription in ~0.3s (verified). With thinking on,
+        # reasoning_content eats the token budget and `content` comes back empty.
+        no_think=True,
     )
     return reply or ""
 

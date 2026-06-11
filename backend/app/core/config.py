@@ -79,14 +79,15 @@ class Settings(BaseSettings):
     LLM_TIMEOUT_SECONDS: float = 90.0
 
     # Vision tier (scanned/image 1040s): a VLM served WITH a vision projector.
-    # Defaults to the main gateway; point VISION_GATEWAY at the dev gateway
-    # (bigboy-litellm:4001 with a `midboy1/` model prefix) or wherever the
-    # mmproj-enabled model lives. Empty model disables the VLM tier.
-    # Confirmed live: qwen3.6 mmproj-enabled vision at midboy1:8088 (llama-swap),
-    # models Qwen3.6-35B-A3B-Vision (RTX 6000) + -p40 (P40). Set the gateway in
-    # deploy: LLM_VISION_GATEWAY_URL=http://100.121.80.175:8088/v1
+    # Now registered in the suite gateway as model `qwen3.6-vision` →
+    # Qwen3.6-35B-A3B-Vision (mmproj) on midboy1's RTX 6000 (llama-swap :8088),
+    # rate-limited + tier=paid so it isn't spun up casually by every caller.
+    # Leave LLM_VISION_GATEWAY_URL empty → goes through unicorn-litellm:4000 and
+    # is metered via Lago like the rest. Set it only to bypass the gateway and
+    # hit the box directly (e.g. http://100.121.80.175:8088/v1). Empty model
+    # disables the VLM tier. The P40 variant (-p40) and the 3090 are NOT wired.
     LLM_VISION_GATEWAY_URL: str = ""  # falls back to LLM_GATEWAY_URL when empty
-    LLM_VISION_MODEL: str = "Qwen3.6-35B-A3B-Vision"
+    LLM_VISION_MODEL: str = "qwen3.6-vision"
     OCR_RENDER_DPI: int = 200
 
     # Alt image tier: a traditional OCR microservice (PaddleOCR/docTR on the
