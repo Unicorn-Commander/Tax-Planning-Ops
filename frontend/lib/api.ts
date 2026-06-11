@@ -10,7 +10,13 @@ export const api = axios.create({
 
 api.interceptors.request.use((config) => {
   if (typeof window !== "undefined") {
-    const token = localStorage.getItem("access_token");
+    let token = localStorage.getItem("access_token");
+    // Dev autologin: guarantee the token exists on the very first request so a
+    // data fetch firing before the auth provider's effect can't race to a 401.
+    if (!token && process.env.NEXT_PUBLIC_DEV_AUTOLOGIN === "1") {
+      token = "dev";
+      localStorage.setItem("access_token", "dev");
+    }
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
