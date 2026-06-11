@@ -132,6 +132,14 @@ def extract_json(text: str) -> Any | None:
     return None
 
 
+def strip_think(text: str | None) -> str | None:
+    """Remove a qwen3 <think>…</think> reasoning block, leaving clean prose.
+    Used for human-facing narratives where the model reasons before answering."""
+    if not text:
+        return text
+    return _THINK.sub("", text).strip()
+
+
 async def chat_json(settings: Settings, messages: list[dict[str, Any]], **kw: Any) -> Any | None:
     reply = await chat(settings, messages, **kw)
     return extract_json(reply) if reply else None

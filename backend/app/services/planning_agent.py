@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings
 from app.engines.form1040 import Form1040Inputs
 from app.engines.opportunity import Opportunity, find_opportunities
-from app.integrations.llm import chat, llm_enabled
+from app.integrations.llm import chat, llm_enabled, strip_think
 from app.models.client import Client
 from app.models.tax_year import ClientTaxYear, TaxSituationSnapshot
 from app.services.tax_config import resolve_bracket_set, to_engine_config
@@ -72,12 +72,13 @@ async def _narrative(
         f"COMPUTED OPPORTUNITIES (authoritative):\n{lines}\n\n"
         "Write the proposal now."
     )
-    return await chat(
+    reply = await chat(
         settings,
         [{"role": "user", "content": prompt}],
         model=settings.LLM_TEXT_MODEL,
-        max_tokens=900,
+        max_tokens=1200,
     )
+    return strip_think(reply)
 
 
 async def propose_plan(
