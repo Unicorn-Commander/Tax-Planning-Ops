@@ -11,6 +11,7 @@ from app.db.session import get_tenant_db
 from app.schemas.auth import AuthContext
 from app.services.book_scan import scan_book
 from app.services.planning_agent import propose_plan
+from app.services.strategist import generate_strategist_memo
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -42,6 +43,24 @@ async def post_propose_plan(
             client_tax_year_id=client_tax_year_id,
             settings=settings,
             illustrative_amount_cents=illustrative_amount_cents,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/clients/tax-years/{tax_year_id}/strategist")
+async def get_strategist_memo(
+    tax_year_id: UUID,
+    ctx: AuthContext = Depends(require_scopes(("taxplan:advisor",))),
+    db: AsyncSession = Depends(get_tenant_db),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, object]:
+    """AI tax-strategist: optimizer-driven findings (Roth fill, S-corp salary,
+    opportunity levers, IRMAA cliffs) + an LLM-authored prioritized memo. Every
+    figure is engine-computed; the model only narrates."""
+    try:
+        return await generate_strategist_memo(
+            db, workspace_id=ctx.workspace_id, tax_year_id=tax_year_id, settings=settings
         )
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
