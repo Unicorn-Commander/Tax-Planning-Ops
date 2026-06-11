@@ -71,3 +71,8 @@ _BRACKETED: dict[str, StateTaxConfig] = {}
 
 def register_bracketed(configs: dict[str, StateTaxConfig]) -> None:
     _BRACKETED.update(configs)
+
+
+# Import for its registration side effect (defined after register_bracketed to
+# avoid a circular import).
+from app import state_brackets  # noqa: E402,F401

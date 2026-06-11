@@ -66,3 +66,25 @@ def test_az_single() -> None:
 
 def test_unknown_state_returns_none() -> None:
     assert get_state_config("ZZ") is None
+
+
+def test_ca_single_and_mfj() -> None:
+    # AGI $80k, $15k SS excluded → taxable $59,294 → $2,128.
+    assert _tax("CA", 8_000_000, ss=1_500_000) == 212_800
+    # MFJ AGI $250k → taxable $238,588 → $15,066.
+    assert _tax("CA", 25_000_000, status="mfj") == 1_506_600
+
+
+def test_ny_single() -> None:
+    # AGI $80k, $10k SS excluded → taxable $62,000 → $3,245.
+    assert _tax("NY", 8_000_000, ss=1_000_000) == 324_500
+
+
+def test_nj_mfj_and_single() -> None:
+    assert _tax("NJ", 12_000_000, status="mfj") == 385_500  # $120k → $3,855
+    assert _tax("NJ", 60_000_000) == 3_869_400  # $600k → $38,694
+
+
+def test_va_single() -> None:
+    # AGI $60k → taxable $51,250 → $2,689.
+    assert _tax("VA", 6_000_000) == 268_900
