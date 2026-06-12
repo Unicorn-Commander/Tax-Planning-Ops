@@ -9,6 +9,7 @@ import pytest
 from app.core.config import Settings
 from app.integrations.accounting_ops import (
     AccountingOpsDisabledError,
+    _get_federation_token,
     extract_net_income_cents,
     fetch_pl,
 )
@@ -60,3 +61,14 @@ async def test_fetch_pl_enabled_without_url_raises() -> None:
     settings = Settings(ACCOUNTING_OPS_ENABLED=True, ACCOUNTING_OPS_URL="")
     with pytest.raises(AccountingOpsDisabledError):
         await fetch_pl("ws-1", settings)
+
+
+@pytest.mark.asyncio
+async def test_static_service_token_short_circuits_mint_and_exchange() -> None:
+    # The static override bypasses both the KC mint and the Brigade exchange
+    # (no network) — used for the live handshake / testing.
+    settings = Settings(
+        ACCOUNTING_OPS_SERVICE_TOKEN="static-token",  # noqa: S106 - test fixture
+        BRIGADE_TOKEN_URL="https://brigade.example/exchange",  # noqa: S106 - test fixture
+    )
+    assert await _get_federation_token(settings) == "static-token"

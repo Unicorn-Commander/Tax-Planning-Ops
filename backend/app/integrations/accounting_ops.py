@@ -5,11 +5,16 @@ centerdeep, `GET /api/workspaces/{workspace_id}/reports/pl`) so a linked TPO
 business entity's `amount_cents` can be sourced from the real books instead of
 hand entry.
 
-Auth = a client-credentials token minted from TPO's own Keycloak confidential
-client; AO must trust that service account as a federation actor (the canonical
-brokered-token pattern — NOT a per-app credential). Until that trust is wired on
-the AO side, calls return 401/403 and surface as `AccountingOpsAuthError`, which
-the API turns into a clear "not yet authorized" message rather than a 500.
+Auth = the suite-canonical brokered token. TPO mints its own Keycloak service
+token (client-credentials), then exchanges it at Brigade's RFC-8693 endpoint for
+a Brigade-issued token carrying the Accounting-Ops audience — AO trusts Brigade
+(its issuer/JWKS/audience), not TPO's Keycloak directly. (TPO and AO sit behind
+different Keycloaks — auth.magicunicorn.dev vs auth.unicorncommander.ai — so a
+raw KC token 401s with "unknown signing key"; Brigade is the shared anchor.)
+Set BRIGADE_TOKEN_URL to enable the exchange; without it the adapter sends the
+raw KC token (legacy/testing). Until the AO/Brigade trust is wired, calls return
+401/403 → `AccountingOpsAuthError`, which the API turns into a clear "not yet
+authorized" message rather than a 500.
 
 The P&L shape isn't contractually pinned yet, so `extract_net_income_cents` is
 defensive across the likely key names and a dollars-vs-cents heuristic; it is
@@ -106,12 +111,9 @@ def extract_net_income_cents(payload: dict[str, Any]) -> int | None:
     return None
 
 
-async def _get_service_token(settings: Settings) -> str:
-    if settings.ACCOUNTING_OPS_SERVICE_TOKEN:
-        return settings.ACCOUNTING_OPS_SERVICE_TOKEN
-    cached = _token_cache.get("value")
-    if cached and time.time() < _token_cache.get("expires_at", 0.0):
-        return str(cached)
+async def _mint_kc_token(settings: Settings) -> str:
+    """Client-credentials grant for TPO's own KC service account (the subject
+    token for the Brigade exchange)."""
     if not settings.KEYCLOAK_CLIENT_SECRET:
         raise AccountingOpsAuthError(
             "no Accounting-Ops service credential configured "
@@ -123,26 +125,79 @@ async def _get_service_token(settings: Settings) -> str:
         "client_id": settings.KEYCLOAK_CLIENT_ID,
         "client_secret": settings.KEYCLOAK_CLIENT_SECRET,
     }
-    if settings.ACCOUNTING_OPS_AUDIENCE:
-        form["audience"] = settings.ACCOUNTING_OPS_AUDIENCE
     try:
         async with httpx.AsyncClient(timeout=settings.ACCOUNTING_OPS_TIMEOUT_SECONDS) as client:
             resp = await client.post(token_url, data=form)
     except httpx.HTTPError as exc:
-        raise AccountingOpsUnavailableError(f"could not reach the token endpoint: {exc}") from exc
+        raise AccountingOpsUnavailableError(
+            f"could not reach the KC token endpoint: {exc}"
+        ) from exc
+    if resp.status_code in (400, 401, 403):
+        raise AccountingOpsAuthError(f"client-credentials grant rejected ({resp.status_code})")
+    if resp.status_code >= 400:
+        raise AccountingOpsUnavailableError(f"KC token endpoint error ({resp.status_code})")
+    token = resp.json().get("access_token")
+    if not token:
+        raise AccountingOpsUnavailableError("KC token response had no access_token")
+    return str(token)
+
+
+async def _exchange_at_brigade(subject_token: str, settings: Settings) -> tuple[str, int]:
+    """RFC-8693 token exchange at Brigade: swap TPO's KC token for a Brigade-
+    issued token carrying the Accounting-Ops audience (the suite-canonical broker
+    pattern AO trusts). Returns (token, expires_in)."""
+    form: dict[str, str] = {
+        "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+        "subject_token": subject_token,
+        "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
+        "requested_token_type": "urn:ietf:params:oauth:token-type:access_token",
+        "client_id": settings.BRIGADE_CLIENT_ID or settings.KEYCLOAK_CLIENT_ID,
+    }
+    secret = settings.BRIGADE_CLIENT_SECRET or settings.KEYCLOAK_CLIENT_SECRET
+    if secret:
+        form["client_secret"] = secret
+    if settings.ACCOUNTING_OPS_AUDIENCE:
+        form["audience"] = settings.ACCOUNTING_OPS_AUDIENCE
+    try:
+        async with httpx.AsyncClient(timeout=settings.ACCOUNTING_OPS_TIMEOUT_SECONDS) as client:
+            resp = await client.post(settings.BRIGADE_TOKEN_URL, data=form)
+    except httpx.HTTPError as exc:
+        raise AccountingOpsUnavailableError(f"could not reach Brigade exchange: {exc}") from exc
     if resp.status_code in (400, 401, 403):
         raise AccountingOpsAuthError(
-            f"client-credentials grant rejected ({resp.status_code})"
+            f"Brigade token exchange rejected ({resp.status_code}) — the "
+            "tax-planning-ops → accounting-ops exchange contract may not be registered yet."
         )
     if resp.status_code >= 400:
-        raise AccountingOpsUnavailableError(f"token endpoint error ({resp.status_code})")
+        raise AccountingOpsUnavailableError(f"Brigade exchange error ({resp.status_code})")
     body = resp.json()
     token = body.get("access_token")
     if not token:
-        raise AccountingOpsUnavailableError("token response had no access_token")
+        raise AccountingOpsUnavailableError("Brigade exchange returned no access_token")
+    return str(token), int(body.get("expires_in", 60))
+
+
+async def _get_federation_token(settings: Settings) -> str:
+    """The token TPO presents to Accounting-Ops.
+
+    Canonical path: mint TPO's KC token, then exchange it at Brigade for an
+    AO-audience token (set BRIGADE_TOKEN_URL). Without a Brigade URL it falls
+    back to the raw KC token (legacy/testing). A static override short-circuits
+    both."""
+    if settings.ACCOUNTING_OPS_SERVICE_TOKEN:
+        return settings.ACCOUNTING_OPS_SERVICE_TOKEN
+    cached = _token_cache.get("value")
+    if cached and time.time() < _token_cache.get("expires_at", 0.0):
+        return str(cached)
+
+    kc_token = await _mint_kc_token(settings)
+    if settings.BRIGADE_TOKEN_URL:
+        token, expires_in = await _exchange_at_brigade(kc_token, settings)
+    else:
+        token, expires_in = kc_token, 60
     _token_cache["value"] = token
-    _token_cache["expires_at"] = time.time() + max(0, int(body.get("expires_in", 60)) - 15)
-    return str(token)
+    _token_cache["expires_at"] = time.time() + max(0, expires_in - 15)
+    return token
 
 
 async def fetch_pl(accounting_ops_workspace_id: str, settings: Settings) -> PLSummary:
@@ -150,7 +205,7 @@ async def fetch_pl(accounting_ops_workspace_id: str, settings: Settings) -> PLSu
     if not settings.ACCOUNTING_OPS_ENABLED or not settings.ACCOUNTING_OPS_URL:
         raise AccountingOpsDisabledError("Accounting-Ops integration is not enabled")
 
-    token = await _get_service_token(settings)
+    token = await _get_federation_token(settings)
     url = (
         f"{settings.ACCOUNTING_OPS_URL.rstrip('/')}"
         f"/api/workspaces/{accounting_ops_workspace_id}/reports/pl"

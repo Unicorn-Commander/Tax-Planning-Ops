@@ -67,17 +67,25 @@ class Settings(BaseSettings):
     OCR_QWENVL_ENABLED: bool = False
     PDF_SERVICE_URL: str = ""
     # Accounting-Ops federation read (AO P&L → business-entity net income).
-    # AO is live on centerdeep exposing GET /api/workspaces/{ws}/reports/pl. The
-    # token is a client-credentials grant from TPO's own KC confidential client;
-    # AO must trust that service account (the broker-trust step). Disabled until
-    # both ends are wired — when off, the sync endpoint returns 503 cleanly.
+    # AO is live on centerdeep exposing GET /api/workspaces/{ws}/reports/pl.
+    # Auth = the suite-canonical brokered token: TPO mints its KC service token,
+    # exchanges it at Brigade (RFC-8693) for an AO-audience token, and sends that
+    # — AO trusts Brigade, not TPO's Keycloak. Disabled until both ends are wired;
+    # when off, the sync endpoint returns 503 cleanly.
     ACCOUNTING_OPS_URL: str = ""
     ACCOUNTING_OPS_ENABLED: bool = False
-    # Token audience/resource AO expects (its KC client id); empty → no audience.
+    # Audience the AO-bound (Brigade-issued) token must carry — AO expects
+    # `accounting-ops`. Used as the requested audience in the Brigade exchange.
     ACCOUNTING_OPS_AUDIENCE: str = ""
-    # Static bearer override for testing / when client-credentials isn't used.
+    # Static bearer override for testing / bypassing the mint+exchange.
     ACCOUNTING_OPS_SERVICE_TOKEN: str = ""
     ACCOUNTING_OPS_TIMEOUT_SECONDS: float = 10.0
+    # Brigade RFC-8693 token-exchange endpoint. Empty → send the raw KC token
+    # (legacy/testing); set it to use the canonical broker the suite trusts.
+    BRIGADE_TOKEN_URL: str = ""
+    # Exchange client auth; default to TPO's KC client when unset.
+    BRIGADE_CLIENT_ID: str = ""
+    BRIGADE_CLIENT_SECRET: str = ""
 
     # LLM gateway (LiteLLM, OpenAI-compatible). Drives OCR field-structuring +
     # the planning agents. On the dev box: http://unicorn-litellm:4000/v1.
