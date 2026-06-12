@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tax-Planning-Ops — The Playbook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/system.css" />
+<style>
+  .page { padding: 26px 0 70px; }
+  .head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  .head h1 { margin: 0; font-weight: 750; font-size: 30px; letter-spacing: -0.02em; }
+
+  .plays { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 20px; }
+  .play { border: 1px solid var(--g-hairline); border-radius: 14px; background: var(--g-surface); box-shadow: var(--shadow-panel); padding: 16px 18px; display: flex; flex-direction: column; gap: 9px; }
+  .play .p-top { display: flex; align-items: baseline; gap: 10px; }
+  .play b.t { font-size: 14.5px; letter-spacing: -0.01em; }
+  .play .cat { margin-left: auto; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--g-ink-3); }
+  .play p { margin: 0; font-size: 12.5px; color: var(--g-ink-2); line-height: 1.55; flex: 1; }
+  .play .elig { display: flex; gap: 6px; flex-wrap: wrap; }
+  .play .elig .chip { font-size: 10px; padding: 2.5px 8px; }
+  .play .foot { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--g-hairline-soft); padding-top: 10px; font-size: 11px; color: var(--g-ink-3); }
+  .play .foot b { color: var(--save); font-family: var(--font-mono); font-size: 11px; }
+  .eng-badge { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.08em; color: var(--agent); border: 1px solid rgba(86,196,189,0.35); border-radius: 6px; padding: 2px 7px; }
+  .lib-badge { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.08em; color: var(--g-ink-3); border: 1px dashed var(--g-hairline); border-radius: 6px; padding: 2px 7px; }
+
+  /* the constants: provenance as a showcase */
+  .const { margin-top: 26px; }
+  .yeartoggle { display: inline-flex; border: 1px solid var(--g-hairline); border-radius: 9px; overflow: hidden; font-size: 12px; font-weight: 600; }
+  .yeartoggle a { padding: 6px 14px; color: var(--g-ink-3); text-decoration: none; }
+  .yeartoggle a.on { background: rgba(238,240,244,0.09); color: var(--g-ink); }
+  .diff td.old { color: var(--g-ink-3); text-decoration: line-through; text-decoration-color: rgba(238,240,244,0.3); }
+  .diff td.new { color: var(--g-ink); font-weight: 600; }
+  .diff td .why { font-family: var(--font-mono); font-size: 9.5px; color: var(--seal); }
+</style>
+</head>
+<body class="grain">
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="wordmark" href="index.html"><span class="mk"></span><b>Tax-Planning-Ops</b></a>
+    <nav class="nav">
+      <a href="01-desk.html">Desk</a>
+      <a href="02-book.html">Book</a>
+      <a href="11-season.html">Season</a>
+      <a href="10-staff.html">Staff</a>
+      <a class="on" href="12-playbook.html">Playbook</a>
+    </nav>
+    <div class="topbar-right">
+      <span class="workspace-chip"><span class="sw"></span> Northstar Tax Advisory ▾</span>
+      <span class="kbd">⌘K</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap page">
+
+  <section class="head rise">
+    <h1>The Playbook</h1>
+    <span class="annotation">fewer strategies than the catalogs — but every one of these recomputes your client’s whole return</span>
+    <a class="btn btn-ghost" style="margin-left:auto; padding:7px 14px; font-size:12.5px" href="#">＋ House strategy</a>
+  </section>
+
+  <!-- ======================================================= the plays ==== -->
+  <div class="plays rise d1">
+    <div class="play">
+      <div class="p-top"><b class="t">Roth conversion — bracket fill</b><span class="cat">retirement</span></div>
+      <p>Fill the chosen ceiling (bracket top or IRMAA tier) in low years; engine prices every level and snaps to inflection points.</p>
+      <div class="elig"><span class="chip">pre-tax IRA/401k</span><span class="chip">low-bracket window</span><span class="chip cliff">IRMAA-aware</span></div>
+      <div class="foot"><span class="eng-badge">∑ ENGINE · roth.window</span><span style="margin-left:auto">fits <b>2</b> clients · <b>$20,640</b>/yr live</span></div>
+    </div>
+    <div class="play">
+      <div class="p-top"><b class="t">S-corp reasonable-comp split</b><span class="cat">entity</span></div>
+      <p>Search the salary that minimizes FICA without starving §199A wages or tripping reasonable-comp risk. Both sides of the ledger shown.</p>
+      <div class="elig"><span class="chip">Sch C ≥ ~$60k</span><span class="chip">not SSTB-capped</span><span class="chip">payroll feasible</span></div>
+      <div class="foot"><span class="eng-badge">∑ ENGINE · scorp.optimize</span><span style="margin-left:auto">fits <b>2</b> · <b>$4,910</b>/yr live</span></div>
+    </div>
+    <div class="play">
+      <div class="p-top"><b class="t">Charitable bunching / DAF</b><span class="cat">charitable</span></div>
+      <p>Stack N years of giving over the standard deduction in one year — 2026’s 0.5%-AGI floor priced in; QCD lane after 70½.</p>
+      <div class="elig"><span class="chip">recurring giving</span><span class="chip">itemize-marginal</span></div>
+      <div class="foot"><span class="eng-badge">∑ ENGINE · charitable.bunching</span><span style="margin-left:auto">fits <b>4</b> · <b>$13,612</b> live</span></div>
+    </div>
+    <div class="play">
+      <div class="p-top"><b class="t">QSBS §1202 exit</b><span class="cat">exit</span></div>
+      <p>Qualify and sequence the sale of C-corp founder stock — holding clock, asset ceiling, 10×-basis cap, post-OBBBA tiers.</p>
+      <div class="elig"><span class="chip">C-corp stock</span><span class="chip">5-yr clock</span><span class="chip">orig. issue</span></div>
+      <div class="foot"><span class="eng-badge">∑ ENGINE · corporate.qsbs</span><span style="margin-left:auto">fits <b>1</b> · <b>$1.19M</b> live</span></div>
+    </div>
+    <div class="play">
+      <div class="p-top"><b class="t">Residency / relocation timing</b><span class="cat">state</span></div>
+      <p>Price the same event in both states and sequence domicile around it. 19 state engines; evidence checklist attached.</p>
+      <div class="elig"><span class="chip">move planned</span><span class="chip">event income</span></div>
+      <div class="foot"><span class="eng-badge">∑ ENGINE · state.delta</span><span style="margin-left:auto">fits <b>1</b> · <b>$635,078</b> live</span></div>
+    </div>
+    <div class="play">
+      <div class="p-top"><b class="t">Augusta rule — §280A(g)</b><span class="cat">house</span></div>
+      <p>Rent the home to the business ≤14 days, tax-free. House strategy: firm-authored, narrative + checklist; savings entered by the advisor.</p>
+      <div class="elig"><span class="chip">owner + entity</span><span class="chip">documented rate</span></div>
+      <div class="foot"><span class="lib-badge">✎ FIRM LIBRARY · rate × amount</span><span style="margin-left:auto">fits <b>2</b> · advisor-priced</span></div>
+    </div>
+  </div>
+  <div class="spec-note rise d2" style="margin-top:14px">SPEC · “fits N clients · $X live” = the matrix column totals (book-scan), refreshed nightly — the library is wired to the book, not a brochure. Engine-backed plays carry ∑; firm-library plays carry ✎ and are honest about being rate-×-amount.</div>
+
+  <!-- ===================================================== the constants == -->
+  <section class="panel const rise d3">
+    <div class="panel-head">
+      <span class="microlabel">The constants under everything</span>
+      <span class="annotation" style="font-size:13.5px">correctness is a feature — show the provenance, the diff, and the tests</span>
+      <div class="yeartoggle" style="margin-left:auto"><a href="#">TY 2025</a><a class="on" href="#">TY 2026 · diff</a></div>
+    </div>
+    <table class="ledger diff">
+      <thead><tr><th>Constant</th><th class="r">2025</th><th class="r">2026</th><th>Source</th><th class="r">Tests</th></tr></thead>
+      <tbody>
+        <tr><td>Standard deduction · single / MFJ / HoH</td><td class="r fig old">15,750 / 31,500 / 23,625</td><td class="r fig new">16,100 / 32,200 / 24,150</td><td><span class="chip" style="font-size:10px">Rev. Proc. 2025-32</span></td><td class="r fig" style="color:var(--save)">✓ 12</td></tr>
+        <tr><td>AMT exemption phase-out · single / MFJ</td><td class="r fig old">626,350 / 1,252,700 @25%</td><td class="r fig new">500,000 / 1,000,000 @50% <span class="why">OBBBA reset</span></td><td><span class="chip" style="font-size:10px">OBBBA §70107</span></td><td class="r fig" style="color:var(--save)">✓ 9</td></tr>
+        <tr><td>QBI thresholds · single / MFJ</td><td class="r fig old">197,300 / 394,600</td><td class="r fig new">201,750 / 403,500 <span class="why">+$75k/150k phase-in</span></td><td><span class="chip" style="font-size:10px">§199A · Rev. Proc.</span></td><td class="r fig" style="color:var(--save)">✓ 31</td></tr>
+        <tr><td>IRMAA · Part B base / tier-4 MFJ MAGI</td><td class="r fig old">185.00 / 386,000</td><td class="r fig new">202.90 / 410,000 <span class="why">sets 2028 premiums</span></td><td><span class="chip" style="font-size:10px">CMS 2026</span></td><td class="r fig" style="color:var(--save)">✓ 14</td></tr>
+        <tr><td>SS wage base (SE / S-corp planning)</td><td class="r fig old">176,100</td><td class="r fig new">184,500</td><td><span class="chip" style="font-size:10px">SSA</span></td><td class="r fig" style="color:var(--save)">✓ 8</td></tr>
+        <tr><td>State engines live</td><td class="r fig old">—</td><td class="r fig new">19 states <span class="why">CA NY NJ VA IL PA MA GA NC AZ + 9 no-tax</span></td><td><span class="chip" style="font-size:10px">FTB / DTF / DOR</span></td><td class="r fig" style="color:var(--save)">✓ 38</td></tr>
+      </tbody>
+    </table>
+    <div style="display:flex; align-items:center; gap:12px; padding:14px 20px; border-top:1px solid var(--g-hairline-soft)">
+      <span class="stamp stamp-verified" style="transform:none">148 golden tests green</span>
+      <span style="font-size:12px; color:var(--g-ink-3)">every value hand-derived, adversarially verified, and guarded — engines are constant-free by test</span>
+      <span class="chip" style="margin-left:auto">a constants change re-ranks the book + redlines affected memos</span>
+    </div>
+  </section>
+
+  <footer style="padding:26px 0 0; display:flex; gap:14px; flex-wrap:wrap">
+    <span class="spec-note">№ 12 — THE PLAYBOOK · the strategy library wired to the live book, and the constants shown like the audited substrate they are.</span>
+  </footer>
+</main>
+
+</body>
+</html>

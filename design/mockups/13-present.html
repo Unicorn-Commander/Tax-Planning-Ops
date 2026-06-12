@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Present — Marcus Webb · 2026 Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/system.css" />
+<style>
+  /* PRESENT MODE: the room goes dark, the paper does the talking.
+     No nav, no controls, no agent chrome — type sized for a screen-share. */
+  .stagebar { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; gap: 14px; padding: 12px 26px; background: color-mix(in srgb, var(--g-bg) 80%, transparent); backdrop-filter: blur(14px); border-bottom: 1px solid var(--g-hairline-soft); }
+  .stagebar .pg { margin-left: auto; font-family: var(--font-mono); font-size: 10.5px; color: var(--g-ink-3); }
+
+  .deck { max-width: 980px; margin: 0 auto; padding: 40px 24px 90px; display: flex; flex-direction: column; gap: 44px; }
+  .plate { padding: 70px 78px; }
+  .plate .folio { position: absolute; bottom: 22px; right: 28px; font-family: var(--font-mono); font-size: 9.5px; color: var(--p-ink-3); }
+  .plate h1 { font-size: 42px; margin: 22px 0 10px; }
+  .plate .lede { font-size: 19px; }
+
+  .big-number { font-family: var(--font-ui); font-weight: 800; font-size: 88px; letter-spacing: -0.045em; line-height: 0.95; margin: 30px 0 6px; }
+  .nof { font-size: 15px; color: var(--p-ink-2); }
+
+  /* simplified position for clients: 3 marks max */
+  .pos-simple { margin: 26px 0 8px; }
+  .pos-simple .lane { display: flex; height: 42px; border-radius: 8px; overflow: hidden; gap: 3px; position: relative; }
+  .pos-simple .lane i { opacity: 0.9; }
+  .pos-note { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 10px; color: var(--p-ink-3); margin-top: 8px; }
+
+  .moves { display: grid; grid-template-columns: 1fr; gap: 16px; margin-top: 24px; }
+  .move { border: 1px solid var(--p-hairline); border-radius: 10px; padding: 20px 24px; display: flex; gap: 20px; align-items: baseline; background: rgba(255,255,255,0.45); }
+  .move .n { font-family: var(--font-ui); font-weight: 800; font-size: 26px; color: var(--p-seal); width: 34px; flex: none; }
+  .move b { font-family: var(--font-ui); font-size: 18px; display: block; letter-spacing: -0.01em; }
+  .move p { margin: 6px 0 0; font-size: 15px; color: var(--p-ink-2); line-height: 1.6; }
+  .move .amt { margin-left: auto; font-family: var(--font-ui); font-weight: 750; font-size: 24px; color: var(--p-save); white-space: nowrap; }
+
+  .keep { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid var(--p-hairline); border-radius: 10px; overflow: hidden; margin-top: 26px; }
+  .keep > div { padding: 24px 28px; }
+  .keep .a { border-right: 1px solid var(--p-hairline); }
+  .keep .v { font-family: var(--font-ui); font-weight: 800; font-size: 40px; letter-spacing: -0.03em; }
+
+  .cal { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 26px; }
+  .cal .c { border: 1px solid var(--p-hairline); border-radius: 10px; padding: 16px 18px; background: rgba(255,255,255,0.45); }
+  .cal .c .d { font-family: var(--font-mono); font-size: 10px; color: var(--p-seal); letter-spacing: 0.1em; }
+  .cal .c b { font-family: var(--font-ui); font-size: 14.5px; display: block; margin-top: 6px; }
+  .cal .c span { font-size: 12px; color: var(--p-ink-3); }
+</style>
+</head>
+<body class="grain">
+
+<div class="stagebar">
+  <a class="wordmark" href="06-memo.html" style="text-decoration:none"><span class="mk"></span><b>esc — back to the desk</b></a>
+  <span class="chip" style="border-color:rgba(238,240,244,0.2)">client view · no controls · no jargon</span>
+  <span class="pg">plate 1–4 · ⌐ ¬ arrow keys · F fullscreen</span>
+</div>
+
+<main class="deck">
+
+  <!-- ============================================================ cover === -->
+  <section class="sheet plate rise" style="position:relative">
+    <div class="letterhead">
+      <span class="firm">Northstar Tax Advisory</span>
+      <span class="doc-ref">PREPARED FOR MARCUS WEBB · JUNE 2026</span>
+    </div>
+    <h1>Your next four years,<br/>planned to the dollar.</h1>
+    <p class="lede">We rebuilt your tax position from your actual return and your company’s actual books — then planned the sale, the move, and the giving you told us about.</p>
+    <div class="big-number fig-serif" style="color:var(--p-save)">$1,846,290</div>
+    <div class="nof">identified across 2026–2030 · every figure computed, none estimated<br/><b>net of our $15,000 planning fee: $1,831,290 stays with you — 123 : 1</b></div>
+    <span class="folio">№ 1 · THE HEADLINE</span>
+  </section>
+
+  <!-- ========================================================= position === -->
+  <section class="sheet plate rise d1" style="position:relative">
+    <div class="microlabel" style="margin-bottom:6px">Where you stand today</div>
+    <h1 style="font-size:30px">You’re using the brackets well.<br/>The opportunity is the <em>next</em> three years.</h1>
+    <div class="pos-simple">
+      <div class="lane">
+        <i style="background:var(--s10); flex:6"></i><i style="background:var(--s12); flex:13"></i>
+        <i style="background:var(--s22); flex:20"></i><i style="background:var(--s24); flex:24"></i>
+        <i style="background:var(--s32); flex:16; opacity:0.22"></i><i style="background:var(--s35); flex:16; opacity:0.18"></i>
+        <div style="position:absolute; left:59%; top:-10px; bottom:-10px; border-left:2.5px solid var(--p-ink)"></div>
+        <div style="position:absolute; left:59%; top:-30px; transform:translateX(-50%); font-family:var(--font-mono); font-size:11px; color:var(--p-ink)">you</div>
+      </div>
+      <div class="pos-note"><span>lower rates</span><span>your income fills to here — 24%</span><span>higher rates</span></div>
+    </div>
+    <p style="font-size:15.5px">2025: you earned <b class="fig-serif">$216,200</b> and paid <b class="fig-serif">$50,811</b> in combined federal and California tax — about 23.5 cents of every dollar. That’s normal for your bracket. What’s <i>not</i> normal is what 2027 makes possible.</p>
+    <span class="folio">№ 2 · THE POSITION</span>
+  </section>
+
+  <!-- =========================================================== moves ==== -->
+  <section class="sheet plate rise d2" style="position:relative">
+    <div class="microlabel" style="margin-bottom:6px">The plan, in three moves</div>
+    <h1 style="font-size:30px">Order is everything.</h1>
+    <div class="moves">
+      <div class="move">
+        <span class="n">1</span>
+        <span style="flex:1"><b>Move to Texas before the sale closes</b>
+        <p>Your company sale is taxed by the state you live in when it closes. Texas doesn’t have an income tax. We establish your residency properly — lease, license, the works — before signing day.</p></span>
+        <span class="amt fig-serif">$635,078</span>
+      </div>
+      <div class="move">
+        <span class="n">2</span>
+        <span style="flex:1"><b>Sell under the small-business stock rule</b>
+        <p>Your founder shares qualify for a federal exclusion written exactly for situations like yours. Held since 2019, sold in 2027 — the federal tax on the gain goes to zero. We confirm one document (your stock basis) and the position is airtight.</p></span>
+        <span class="amt fig-serif">$1,190,000</span>
+      </div>
+      <div class="move">
+        <span class="n">3</span>
+        <span style="flex:1"><b>Give three years of charity this year — then convert in the quiet years</b>
+        <p>2026 is your last full California year: we stack your next three years of giving into one fund now, while the deduction is worth the most. After the sale, 2028–2030 are low-income years — we move retirement money to Roth at the cheapest rates you’ll ever see.</p></span>
+        <span class="amt fig-serif">$21,212+</span>
+      </div>
+    </div>
+    <span class="folio">№ 3 · THE MOVES</span>
+  </section>
+
+  <!-- ======================================================= keep + cal === -->
+  <section class="sheet plate rise d3" style="position:relative">
+    <div class="microlabel" style="margin-bottom:6px">What it costs · what happens next</div>
+    <h1 style="font-size:30px">You keep the difference.</h1>
+    <div class="keep">
+      <div class="a">
+        <div class="microlabel" style="color:var(--p-ink-3)">Our fee — flat, no surprises</div>
+        <div class="v fig-serif">$15,000</div>
+        <p style="font-size:13px; margin:8px 0 0; color:var(--p-ink-2)">plan + implementation support + quarterly reviews through the sale</p>
+      </div>
+      <div>
+        <div class="microlabel" style="color:var(--p-save)">Identified savings, net of fee</div>
+        <div class="v fig-serif" style="color:var(--p-save)">$1,831,290</div>
+        <p style="font-size:13px; margin:8px 0 0; color:var(--p-ink-2)">we track every move to <b>realized</b> — and show you the reconciliation on your 2027 return</p>
+      </div>
+    </div>
+    <div class="cal">
+      <div class="c"><div class="d">NOW · JUN 2026</div><b>Open the giving fund</b><span>and confirm one stock document</span></div>
+      <div class="c"><div class="d">H2 2026</div><b>Texas groundwork</b><span>residency checklist — we run it with you</span></div>
+      <div class="c"><div class="d">2027</div><b>Close the sale</b><span>as a Texan, under the exclusion</span></div>
+      <div class="c"><div class="d">2028–30</div><b>The quiet years</b><span>Roth conversions at the floor rates</span></div>
+    </div>
+    <p class="fn" style="margin-top:26px">Every dollar figure on these pages was computed by deterministic tax engines from your filed 2025 return, your company’s live books, and current law (2026 constants, verified). Prepared by Northstar Tax Advisory · reviewed and signed by D. Reyes, EA · M-2026-014 · This is planning, not a filed return.</p>
+    <span class="folio">№ 4 · THE AGREEMENT</span>
+  </section>
+
+  <div class="spec-note" style="max-width:980px; margin:0 auto">SPEC · Present mode renders FROM the signed memo (top 3 accepted findings, client-friendly register — the agent’s one-click translation, advisor-approved). Plain-language only; no nominal-vs-true rates, no engine names on client plates — the provenance line lives in the footer. Arrow keys page; F fullscreens; exports to the branded PDF deck. № 13 — PRESENT.</div>
+</main>
+
+</body>
+</html>

@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Evelyn &amp; Sam Cho — The Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/system.css" />
+<style>
+  body { --chue: #b65f72; }
+  .lab { padding: 26px 0 70px; }
+  .lab-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .lab-head h1 { margin: 0; font-weight: 750; font-size: 30px; letter-spacing: -0.02em; }
+  .bank { display: flex; gap: 8px; margin-left: auto; align-items: center; }
+
+  /* ------------------------------------------ the conversion instrument --- */
+  .roth { padding: 26px 28px 70px; position: relative; }
+  .roth .p-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 48px; flex-wrap: wrap; }
+  .inst-track.hero { height: 62px; }
+  /* the conversion fill: the agent's recommended amount, draggable */
+  .conv-fill { position: absolute; top: 0; bottom: 0; z-index: 2; background: repeating-linear-gradient(135deg, rgba(76,195,138,0.34) 0 7px, rgba(76,195,138,0.12) 7px 14px); border-left: 2px solid var(--save); border-right: 0; }
+  .handle { position: absolute; top: -12px; bottom: -12px; width: 0; z-index: 5; border-right: 2.5px solid var(--save); cursor: ew-resize; }
+  .handle .grip { position: absolute; right: -11px; top: 50%; transform: translateY(-50%); width: 20px; height: 30px; border-radius: 7px; background: linear-gradient(180deg, #5fd49b, #2f9e69); box-shadow: 0 3px 12px rgba(76,195,138,0.5); display: grid; place-items: center; color: #06281a; font-size: 9px; letter-spacing: 1px; }
+  .handle .amt { position: absolute; right: -54px; top: -30px; font-family: var(--font-mono); font-size: 11.5px; color: var(--save); background: rgba(76,195,138,0.1); border: 1px solid rgba(76,195,138,0.4); padding: 3px 9px; border-radius: 7px; white-space: nowrap; }
+
+  /* live recompute readouts under the instrument */
+  .readout { display: flex; gap: 10px; margin-top: 34px; flex-wrap: wrap; }
+  .ro { border: 1px solid var(--g-hairline); border-radius: 10px; padding: 9px 14px; background: rgba(255,255,255,0.02); }
+  .ro .k { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; color: var(--g-ink-3); text-transform: uppercase; }
+  .ro .v { font-size: 15px; font-weight: 700; margin-top: 3px; }
+  .ro.bind { border-color: rgba(226,93,109,0.5); background: rgba(226,93,109,0.06); }
+
+  /* --------------------------------------------------- the EMR terrain ---- */
+  .terrain svg { display: block; width: 100%; height: 230px; }
+  .terrain .axis-l { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 9.5px; color: var(--g-ink-3); padding: 8px 4px 0; }
+
+  /* ----------------------------------------------------- scenario ledger -- */
+  .ledger th.base { color: var(--g-ink-2); }
+  .ledger th.rec { color: var(--save); }
+  .ledger td.dim { color: var(--g-ink-3); }
+  .ledger .dcol { background: rgba(76,195,138,0.045); }
+  .ledger td .neg { color: var(--cliff); }
+  .ledger td .pos { color: var(--save); }
+  .rowlab { font-size: 12px; color: var(--g-ink-2); }
+
+  /* ------------------------------------------------------- crossover ------ */
+  .grid2 { display: grid; grid-template-columns: 1.25fr 1fr; gap: 22px; margin-top: 22px; align-items: start; }
+  .cross svg { display: block; width: 100%; height: 200px; }
+  .legend { display: flex; gap: 16px; font-size: 11px; color: var(--g-ink-3); padding: 0 18px 14px; }
+  .legend i { display: inline-block; width: 16px; height: 2.5px; border-radius: 2px; vertical-align: 3px; margin-right: 6px; }
+
+  .sched-row { display: flex; align-items: center; gap: 12px; padding: 11px 18px; border-top: 1px solid var(--g-hairline-soft); font-size: 13px; }
+  .sched-row:first-of-type { border-top: 0; }
+  .sched-row .yr { font-family: var(--font-mono); font-size: 11px; color: var(--g-ink-3); width: 42px; }
+  .sched-row .why { font-size: 11px; color: var(--g-ink-3); }
+  .sched-row b { margin-left: auto; font-size: 14px; }
+
+  /* the ask-anything bar */
+  .whatif { margin-top: 22px; display: flex; align-items: center; gap: 14px; border: 1px dashed var(--g-hairline); border-radius: 14px; padding: 13px 18px; }
+</style>
+</head>
+<body class="grain">
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="wordmark" href="01-desk.html"><span class="mk"></span><b>‹ Desk</b></a>
+    <span class="client-crumb">
+      <span class="cavatar" style="--chue:#b65f72">EC</span>
+      <span><b>Evelyn &amp; Sam Cho</b><div class="meta">CF-0040 · mfj · WA · plan year 2026</div></span>
+    </span>
+    <nav class="nav">
+      <a href="03-casefile.html">Case</a>
+      <a href="04-return.html">Return</a>
+      <a href="08-entities.html">Entities</a>
+      <a href="09-goals.html">Brief</a>
+      <a class="on" href="05-lab.html">Lab</a>
+      <a href="06-memo.html">Memo</a>
+      <a href="07-plan.html">Plan</a>
+    </nav>
+    <div class="topbar-right">
+      <a class="btn btn-ghost" style="padding:6px 12px;font-size:12px" href="13-present.html">Present ▸</a>
+      <span class="kbd">⌘K</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap lab">
+
+  <section class="lab-head rise">
+    <h1>The Lab</h1>
+    <span class="annotation">move a number, the whole return recomputes — under 100ms, every cliff priced</span>
+    <div class="bank">
+      <span class="chip">⚿ Baseline 2026 <i style="color:var(--g-ink-3)">— immutable</i></span>
+      <span class="chip save">● Roth ladder — active</span>
+      <span class="chip">＋ scenario</span>
+    </div>
+  </section>
+
+  <!-- ======================================= the conversion instrument ==== -->
+  <section class="panel roth rise d1">
+    <div class="p-head">
+      <span class="microlabel">Roth conversion · drag to size — the chart is the control</span>
+      <span class="annotation" style="font-size:13.5px">the optimizer tried 40 levels; the handle sits on its pick</span>
+      <span style="margin-left:auto" class="chip agent">optimizer: $18,400 — IRMAA-capped</span>
+    </div>
+
+    <div class="instrument">
+      <div class="inst-track hero">
+        <!-- 2026 MFJ strata, widths ∝ real bracket spans (to $600k view) -->
+        <div class="inst-seg filled" style="flex:4.1"><i style="--seg:var(--s10)"></i><span class="rt">10%</span><span class="bd">$0</span></div>
+        <div class="inst-seg filled" style="flex:12.7"><i style="--seg:var(--s12)"></i><span class="rt">12%</span><span class="bd">24,800</span></div>
+        <div class="inst-seg filled" style="flex:18.4"><i style="--seg:var(--s22)"></i><span class="rt">22%</span><span class="bd">100,800</span></div>
+        <div class="inst-seg partial" style="flex:32; --fillpct:62%"><i style="--seg:var(--s24)"></i><span class="rt">24%</span><span class="bd">211,400</span></div>
+        <div class="inst-seg" style="flex:18.2"><i style="--seg:var(--s32)"></i><span class="rt">32%</span><span class="bd">403,550</span></div>
+        <div class="inst-seg" style="flex:14.6"><i style="--seg:var(--s35)"></i><span class="rt">35%</span><span class="bd">512,450</span></div>
+
+        <!-- current taxable position, conversion fill, the handle -->
+        <div class="inst-now" style="left:55.1%"><span class="tag">taxable $330,400</span></div>
+        <div class="conv-fill" style="left:55.1%; width:3.05%"></div>
+        <div class="handle" style="left:58.15%"><span class="grip">⇔</span><span class="amt">+$18,400</span></div>
+
+        <!-- cliffs on the SAME canvas — what makes this instrument honest -->
+        <div class="inst-pin" style="left:58.4%"><span class="tag">IRMAA t4 · MAGI $410k</span></div>
+        <div class="inst-pin soft" style="left:67.3%"><span class="tag">32% edge</span></div>
+      </div>
+      <div class="axis" style="display:flex; justify-content:space-between; margin-top:26px; font-family:var(--font-mono); font-size:9.5px; color:var(--g-ink-3)"><span>$0</span><span>2026 MFJ taxable →</span><span>$600k</span></div>
+    </div>
+
+    <div class="readout">
+      <div class="ro"><div class="k">conversion tax</div><div class="v fig">+$4,674</div></div>
+      <div class="ro"><div class="k">effective rate on this move</div><div class="v fig">25.4%</div></div>
+      <div class="ro bind"><div class="k">binding limit</div><div class="v" style="color:var(--cliff)">IRMAA tier 4 — $1 over costs $3,472/yr</div></div>
+      <div class="ro"><div class="k">2028 premiums (both enrolled)</div><div class="v fig">unchanged ✓</div></div>
+      <div class="ro"><div class="k">vs converting later at</div><div class="v fig">32% + surcharges</div></div>
+      <a class="mini-btn seal" style="align-self:center; margin-left:auto" href="06-memo.html">Snapshot → memo</a>
+    </div>
+    <div class="spec-note" style="margin-top:16px">SPEC · drag = optimistic recompute (&lt;100ms, engines are deterministic) — figures sit still, changed cells highlight-fade once. The handle snaps to engine inflection points (cliff edges, bracket tops). 2026 MAGI sets 2028 premiums — the year mapping is always printed.</div>
+  </section>
+
+  <!-- ================================================== the EMR terrain === -->
+  <section class="panel terrain rise d2" style="margin-top:22px">
+    <div class="panel-head">
+      <span class="microlabel">True marginal terrain · the next $100,000 of ordinary income</span>
+      <span class="annotation" style="font-size:13px">the nominal bracket says 24% — the terrain shows what the next dollar really costs</span>
+      <span class="chip" style="margin-left:auto">engine-recomputed at $500 steps</span>
+    </div>
+    <div style="padding: 18px 22px 8px">
+      <svg viewBox="0 0 1000 230" preserveAspectRatio="none" aria-label="Effective marginal rate terrain">
+        <!-- gridlines -->
+        <g stroke="rgba(238,240,244,0.07)" stroke-width="1">
+          <line x1="0" y1="38"  x2="1000" y2="38"/><line x1="0" y1="88" x2="1000" y2="88"/>
+          <line x1="0" y1="138" x2="1000" y2="138"/><line x1="0" y1="188" x2="1000" y2="188"/>
+        </g>
+        <g font-family="IBM Plex Mono" font-size="10" fill="rgba(238,240,244,0.4)">
+          <text x="6" y="34">60%</text><text x="6" y="84">40%</text><text x="6" y="134">24%</text><text x="6" y="184">10%</text>
+        </g>
+        <!-- statutory steps (dim) -->
+        <path d="M0,138 L735,138 L735,98 L1000,98" fill="none" stroke="rgba(238,240,244,0.28)" stroke-width="1.5" stroke-dasharray="5 4"/>
+        <!-- TRUE EMR: 24% base, SS-taxability ripple, the IRMAA spike at +18.4k, 32% step at +73.5k -->
+        <path d="M0,138 L60,138 L74,126 L96,126 L110,138 L184,138 L184,12 L192,12 L192,138 L735,138 L735,98 L1000,98"
+              fill="none" stroke="#e8b54a" stroke-width="2.5" stroke-linejoin="round"/>
+        <path d="M0,138 L60,138 L74,126 L96,126 L110,138 L184,138 L184,12 L192,12 L192,138 L735,138 L735,98 L1000,98 L1000,230 L0,230 Z"
+              fill="rgba(232,181,74,0.07)" stroke="none"/>
+        <!-- recommended fill zone -->
+        <rect x="0" y="0" width="184" height="230" fill="rgba(76,195,138,0.08)"/>
+        <line x1="184" y1="0" x2="184" y2="230" stroke="#4cc38a" stroke-width="2"/>
+        <!-- annotations -->
+        <g font-family="IBM Plex Mono" font-size="10.5">
+          <text x="30" y="216" fill="#4cc38a">convert here · 24–25.4% true</text>
+          <text x="200" y="26" fill="#e25d6d">IRMAA t4 cliff · spike ≈ ∞/dollar · $3,472/yr</text>
+          <text x="748" y="92" fill="rgba(238,240,244,0.55)">32% statutory</text>
+          <text x="64" y="118" fill="rgba(238,240,244,0.45)">SS phase-in ripple</text>
+        </g>
+      </svg>
+      <div class="axis-l"><span>+$0</span><span>+$18,400</span><span>+$50k</span><span>+$73,550</span><span>+$100k</span></div>
+    </div>
+    <div style="padding: 6px 22px 18px; font-size:12px; color:var(--g-ink-3)">Dashed = the bracket table. Amber = what the engines actually price, including Social Security phase-in and the Medicare cliff. Click any spike to decompose it into line items.</div>
+  </section>
+
+  <!-- ================================================= scenario ledger ==== -->
+  <section class="panel rise d3" style="margin-top:22px">
+    <div class="panel-head">
+      <span class="microlabel">Scenario ledger · baseline-anchored, delta always visible</span>
+      <span class="chip" style="margin-left:auto">⎙ print: 3 columns + Δ fits the memo</span>
+    </div>
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th>2026</th>
+          <th class="r base">Baseline ⚿</th>
+          <th class="r rec">Convert $18,400 ◀ rec</th>
+          <th class="r dcol">Δ vs baseline</th>
+          <th class="r">Convert $73,550</th>
+          <th class="r dcol">Δ vs baseline</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="rowlab">AGI / MAGI</td><td class="r fig">391,600</td><td class="r fig">410,000</td><td class="r fig dcol">+18,400</td><td class="r fig">465,150</td><td class="r fig dcol">+73,550</td></tr>
+        <tr><td class="rowlab">Taxable income</td><td class="r fig">330,400</td><td class="r fig">348,800</td><td class="r fig dcol">+18,400</td><td class="r fig">403,950</td><td class="r fig dcol">+73,550</td></tr>
+        <tr><td class="rowlab">Federal tax</td><td class="r fig">61,920</td><td class="r fig">66,594</td><td class="r fig dcol"><span class="neg">+4,674</span></td><td class="r fig">81,575</td><td class="r fig dcol"><span class="neg">+19,655</span></td></tr>
+        <tr><td class="rowlab">2028 Medicare premiums <span style="color:var(--g-ink-3);font-size:10px">(2026 MAGI · both enrolled)</span></td><td class="r fig">10,193</td><td class="r fig">10,193</td><td class="r fig dcol">0 ✓</td><td class="r fig">13,665</td><td class="r fig dcol"><span class="neg">+3,472/yr</span></td></tr>
+        <tr><td class="rowlab">True rate on the move</td><td class="r fig dim">—</td><td class="r fig">25.4%</td><td class="r fig dcol"></td><td class="r fig"><span class="neg">31.4%</span></td><td class="r fig dcol">cliff inside</td></tr>
+        <tr><td class="rowlab">Lifetime tax (to 2040, NPV)</td><td class="r fig">1,184,300</td><td class="r fig">1,071,900</td><td class="r fig dcol"><span class="pos">−112,400</span></td><td class="r fig">1,089,200</td><td class="r fig dcol"><span class="pos">−95,100</span></td></tr>
+      </tbody>
+    </table>
+    <div style="padding: 12px 20px; font-size:12px; color:var(--g-ink-3); border-top:1px solid var(--g-hairline-soft)">The bigger conversion saves less: the cliff inside it costs more than the bracket room is worth. That sentence is the memo. <span class="fig" style="color:var(--g-ink-2)">Parentheses in print; negatives never bare-minus in CPA tables.</span></div>
+  </section>
+
+  <div class="grid2">
+    <!-- crossover: the gap between the lines is the value of the advice -->
+    <section class="panel cross rise d4">
+      <div class="panel-head">
+        <span class="microlabel">Cumulative tax · the crossover</span>
+        <span style="margin-left:auto; font-size:11px; color:var(--g-ink-3)">pain now, payoff from 2031</span>
+      </div>
+      <div style="padding: 16px 18px 0">
+        <svg viewBox="0 0 1000 200" preserveAspectRatio="none">
+          <g stroke="rgba(238,240,244,0.07)" stroke-width="1">
+            <line x1="0" y1="50" x2="1000" y2="50"/><line x1="0" y1="100" x2="1000" y2="100"/><line x1="0" y1="150" x2="1000" y2="150"/>
+          </g>
+          <!-- do nothing -->
+          <path d="M0,196 C200,168 380,140 520,112 C700,76 880,38 1000,16" fill="none" stroke="rgba(238,240,244,0.45)" stroke-width="2.5"/>
+          <!-- ladder: higher early (conversions), flattens after -->
+          <path d="M0,196 C150,150 300,122 460,104 C640,84 840,68 1000,58" fill="none" stroke="#4cc38a" stroke-width="2.5"/>
+          <circle cx="445" cy="106" r="4" fill="#0b0d11" stroke="#4cc38a" stroke-width="2"/>
+          <g font-family="IBM Plex Mono" font-size="10.5">
+            <text x="455" y="96" fill="#4cc38a">crossover · 2031</text>
+            <text x="845" y="120" fill="#4cc38a">gap at 2040 = $112,400</text>
+          </g>
+          <line x1="1000" y1="16" x2="1000" y2="58" stroke="#4cc38a" stroke-width="2" stroke-dasharray="3 3"/>
+        </svg>
+        <div class="axis-l" style="display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:9.5px; color:var(--g-ink-3); padding:8px 4px 14px"><span>2026</span><span>2031</span><span>2035</span><span>2040</span></div>
+      </div>
+      <div class="legend"><span><i style="background:rgba(238,240,244,0.45)"></i>do nothing</span><span><i style="background:#4cc38a"></i>conversion ladder</span><span style="margin-left:auto">RMDs begin 2034 — the do-nothing line steepens</span></div>
+    </section>
+
+    <!-- the ladder schedule: concrete, year by year, each capped by its own cliff -->
+    <section class="panel rise d5">
+      <div class="panel-head">
+        <span class="microlabel">The ladder · each year capped by its own cliff</span>
+        <a class="chip" style="margin-left:auto" href="06-memo.html">→ Exhibit in memo</a>
+      </div>
+      <div class="sched-row"><span class="yr">2026</span><span>while Evelyn still earns<br/><span class="why">cap: IRMAA tier 4 at $410k MAGI</span></span><b class="fig">$18,400</b></div>
+      <div class="sched-row"><span class="yr">2027</span><span>Evelyn retires in June<br/><span class="why">cap: IRMAA tier 3 — lower MAGI base</span></span><b class="fig">$52,000</b></div>
+      <div class="sched-row"><span class="yr">2028</span><span>first full valley year<br/><span class="why">cap: top of 24% — IRMAA clear</span></span><b class="fig">$74,000</b></div>
+      <div class="sched-row" style="background:rgba(76,195,138,0.04)"><span class="yr">Σ</span><span><b>$144,400 converted</b> before RMDs begin<br/><span class="why">every cap engine-priced · re-runs when books or law change</span></span><b class="fig tone-save">−$112,400 lifetime</b></div>
+    </section>
+  </div>
+
+  <!-- what-if anything: the engines answer free-form mutations -->
+  <div class="whatif rise d6">
+    <span class="aavatar" style="--ahue:var(--agent); width:32px; height:32px; font-size:12px">S</span>
+    <span style="flex:1; font-size:14px; color:var(--g-ink-3)">What if — <b style="color:var(--g-ink-2)">“Evelyn retires in March instead of June</b><span style="display:inline-block;width:1.5px;height:15px;background:var(--g-ink-2);vertical-align:-2px;margin-left:2px"></span>”</span>
+    <span style="font-family:var(--font-mono); font-size:10px; color:var(--g-ink-3)">mutates inputs · full recompute · lands as a new column</span>
+  </div>
+
+  <footer style="padding:26px 0 0; display:flex; gap:14px; flex-wrap:wrap">
+    <span class="spec-note">№ 05 — THE LAB · optimizers as instruments. Backend: expose recompute_scenario + optimizer search traces (today they live inside the strategist). Baseline is immutable; scenarios are clones; Present mode hides every control.</span>
+  </footer>
+</main>
+
+</body>
+</html>

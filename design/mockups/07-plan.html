@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Jordan Alvarez — The Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/system.css" />
+<style>
+  body { --chue: #56a3a0; }
+  .page { padding: 26px 0 70px; }
+  .head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .head h1 { margin: 0; font-weight: 750; font-size: 30px; letter-spacing: -0.02em; }
+
+  /* potential → signed → realized: the ledger that renews retainers */
+  .ledger3 { display: grid; grid-template-columns: 1fr 1fr 1.35fr; gap: 0; margin-top: 18px; overflow: hidden; }
+  .ledger3 > div { padding: 18px 22px; border-left: 1px solid var(--g-hairline-soft); }
+  .ledger3 > div:first-child { border-left: 0; }
+  .ledger3 .v { font-size: 27px; font-weight: 750; letter-spacing: -0.025em; margin-top: 6px; }
+  .ledger3 .d { font-size: 11.5px; color: var(--g-ink-3); margin-top: 5px; }
+  .real-bar { height: 7px; border-radius: 99px; background: rgba(238,240,244,0.08); overflow: hidden; margin-top: 10px; }
+  .real-bar i { display: block; height: 100%; width: 18%; background: linear-gradient(90deg, var(--seal), #e7cf9b); }
+
+  /* strategy contract cards: who / what / cash / when / confirmed-by */
+  .contract { border-top: 1px solid var(--g-hairline-soft); padding: 18px 22px; }
+  .contract:first-of-type { border-top: 0; }
+  .contract .c-head { display: flex; align-items: baseline; gap: 12px; }
+  .contract .c-head b { font-size: 15px; letter-spacing: -0.01em; }
+  .contract .c-head .amt { margin-left: auto; font-size: 16px; font-weight: 700; }
+  .fields { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 12px; }
+  .fld { border: 1px solid var(--g-hairline-soft); border-radius: 9px; padding: 8px 11px; }
+  .fld .k { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--g-ink-3); }
+  .fld .v { font-size: 12px; margin-top: 3px; color: var(--g-ink); }
+  .fld.warn { border-color: rgba(224,164,88,0.45); background: rgba(224,164,88,0.05); }
+  .evid { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 9.5px; color: var(--save); }
+
+  .grid2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 22px; margin-top: 22px; align-items: start; }
+  .qchart svg { display: block; width: 100%; height: 190px; }
+  .qrow { display: flex; align-items: center; gap: 12px; padding: 10px 20px; border-top: 1px solid var(--g-hairline-soft); font-size: 12.5px; }
+  .qrow .d { font-family: var(--font-mono); font-size: 10px; color: var(--g-ink-3); width: 110px; }
+  .qrow b { margin-left: auto; }
+
+  .deliv { display: flex; gap: 12px; padding: 13px 18px; border-top: 1px solid var(--g-hairline-soft); align-items: center; }
+  .deliv:first-of-type { border-top: 0; }
+  .d-ic { width: 36px; height: 46px; border-radius: 4px; background: linear-gradient(180deg, #efe9da, #e4ddc9); flex: none; position: relative; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+  .d-ic::after { content: ""; position: absolute; left: 6px; right: 6px; top: 8px; height: 2px; background: #1d1b16; opacity: 0.7; box-shadow: 0 5px 0 rgba(29,27,22,0.35), 0 10px 0 rgba(29,27,22,0.25), 0 15px 0 rgba(29,27,22,0.2); }
+</style>
+</head>
+<body class="grain">
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="wordmark" href="01-desk.html"><span class="mk"></span><b>‹ Desk</b></a>
+    <span class="client-crumb">
+      <span class="cavatar" style="--chue:#56a3a0">JA</span>
+      <span><b>Jordan Alvarez</b><div class="meta">CF-0042 · single · FL · plan year 2026</div></span>
+    </span>
+    <nav class="nav">
+      <a href="03-casefile.html">Case</a>
+      <a href="04-return.html">Return</a>
+      <a href="08-entities.html">Entities</a>
+      <a href="09-goals.html">Brief</a>
+      <a href="05-lab.html">Lab</a>
+      <a href="06-memo.html">Memo</a>
+      <a class="on" href="07-plan.html">Plan</a>
+    </nav>
+    <div class="topbar-right">
+      <a class="btn btn-ghost" style="padding:6px 12px;font-size:12px" href="13-present.html">Present ▸</a>
+      <span class="kbd">⌘K</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap page">
+
+  <section class="head rise">
+    <h1>The Plan</h1>
+    <span class="stamp stamp-signed" style="transform:none">⛁ Signed v1 · Jun 2</span>
+    <span class="chip">sha-256 a41f…9c2e · audit #A-1147</span>
+    <span class="annotation" style="margin-left:auto">a plan is five contracts, not a PDF — the books re-project it monthly</span>
+  </section>
+
+  <!-- =============================== potential → signed → realized ======== -->
+  <section class="panel ledger3 rise d1">
+    <div>
+      <span class="microlabel">Identified by the strategist</span>
+      <div class="v money prov">$9,170<span style="font-size:13px; color:var(--g-ink-3)">/yr</span></div>
+      <div class="d">5 findings · memo M-2026-009 · engine-verified</div>
+    </div>
+    <div>
+      <span class="microlabel" style="color:var(--seal)">Signed into the plan</span>
+      <div class="v money tone-seal">$9,170<span style="font-size:13px; color:var(--g-ink-3)">/yr</span></div>
+      <div class="d">all 5 accepted · sealed Jun 2 · client deliverable sent</div>
+    </div>
+    <div>
+      <span class="microlabel">Realized to date — reconciles against the filed return</span>
+      <div class="v money">$1,610 <span style="font-size:12px; color:var(--g-ink-3)">of $9,170 · on pace</span></div>
+      <div class="real-bar"><i></i></div>
+      <div class="d">payroll split live since Apr · next checkpoint: Q3 books close → the spring review proves it on the 2026 return</div>
+    </div>
+  </section>
+
+  <!-- ===================================== the implementation contracts === -->
+  <section class="panel rise d2" style="margin-top:22px">
+    <div class="panel-head">
+      <span class="microlabel">Implementation · 2 of 5 confirmed</span>
+      <span class="annotation" style="font-size:13px">who · what · cash · deadline · proof — plans die without all five</span>
+      <span class="chip agent" style="margin-left:auto">agent chases overdue items, drafts the reminders</span>
+    </div>
+
+    <div class="contract" style="opacity:0.78">
+      <div class="c-head"><span class="stamp stamp-verified" style="transform:none; font-size:9px">done</span><b>S-corp election — Form 2553</b><span class="amt tone-save">+$1,330/yr · scales with growth</span></div>
+      <div class="fields">
+        <div class="fld"><div class="k">who</div><div class="v">D. Reyes (firm)</div></div>
+        <div class="fld"><div class="k">what</div><div class="v">File 2553, eff. 1/1/2026</div></div>
+        <div class="fld"><div class="k">cash</div><div class="v">$0</div></div>
+        <div class="fld"><div class="k">deadline</div><div class="v">Mar 15 — §1362(b)</div></div>
+        <div class="fld"><div class="k">proof</div><div class="v"><span class="evid">✓ CP261 acceptance.pdf</span></div></div>
+      </div>
+    </div>
+
+    <div class="contract" style="opacity:0.78">
+      <div class="c-head"><span class="stamp stamp-verified" style="transform:none; font-size:9px">done</span><b>Payroll at reasonable comp — $45,000</b><span class="amt tone-save">the floor that makes it real</span></div>
+      <div class="fields">
+        <div class="fld"><div class="k">who</div><div class="v">Client + Gusto</div></div>
+        <div class="fld"><div class="k">what</div><div class="v">Run W-2 payroll monthly</div></div>
+        <div class="fld"><div class="k">cash</div><div class="v">$3,750/mo gross</div></div>
+        <div class="fld"><div class="k">deadline</div><div class="v">live since Apr 1</div></div>
+        <div class="fld"><div class="k">proof</div><div class="v"><span class="evid">✓ comps memo + first stub</span></div></div>
+      </div>
+    </div>
+
+    <div class="contract">
+      <div class="c-head"><span class="chip cost" style="font-size:10px">waiting on client</span><b>Solo-401(k) — deferral + employer side</b><span class="amt tone-save">+$5,400/yr</span></div>
+      <div class="fields">
+        <div class="fld"><div class="k">who</div><div class="v">Client (Jordan)</div></div>
+        <div class="fld"><div class="k">what</div><div class="v">Open · elect deferral · employer 25% at year-end</div></div>
+        <div class="fld"><div class="k">cash</div><div class="v">$1,479/mo</div></div>
+        <div class="fld warn"><div class="k">deadline</div><div class="v">deferrals by Dec 31 — late = lost year</div></div>
+        <div class="fld"><div class="k">proof</div><div class="v" style="color:var(--g-ink-3)">plan adoption doc — pending</div></div>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:10px; align-items:center">
+        <span style="font-size:11.5px; color:var(--g-ink-3)">nudged Jun 5 · agent drafted the follow-up:</span>
+        <span class="chip">“custodian checklist attached — 20 minutes, here’s the link” — send?</span>
+        <a class="mini-btn go" href="#">Send</a><a class="mini-btn" href="#">Edit</a>
+      </div>
+    </div>
+
+    <div class="contract">
+      <div class="c-head"><span class="chip" style="font-size:10px">scheduled</span><b>HSA family max</b><span class="amt tone-save">+$1,210/yr</span></div>
+      <div class="fields">
+        <div class="fld"><div class="k">who</div><div class="v">Client</div></div>
+        <div class="fld"><div class="k">what</div><div class="v">Contribute $8,750</div></div>
+        <div class="fld"><div class="k">cash</div><div class="v">$730/mo or lump</div></div>
+        <div class="fld"><div class="k">deadline</div><div class="v">Apr 15, 2027 (for 2026)</div></div>
+        <div class="fld"><div class="k">proof</div><div class="v" style="color:var(--g-ink-3)">5498-SA next spring</div></div>
+      </div>
+    </div>
+
+    <div class="contract">
+      <div class="c-head"><span class="chip" style="font-size:10px">Q4 surge</span><b>Tax-loss harvest review</b><span class="amt tone-save">+$1,230</span></div>
+      <div class="fields">
+        <div class="fld"><div class="k">who</div><div class="v">Firm + client OK</div></div>
+        <div class="fld"><div class="k">what</div><div class="v">Realize flagged lots; wash-sale guard</div></div>
+        <div class="fld"><div class="k">cash</div><div class="v">$0 net</div></div>
+        <div class="fld"><div class="k">deadline</div><div class="v">trade by Dec 28</div></div>
+        <div class="fld"><div class="k">proof</div><div class="v" style="color:var(--g-ink-3)">1099-B reconciliation</div></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="grid2">
+    <!-- safe harbor: cumulative required vs paid — gaps are penalties -->
+    <section class="panel qchart rise d3">
+      <div class="panel-head">
+        <span class="microlabel">2026 estimates · cumulative required vs paid</span>
+        <span class="chip" style="margin-left:auto">basis: 110% of 2025 — safe harbor</span>
+      </div>
+      <div style="padding:16px 20px 0">
+        <svg viewBox="0 0 1000 190" preserveAspectRatio="none">
+          <g stroke="rgba(238,240,244,0.07)" stroke-width="1"><line x1="0" y1="48" x2="1000" y2="48"/><line x1="0" y1="95" x2="1000" y2="95"/><line x1="0" y1="142" x2="1000" y2="142"/></g>
+          <!-- required: step line at 22.5 / 45 / 67.5 / 90% of annual -->
+          <path d="M0,178 L130,178 L130,138 L380,138 L380,98 L630,98 L630,58 L920,58 L920,18 L1000,18" fill="none" stroke="rgba(238,240,244,0.4)" stroke-width="2" stroke-dasharray="6 4"/>
+          <!-- paid: withholding ramp + estimate jumps Q1 ✓ Q2 ✓ -->
+          <path d="M0,182 L128,166 L132,128 L378,112 L382,86 L560,78" fill="none" stroke="#4cc38a" stroke-width="2.5"/>
+          <circle cx="560" cy="78" r="4" fill="#0b0d11" stroke="#4cc38a" stroke-width="2"/>
+          <g font-family="IBM Plex Mono" font-size="10">
+            <text x="84" y="120" fill="rgba(238,240,244,0.5)">Q1 ✓</text>
+            <text x="338" y="76" fill="#4cc38a">Q2 paid Jun 11 ✓</text>
+            <text x="640" y="50" fill="rgba(238,240,244,0.5)">Q3 req. Sep 15</text>
+            <text x="560" y="104" fill="#56c4bd">↑ paid runs ABOVE required — no 2210 exposure</text>
+          </g>
+        </svg>
+        <div style="display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:9.5px; color:var(--g-ink-3); padding:8px 4px 14px"><span>JAN</span><span>APR 15</span><span>JUN 15</span><span>SEP 15</span><span>JAN 15 ’27</span></div>
+      </div>
+      <div class="qrow" style="border-top:1px solid var(--g-hairline-soft)"><span class="d">Q2 · JUN 15</span><span>voucher 1040-ES · paid via EFTPS</span><b class="fig tone-save">$3,470 ✓</b></div>
+      <div class="qrow"><span class="d">Q3 · SEP 15</span><span>re-projects when July books close — DAF/level-income toggle ready</span><b class="fig">$3,470 est</b></div>
+      <div class="spec-note" style="margin:12px 18px 16px">SPEC · the dashed step = Form 2210 required cumulative (22.5/45/67.5/90%); a paid-line dip below it shades red with the engine’s penalty dollars. Lumpy income flips to the 2210-AI annualized steps.</div>
+    </section>
+
+    <!-- deliverables: versioned, hashed, audience-switched -->
+    <section class="panel rise d4">
+      <div class="panel-head">
+        <span class="microlabel">Deliverables · versioned &amp; hashed</span>
+        <span class="chip" style="margin-left:auto">white-label: Northstar branding</span>
+      </div>
+      <div class="deliv">
+        <span class="d-ic"></span>
+        <div style="flex:1">
+          <b style="font-size:13.5px">2026 Tax Plan — client copy</b>
+          <div style="font-size:11px; color:var(--g-ink-3)">v2 · sent Jun 3 · sha-256 09bf…77a1 · top-3 findings + action checklist</div>
+        </div>
+        <a class="mini-btn" href="13-present.html">Present ▸</a><a class="mini-btn" href="#">PDF</a>
+      </div>
+      <div class="deliv">
+        <span class="d-ic"></span>
+        <div style="flex:1">
+          <b style="font-size:13.5px">S-corp split — one-page explainer</b>
+          <div style="font-size:11px; color:var(--g-ink-3)">client’s own numbers · built to be forwarded · footer: “prepared by Northstar”</div>
+        </div>
+        <a class="mini-btn" href="#">PDF</a>
+      </div>
+      <div class="deliv">
+        <span class="d-ic"></span>
+        <div style="flex:1">
+          <b style="font-size:13.5px">Year-end letter to the preparer</b>
+          <div style="font-size:11px; color:var(--g-ink-3)">auto-builds from confirmed items (election, payroll, 401k, HSA, lots) · audience: CPA / client / internal</div>
+        </div>
+        <span class="chip" style="font-size:10px">drafts itself by Dec</span>
+      </div>
+      <div style="padding:14px 18px; border-top:1px solid var(--g-hairline-soft); font-size:12px; color:var(--g-ink-3)">
+        Every export embeds its provenance block: engines v2026.1 · inputs + hashes · strategist run · <b style="color:var(--g-ink-2)">reviewed &amp; signed by D. Reyes, EA</b>. The liability story is a feature.
+      </div>
+    </section>
+  </div>
+
+  <footer style="padding:26px 0 0; display:flex; gap:14px; flex-wrap:wrap">
+    <span class="spec-note">№ 07 — THE PLAN · potential → signed → realized is the renewal engine; implementation is five fields per strategy; the season chart keeps penalties impossible to miss.</span>
+  </footer>
+</main>
+
+</body>
+</html>

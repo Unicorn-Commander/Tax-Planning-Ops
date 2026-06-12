@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tax-Planning-Ops — GUI v2 mockups · “Graphite &amp; Paper”</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/system.css" />
+<style>
+  .page { padding: 50px 0 80px; max-width: 1080px; margin: 0 auto; }
+  h1 { font-weight: 800; font-size: 46px; letter-spacing: -0.03em; line-height: 1.05; margin: 14px 0 10px; }
+  h1 .paper { font-family: var(--font-doc); font-style: italic; font-weight: 600; color: var(--seal); }
+  .idea { max-width: 760px; font-size: 16px; line-height: 1.65; color: var(--g-ink-2); }
+  .idea b { color: var(--g-ink); }
+
+  .sigs { display: flex; gap: 12px; margin: 22px 0 8px; flex-wrap: wrap; }
+
+  .toc { margin-top: 34px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .pg { display: flex; gap: 16px; padding: 16px 18px; text-decoration: none; color: inherit; border: 1px solid var(--g-hairline); border-radius: 14px; background: var(--g-surface); box-shadow: var(--shadow-panel); transition: transform 0.18s, border-color 0.18s; }
+  .pg:hover { transform: translateY(-3px); border-color: rgba(238,240,244,0.25); }
+  .pg .no { font-family: var(--font-mono); font-size: 11px; color: var(--g-ink-3); width: 26px; padding-top: 3px; }
+  .pg b { font-size: 15px; display: block; letter-spacing: -0.01em; }
+  .pg p { margin: 4px 0 0; font-size: 12.5px; color: var(--g-ink-3); line-height: 1.5; }
+  .pg .env { margin-left: auto; align-self: flex-start; }
+  .sect { margin-top: 26px; }
+</style>
+</head>
+<body class="grain">
+
+<main class="wrap page">
+  <div class="microlabel rise">Tax-Planning-Ops · GUI v2 design mockups · 2026-06-12</div>
+  <h1 class="rise d1">Graphite &amp; <span class="paper">Paper</span></h1>
+  <p class="idea rise d2">
+    <b>The strategist works the file; you sign the memo.</b> Operating surfaces are a dark
+    instrument panel — the desk, the book, the lab — where every number sits against its brackets
+    and cliffs. Documents are lit sheets of paper on that desk — serif, footnoted, signed.
+    Three signatures everywhere: <b>the Strata</b> (the marginal-rate spectrum is the brand),
+    <b>gold = signed</b> (nothing unsigned wears it), and <b>no naked numbers</b>
+    (every dollar opens its engine provenance).
+  </p>
+  <div class="sigs rise d3">
+    <span class="chip"><span style="display:inline-block;width:34px;height:5px;border-radius:99px;background:var(--strata)"></span> the strata</span>
+    <span class="chip seal">⛁ gold = signed</span>
+    <span class="chip"><u style="text-decoration-style:dotted; text-underline-offset:3px">$47,428</u> → engine · inputs · Rev. Proc. · audit ref</span>
+    <span class="chip agent">agents: present, scoped, on the record</span>
+    <span class="chip">serve: python3 -m http.server 8123</span>
+  </div>
+
+  <div class="sect microlabel rise d3">Firm — the operating chrome</div>
+  <div class="toc">
+    <a class="pg rise d3" href="01-desk.html"><span class="no">01</span><span style="flex:1"><b>The Desk</b><p>Season weather (Q2 in 3 days) · your sign-off queue · book pulse ranked by recoverable $ · duty band · omnibar · live ticker.</p></span><span class="chip env">graphite</span></a>
+    <a class="pg rise d3" href="02-book.html"><span class="no">02</span><span style="flex:1"><b>The Book</b><p>Linear-dense roster: position micro-strata, true marginal, YoY, milestones · the clients×strategies matrix, every cell a recompute.</p></span><span class="chip env">graphite</span></a>
+    <a class="pg rise d4" href="11-season.html"><span class="no">11</span><span style="flex:1"><b>The Season</b><p>The year as a board: surges + 4 checkpoints, per-client paid-vs-required, agent-drafted vouchers and meeting cheat sheets.</p></span><span class="chip env">graphite</span></a>
+    <a class="pg rise d4" href="10-staff.html"><span class="no">10</span><span style="flex:1"><b>The Staff</b><p>Agents as staff: standing orders, 4-tier autonomy dials, the three doors (console/MCP/API), traffic, house rules HR-01…05.</p></span><span class="chip env">graphite</span></a>
+    <a class="pg rise d4" href="12-playbook.html"><span class="no">12</span><span style="flex:1"><b>The Playbook</b><p>Strategies wired to the live book (“fits N clients · $X live”) · the constants as an audited, diffed, golden-tested showcase.</p></span><span class="chip env">graphite</span></a>
+  </div>
+
+  <div class="sect microlabel rise d4">Client — the case file</div>
+  <div class="toc">
+    <a class="pg rise d4" href="03-casefile.html"><span class="no">03</span><span style="flex:1"><b>The Case File — Jordan Alvarez</b><p>The Position instrument (strata + LTCG lane + cliff pins + headroom) · cliff radar · filed-vs-plan · implementation · the watching strategist.</p></span><span class="chip env">graphite</span></a>
+    <a class="pg rise d5" href="04-return.html"><span class="no">04</span><span style="flex:1"><b>The Return — Dolores Hartman</b><p>Import theater: scan + live bboxes, confidence routes review, the verification gate (“recompute matches to the dollar”) · waterfall + line ledger.</p></span><span class="chip env">graphite</span></a>
+    <a class="pg rise d5" href="08-entities.html"><span class="no">08</span><span style="flex:1"><b>The Entities — Jordan Alvarez</b><p>The structure map with live books (AO federation) · S-corp salary search curve · the election as both sides of the ledger.</p></span><span class="chip env">graphite</span></a>
+    <a class="pg rise d5" href="09-goals.html"><span class="no">09</span><span style="flex:1"><b>The Brief — Marcus Webb</b><p>A decade on one line (events + tax shadows) · questions priced in dollars · goals wired to findings.</p></span><span class="chip env">graphite</span></a>
+    <a class="pg rise d5" href="05-lab.html"><span class="no">05</span><span style="flex:1"><b>The Lab — Evelyn &amp; Sam Cho</b><p>Drag-to-size Roth on the strata, cliffs priced live · the true-marginal terrain · delta-first scenario ledger · crossover + ladder.</p></span><span class="chip env">graphite</span></a>
+    <a class="pg rise d6" href="06-memo.html"><span class="no">06</span><span style="flex:1"><b>The Memo — Marcus Webb ★</b><p>The hero: run theater (plan → engine calls → a priced question) above a paper memorandum — exhibits, engine footnotes, editorial tools, sign &amp; seal.</p></span><span class="chip env" style="color:var(--seal); border-color:rgba(211,178,119,0.4)">paper</span></a>
+    <a class="pg rise d6" href="07-plan.html"><span class="no">07</span><span style="flex:1"><b>The Plan — Jordan Alvarez</b><p>Identified → signed → realized · five-field implementation contracts · safe-harbor step chart · hashed deliverables.</p></span><span class="chip env">graphite</span></a>
+  </div>
+
+  <div class="sect microlabel rise d6">The room</div>
+  <div class="toc">
+    <a class="pg rise d6" href="13-present.html"><span class="no">13</span><span style="flex:1"><b>Present — Marcus Webb</b><p>Meeting mode: four paper plates, client register, one headline number net of fee, three moves, the calendar. Built from the signed memo.</p></span><span class="chip env" style="color:var(--seal); border-color:rgba(211,178,119,0.4)">paper</span></a>
+    <a class="pg rise d6" href="DESIGN-SPEC.md"><span class="no">—</span><span style="flex:1"><b>DESIGN-SPEC.md</b><p>The written contract: tokens, IA, components, motion, per-surface wiring to today’s API, and what’s additive backend.</p></span><span class="chip env">contract</span></a>
+  </div>
+
+  <footer style="margin-top:40px; display:flex; gap:14px; flex-wrap:wrap">
+    <span class="spec-note">Demo cast: Jordan Alvarez (business-owner wedge) · Marcus Webb (exit + goals showcase) · Evelyn &amp; Sam Cho (retiree cliffs) · Dolores Hartman (intake) · Beckers · Nairs — all from scripts/seed_demo.py, figures consistent across pages.</span>
+  </footer>
+</main>
+
+</body>
+</html>

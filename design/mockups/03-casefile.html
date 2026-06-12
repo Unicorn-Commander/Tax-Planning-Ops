@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Jordan Alvarez — Case File</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/system.css" />
+<style>
+  body { --chue: #56a3a0; }
+  .file { padding: 26px 0 60px; }
+
+  /* ------------------------------------------------------- client header -- */
+  .id-row { display: flex; align-items: center; gap: 18px; }
+  .id-row .cavatar { width: 54px; height: 54px; font-size: 18px; }
+  .id-row h1 { margin: 0; font-weight: 750; font-size: 32px; letter-spacing: -0.02em; }
+  .id-row .chips { display: flex; gap: 7px; margin-top: 7px; flex-wrap: wrap; }
+  .pipeline { margin-left: auto; display: flex; gap: 16px; align-items: center; }
+
+  /* the three-rate cluster: nominal · true next-dollar · average */
+  .rates { display: flex; gap: 0; margin-top: 20px; border: 1px solid var(--g-hairline); border-radius: var(--radius); overflow: hidden; background: var(--g-surface); }
+  .rate { flex: 1; padding: 14px 20px; border-left: 1px solid var(--g-hairline-soft); }
+  .rate:first-child { border-left: 0; }
+  .rate .v { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; margin-top: 6px; }
+  .rate .d { font-size: 11px; color: var(--g-ink-3); margin-top: 5px; font-family: var(--font-mono); }
+  .rate.hot { background: linear-gradient(180deg, rgba(201,114,67,0.1), transparent); }
+  .rate.hot .v { color: var(--s32); }
+
+  /* --------------------------------------------- THE POSITION (hero) ----- */
+  .position { margin-top: 22px; padding: 26px 28px 64px; position: relative; }
+  .position .p-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 44px; }
+  .position .p-head .sum { margin-left: auto; font-size: 13px; color: var(--g-ink-2); }
+  .inst-track.hero { height: 64px; }
+  /* LTCG layer stacks ABOVE ordinary — the legally honest picture */
+  .cg-layer { position: absolute; top: -14px; left: 0; right: 0; height: 10px; display: flex; gap: 3px; }
+  .cg-layer i { border-radius: 2px; }
+  .axis { display: flex; justify-content: space-between; margin-top: 26px; font-family: var(--font-mono); font-size: 9.5px; color: var(--g-ink-3); }
+
+  /* ------------------------------------------------------- cliff radar --- */
+  .cliff-row { display: grid; grid-template-columns: 158px 1fr 168px; gap: 18px; align-items: center; padding: 13px 20px; border-top: 1px solid var(--g-hairline-soft); }
+  .cliff-row:first-of-type { border-top: 0; }
+  .cliff-row .nm b { font-size: 13px; display: block; }
+  .cliff-row .nm span { font-family: var(--font-mono); font-size: 9.5px; color: var(--g-ink-3); }
+  /* distance bar with a SHEER STEP EDGE — cliffs are step functions, never gauges */
+  .dist { position: relative; height: 26px; }
+  .dist .lane { position: absolute; left: 0; right: 0; top: 10px; height: 6px; border-radius: 99px 0 0 99px; background: rgba(238,240,244,0.07); }
+  .dist .filled { position: absolute; left: 0; top: 10px; height: 6px; border-radius: 99px 0 0 99px; background: color-mix(in srgb, var(--chue) 75%, #fff0); }
+  .dist .edge { position: absolute; top: 0; bottom: 0; width: 2.5px; background: var(--cliff); }
+  .dist .edge::after { content: ""; position: absolute; left: 2.5px; top: 0; bottom: 0; width: 26px; background: repeating-linear-gradient(135deg, rgba(226,93,109,0.22) 0 4px, transparent 4px 8px); }
+  .dist .you { position: absolute; top: 6px; width: 2px; height: 14px; background: var(--g-ink); }
+  .dist .you::after { content: ""; position: absolute; top: -4px; left: -2.5px; width: 7px; height: 7px; border-radius: 99px; background: var(--g-ink); }
+  .cliff-row .out { text-align: right; }
+  .cliff-row .out b { font-size: 13.5px; }
+  .cliff-row .out span { display: block; font-family: var(--font-mono); font-size: 9.5px; color: var(--g-ink-3); margin-top: 2px; }
+
+  /* ------------------------------------------------ year vs plan panel --- */
+  .vs { display: grid; grid-template-columns: 1fr auto 1fr; }
+  .vs .yr { padding: 22px 26px; }
+  .vs .yr .microlabel { margin-bottom: 8px; }
+  .vs .big { font-size: 36px; font-weight: 700; letter-spacing: -0.025em; line-height: 1; }
+  .vs .sub { font-size: 12px; color: var(--g-ink-3); margin-top: 8px; }
+  /* IBCS fills: filed = solid · plan = outline */
+  .vs .yr.plan .big { color: var(--g-ink); -webkit-text-stroke: 0; }
+  .vs .delta { align-self: center; text-align: center; padding: 12px 18px; border-radius: 12px; background: rgba(76,195,138,0.09); border: 1px solid rgba(76,195,138,0.3); }
+  .vs .delta b { display: block; font-size: 19px; color: var(--save); }
+  .vs .delta span { font-size: 10px; font-family: var(--font-mono); color: var(--g-ink-3); letter-spacing: 0.08em; }
+  .ibcs { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+  .ibcs.filed { background: var(--g-ink); }
+  .ibcs.plan { background: transparent; border: 1.5px dashed var(--g-ink-2); }
+
+  /* --------------------------------------------------------- small cards -- */
+  .grid { display: grid; grid-template-columns: 1.62fr 1fr; gap: 22px; margin-top: 22px; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 22px; }
+  .ent-mini { display: flex; gap: 12px; padding: 13px 18px; border-top: 1px solid var(--g-hairline-soft); align-items: center; }
+  .ent-mini:first-of-type { border-top: 0; }
+  .ent-ic { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; font-family: var(--font-mono); font-size: 10px; flex: none; background: rgba(86,196,189,0.1); color: var(--agent); border: 1px solid rgba(86,196,189,0.25); }
+  .goal-chips { padding: 14px 18px; display: flex; flex-wrap: wrap; gap: 8px; }
+
+  .task { display: flex; align-items: center; gap: 12px; padding: 11px 18px; border-top: 1px solid var(--g-hairline-soft); font-size: 13px; }
+  .task:first-of-type { border-top: 0; }
+  .task .tick { width: 18px; height: 18px; border-radius: 6px; border: 1.5px solid var(--g-hairline); display: grid; place-items: center; font-size: 11px; flex: none; }
+  .task.done .tick { background: rgba(76,195,138,0.14); border-color: var(--save); color: var(--save); }
+  .task.done span { color: var(--g-ink-3); text-decoration: line-through; }
+  .task .due { margin-left: auto; font-family: var(--font-mono); font-size: 10px; color: var(--g-ink-3); }
+  .task .due.hot { color: var(--cost); }
+  .impl-bar { height: 6px; border-radius: 99px; background: rgba(238,240,244,0.08); overflow: hidden; margin: 4px 18px 14px; }
+  .impl-bar i { display: block; height: 100%; width: 40%; background: linear-gradient(90deg, var(--save), #6fd8a8); border-radius: 99px; }
+
+  /* the provenance card, shown once as the teaching artifact */
+  .prov-anchor { position: relative; }
+  .prov-float { position: absolute; right: 26px; top: 76px; z-index: 10; }
+  .prov-float .tip { position: absolute; top: -5px; right: 56px; width: 10px; height: 10px; transform: rotate(45deg); background: var(--g-surface-2); border-left: 1px solid var(--g-hairline); border-top: 1px solid var(--g-hairline); }
+
+  /* strategist watch note */
+  .watch { padding: 16px 18px; display: flex; gap: 12px; }
+  .watch p { margin: 4px 0 10px; font-size: 13px; color: var(--g-ink-2); line-height: 1.55; }
+  .watch .because { font-family: var(--font-mono); font-size: 10px; color: var(--g-ink-3); }
+</style>
+</head>
+<body class="grain">
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="wordmark" href="01-desk.html"><span class="mk"></span><b>‹ Desk</b></a>
+    <span class="client-crumb">
+      <span class="cavatar" style="--chue:#56a3a0">JA</span>
+      <span><b>Jordan Alvarez</b><div class="meta">CF-0042 · single · FL · plan year 2026</div></span>
+    </span>
+    <nav class="nav">
+      <a class="on" href="03-casefile.html">Case</a>
+      <a href="04-return.html">Return</a>
+      <a href="08-entities.html">Entities</a>
+      <a href="09-goals.html">Brief</a>
+      <a href="05-lab.html">Lab</a>
+      <a href="06-memo.html">Memo</a>
+      <a href="07-plan.html">Plan</a>
+    </nav>
+    <div class="topbar-right">
+      <a class="chip seal" href="07-plan.html">⛁ Plan signed</a>
+      <a class="btn btn-ghost" style="padding:6px 12px;font-size:12px" href="13-present.html">Present ▸</a>
+      <span class="kbd">⌘K</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap file">
+
+  <!-- ======================================================== identity === -->
+  <section class="id-row rise">
+    <span class="cavatar" style="--chue:#56a3a0">JA</span>
+    <div>
+      <h1>Jordan Alvarez</h1>
+      <div class="chips">
+        <span class="chip">single · FL — no state income tax</span>
+        <span class="chip">Alvarez Design Studio <i style="color:var(--agent)">●</i> books live</span>
+        <span class="chip">Duplex on 5th Ave</span>
+        <span class="chip seal">plan sealed Jun 2 · #a41f…c9</span>
+      </div>
+    </div>
+    <div class="pipeline">
+      <span class="stage done">baseline</span>
+      <span class="stage done">analysis</span>
+      <span class="stage done">memo</span>
+      <span class="stage sealed">signed</span>
+      <span class="stage on">implementing 2/5</span>
+      <span class="stage">monitoring</span>
+    </div>
+  </section>
+
+  <!-- three rates: the nominal bracket lies exactly where planning lives -->
+  <section class="rates rise d1">
+    <div class="rate">
+      <span class="microlabel">Nominal bracket</span>
+      <div class="v">24%</div>
+      <div class="d">2026 single · $105,475–201,350</div>
+    </div>
+    <div class="rate hot">
+      <span class="microlabel">True next-dollar rate <span class="prov" style="text-transform:none">ⓘ</span></span>
+      <div class="v">32.9%</div>
+      <div class="d">+ SE 2.9% Medicare + NIIT drag — engine-recomputed at +$100</div>
+    </div>
+    <div class="rate">
+      <span class="microlabel">Average rate</span>
+      <div class="v">21.9%</div>
+      <div class="d">total tax 47,428 ÷ total income 216,200</div>
+    </div>
+    <div class="rate">
+      <span class="microlabel">2026 plan savings</span>
+      <div class="v tone-save">$9,170<span style="font-size:13px;color:var(--g-ink-3)">/yr</span></div>
+      <div class="d">signed · 5 strategies · realized tracking on</div>
+    </div>
+  </section>
+
+  <!-- ================================================= THE POSITION ====== -->
+  <section class="panel position prov-anchor rise d2">
+    <div class="p-head">
+      <span class="microlabel">The position · taxable income on the 2026 strata</span>
+      <span class="annotation" style="font-size:14px">where every conversation starts</span>
+      <span class="sum">ordinary <b class="fig">$191,980</b> · LTCG layer <b class="fig">$2,200</b></span>
+    </div>
+
+    <div class="instrument">
+      <div class="inst-track hero">
+        <!-- LTCG stacks on top of ordinary — drawn as the thin upper lane -->
+        <div class="cg-layer">
+          <i style="flex:48.9; background:transparent"></i>
+          <i style="flex:1.1; background:var(--cg15); opacity:0.9"></i>
+          <i style="flex:50; background:transparent"></i>
+        </div>
+        <!-- ordinary strata: widths ∝ real 2026 single bracket spans -->
+        <div class="inst-seg filled" style="flex:3.1"><i style="--seg:var(--s10)"></i><span class="rt">10%</span><span class="bd">$0</span></div>
+        <div class="inst-seg filled" style="flex:9.4"><i style="--seg:var(--s12)"></i><span class="rt">12%</span><span class="bd">12,400</span></div>
+        <div class="inst-seg filled" style="flex:13.9"><i style="--seg:var(--s22)"></i><span class="rt">22%</span><span class="bd">50,400</span></div>
+        <div class="inst-seg partial" style="flex:24; --fillpct:90%"><i style="--seg:var(--s24)"></i><span class="rt">24%</span><span class="bd">105,475</span></div>
+        <div class="inst-seg" style="flex:13.5"><i style="--seg:var(--s32)"></i><span class="rt">32%</span><span class="bd">201,350</span></div>
+        <div class="inst-seg" style="flex:30.3"><i style="--seg:var(--s35)"></i><span class="rt">35%</span><span class="bd">256,225</span></div>
+        <div class="inst-seg" style="flex:10.7"><i style="--seg:var(--s37)"></i><span class="rt">37%</span><span class="bd">640,600</span></div>
+
+        <!-- the NOW marker + the headroom he protects by staying at $52k salary -->
+        <div class="inst-now" style="left:49.4%"><span class="tag">you · $191,980</span></div>
+        <div class="inst-headroom" style="left:49.6%; width:2.2%"><span class="tag">$7,150 headroom</span></div>
+        <!-- cliffs that bite THIS client, engine-placed -->
+        <div class="inst-pin soft" style="left:51.8%"><span class="tag">32% edge</span></div>
+        <div class="inst-pin" style="left:52.6%"><span class="tag">NIIT $200k MAGI</span></div>
+      </div>
+      <div class="axis"><span>$0</span><span>taxable →</span><span>$700k</span></div>
+    </div>
+
+    <!-- the provenance card: NO NAKED NUMBERS — hover any figure for this -->
+    <div class="prov-float rise d4">
+      <div class="prov-card">
+        <span class="tip"></span>
+        <div class="ph"><b class="money">$47,428</b><span style="font-size:11px;color:var(--g-ink-3)">2025 comprehensive total tax</span><span class="stamp stamp-verified" style="margin-left:auto;transform:none;font-size:9px">engine</span></div>
+        <div class="prov-row"><span class="k">computed by</span><span class="v">comprehensive.calculate v2026.1 · 0.4s</span></div>
+        <div class="prov-row"><span class="k">folds</span><span class="v">1040 + SE $11,304 + QBI −$16,000 + AMT ✓no</span></div>
+        <div class="prov-row"><span class="k">inputs</span><span class="v">1040 (OCR ✓ verified) · 2 entities · AO YTD Jun 12</span></div>
+        <div class="prov-row"><span class="k">constants</span><span class="v">Rev. Proc. 2024-40 · golden ×148</span></div>
+        <div class="prov-row"><span class="k">audit ref</span><span class="v">#A-1147 · chain ✓</span></div>
+        <div class="prov-row" style="justify-content:flex-end; gap:8px"><a class="mini-btn" href="#">Full trace</a><a class="mini-btn go" href="05-lab.html">Recompute in Lab</a></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="grid">
+    <div class="col">
+      <!-- =============================================== cliff radar ===== -->
+      <section class="panel rise d3">
+        <div class="panel-head">
+          <span class="microlabel">Cliff radar</span>
+          <span class="annotation" style="font-size:13.5px">thresholds with teeth, sorted by distance — dollars both ways</span>
+        </div>
+        <div class="cliff-row">
+          <div class="nm"><b>32% bracket edge</b><span>ordinary · $201,350</span></div>
+          <div class="dist"><span class="lane"></span><span class="filled" style="width:78%"></span><span class="edge" style="left:82%"></span><span class="you" style="left:78%"></span></div>
+          <div class="out"><b class="money">$9,370 below</b><span>next $1 taxed +8¢ — soft edge</span></div>
+        </div>
+        <div class="cliff-row">
+          <div class="nm"><b>NIIT threshold</b><span>§1411 · $200k MAGI</span></div>
+          <div class="dist"><span class="lane"></span><span class="filled" style="width:84%"></span><span class="edge" style="left:74%"></span><span class="you" style="left:84%"></span></div>
+          <div class="out"><b class="money tone-cliff">$10,400 over</b><span>3.8% × lesser(NII $14,200, <u>excess $10,400</u>) = $395/yr</span></div>
+        </div>
+        <div class="cliff-row">
+          <div class="nm"><b>Add’l Medicare</b><span>§3101(b)(2) · $200k earned</span></div>
+          <div class="dist"><span class="lane"></span><span class="filled" style="width:71%"></span><span class="edge" style="left:69%"></span><span class="you" style="left:71%"></span></div>
+          <div class="out"><b class="money tone-cliff">$2,980 over</b><span>0.9% on excess = $27/yr · S-corp split shrinks this</span></div>
+        </div>
+        <div class="cliff-row" style="background:rgba(76,195,138,0.03)">
+          <div class="nm"><b>QBI phase-in</b><span>§199A · $201,750 TI</span></div>
+          <div class="dist"><span class="lane"></span><span class="filled" style="width:80%"></span><span class="edge" style="left:81%; background:var(--cost)"></span><span class="you" style="left:80%"></span></div>
+          <div class="out"><b class="money">$9,770 below</b><span>full 20% deduction holds · watched by strategist</span></div>
+        </div>
+      </section>
+
+      <!-- =========================================== filed vs plan ======= -->
+      <section class="panel rise d4">
+        <div class="panel-head">
+          <span class="microlabel">Total tax · filed vs plan</span>
+          <span style="margin-left:auto; font-size:11px; color:var(--g-ink-3)"><span class="ibcs filed"></span>filed actual&nbsp;&nbsp;<span class="ibcs plan"></span>plan projection</span>
+        </div>
+        <div class="vs">
+          <div class="yr">
+            <span class="microlabel">2025 · filed</span>
+            <div class="big money prov">$47,428</div>
+            <div class="sub">comprehensive — 1040 $19,157 + SE $11,304 + business fold · 21.9% average</div>
+          </div>
+          <div class="delta">
+            <b class="money">−$9,170</b>
+            <span>ENGINE-VERIFIED</span>
+          </div>
+          <div class="yr plan">
+            <span class="microlabel" style="color:var(--save)">2026 · plan (signed)</span>
+            <div class="big money" style="color:var(--g-ink)">$38,258</div>
+            <div class="sub">S-corp split $52k/$28k · solo-401(k) · HSA · TLH — live vs books, refreshed Jun 12</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================== implementation ====== -->
+      <section class="panel rise d5">
+        <div class="panel-head">
+          <span class="microlabel">Implementation · 2 of 5</span>
+          <a class="chip" style="margin-left:auto" href="07-plan.html">Open the plan →</a>
+        </div>
+        <div class="impl-bar"><i></i></div>
+        <div class="task done"><span class="tick">✓</span><span>Form 2553 S-election filed</span><span class="due">done Mar 11 · deadline was Mar 15</span></div>
+        <div class="task done"><span class="tick">✓</span><span>Payroll set — $45,000 reasonable comp (comps attached)</span><span class="due">done Apr 2</span></div>
+        <div class="task"><span class="tick"></span><span>Open solo-401(k) &amp; set deferral — <b class="fig">$1,479/mo</b></span><span class="due hot">cash needed by Dec 31</span></div>
+        <div class="task"><span class="tick"></span><span>HSA family max <b class="fig">$8,750</b></span><span class="due">any time 2026</span></div>
+        <div class="task"><span class="tick"></span><span>Q4 harvest review — loss candidates from brokerage</span><span class="due">Nov surge</span></div>
+      </section>
+    </div>
+
+    <div class="col">
+      <!-- the strategist is WATCHING this file — the plan is alive -->
+      <section class="panel watch rise d4">
+        <span class="aavatar" style="--ahue:var(--agent)">S<span class="st"></span></span>
+        <div style="flex:1">
+          <div class="microlabel" style="color:var(--agent)">Strategist · watching this file</div>
+          <p>Studio books through <b>Jun 12</b> run <b class="fig">12% under</b> the plan’s revenue assumption. If H2 holds, the solo-401(k) deferral can rise <b class="fig tone-save">+$340/mo</b> without touching the 32% edge.</p>
+          <p class="because">BECAUSE: goal “keep effective &lt; 20%” + AO pull −$985.87 YTD · run #218</p>
+          <div style="display:flex; gap:8px; margin-top:4px">
+            <a class="mini-btn go" href="05-lab.html">Re-project in Lab</a>
+            <a class="mini-btn" href="#">Dismiss</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- entities mini-map -->
+      <section class="panel rise d5">
+        <div class="panel-head"><span class="microlabel">Entities</span><a class="chip" style="margin-left:auto" href="08-entities.html">Structure map →</a></div>
+        <div class="ent-mini">
+          <span class="ent-ic">S</span>
+          <div style="flex:1"><b style="font-size:13px">Alvarez Design Studio</b><div style="font-size:11px;color:var(--g-ink-3)">S-corp (elected 2026) · QBI $6,311 (’26 plan) · <span style="color:var(--agent)">● live from books</span></div></div>
+          <b class="fig" style="font-size:12px">$80,000</b>
+        </div>
+        <div class="ent-mini">
+          <span class="ent-ic" style="background:rgba(91,134,168,0.12);color:#7fa6c4;border-color:rgba(91,134,168,0.3)">E</span>
+          <div style="flex:1"><b style="font-size:13px">Duplex on 5th Ave</b><div style="font-size:11px;color:var(--g-ink-3)">Schedule E rental · passive · no depreciation modeled yet</div></div>
+          <b class="fig" style="font-size:12px">$12,000</b>
+        </div>
+      </section>
+
+      <!-- the brief -->
+      <section class="panel rise d6">
+        <div class="panel-head"><span class="microlabel">The brief</span><a class="chip" style="margin-left:auto" href="09-goals.html">Edit goals →</a></div>
+        <div class="goal-chips">
+          <span class="chip">keep effective rate &lt; 20%</span>
+          <span class="chip">buy a home 2028</span>
+          <span class="chip">grow studio → hire #1 in 2027</span>
+          <span class="chip">risk: conservative</span>
+        </div>
+        <p style="padding:0 18px 14px; margin:0; font-size:12px; color:var(--g-ink-3)">Trajectory: income ▲ rising 2024→2026 · no IRMAA horizon · next life event: home purchase (mortgage interest will not clear standard deduction alone — bunching candidate 2028).</p>
+      </section>
+
+      <div class="spec-note rise d6">SPEC · Case file = GET /clients/{id}/overview + /analysis + strategist watch-notes. The Position renders from the engine bracket walk (segment spans = real bracket widths; LTCG lane stacks above). Cliff radar rows sort by |distance|, each shows the binding side of lesser-of math. Every figure: hover → provenance card (engine · inputs · constants · audit ref). Filed=solid / plan=outline fills per IBCS. Strategist note carries its BECAUSE line (goals + data that triggered it).</div>
+    </div>
+  </div>
+</main>
+
+<footer class="wrap" style="padding:26px 0 60px; display:flex; gap:14px; flex-wrap:wrap">
+  <span class="spec-note">№ 03 — THE CASE FILE · one screen that holds the client’s whole tax life: position, cliffs, plan delta, implementation, and the agent watching it.</span>
+</footer>
+
+</body>
+</html>

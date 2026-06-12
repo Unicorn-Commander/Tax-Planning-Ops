@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dolores Hartman — The Return</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/system.css" />
+<style>
+  body { --chue: #c2884f; }
+  .page { padding: 26px 0 70px; }
+
+  /* ------------------------------------------------------ import theater -- */
+  .theater { display: grid; grid-template-columns: 1.05fr 1fr; gap: 0; overflow: hidden; }
+
+  /* the scan: an off-white page in the dark room, bboxes glowing */
+  .scanwrap { padding: 26px; border-right: 1px solid var(--g-hairline-soft); background: rgba(0,0,0,0.18); display: grid; place-items: center; }
+  .scan { width: 100%; max-width: 470px; aspect-ratio: 8.5/11; background: linear-gradient(180deg, #ece9df, #e4e0d2); border-radius: 3px; box-shadow: var(--shadow-sheet); position: relative; padding: 26px 30px; color: #4a463c; transform: rotate(-0.4deg); }
+  .scan .f-head { display: flex; justify-content: space-between; border-bottom: 2.5px solid #3d3a32; padding-bottom: 6px; font-family: var(--font-ui); }
+  .scan .f-head b { font-size: 16px; letter-spacing: 0.02em; }
+  .scan .f-head span { font-size: 8px; max-width: 180px; line-height: 1.4; }
+  .f-line { display: flex; gap: 8px; align-items: center; margin-top: 9px; }
+  .f-line .no { font-family: var(--font-mono); font-size: 7.5px; width: 18px; color: #6b675c; }
+  .f-line .lbl { flex: 1; font-size: 8px; border-bottom: 1px dotted #b7b2a4; padding-bottom: 2px; }
+  .f-line .val { font-family: var(--font-mono); font-size: 9px; width: 78px; text-align: right; border: 1px solid #c6c1b2; padding: 2.5px 5px; background: #f2efe6; }
+  .bbox { position: absolute; border: 2px solid rgba(86,196,189,0.9); border-radius: 3px; box-shadow: 0 0 0 3px rgba(86,196,189,0.18); }
+  .bbox.warn { border-color: var(--cost); box-shadow: 0 0 0 3px rgba(224,164,88,0.22); }
+  .bbox .tag { position: absolute; top: -17px; left: -2px; font-family: var(--font-mono); font-size: 8.5px; background: #0d1014; color: var(--agent); padding: 1.5px 6px; border-radius: 4px; white-space: nowrap; }
+  .bbox.warn .tag { color: var(--cost); }
+
+  /* extraction rail */
+  .extract { padding: 20px 24px; display: flex; flex-direction: column; }
+  .stages { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .stg { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 10px; color: var(--g-ink-3); border: 1px solid var(--g-hairline-soft); border-radius: 99px; padding: 4px 11px; }
+  .stg.done { color: var(--save); border-color: rgba(76,195,138,0.35); }
+  .field { display: grid; grid-template-columns: 1fr auto 92px; gap: 12px; align-items: center; padding: 8px 4px; border-top: 1px solid var(--g-hairline-soft); font-size: 12.5px; }
+  .field:first-of-type { border-top: 0; }
+  .field code { font-family: var(--font-mono); font-size: 11.5px; color: var(--g-ink); }
+  .conf { display: flex; align-items: center; gap: 7px; }
+  .conf .bar { width: 52px; height: 4px; border-radius: 99px; background: rgba(238,240,244,0.09); overflow: hidden; }
+  .conf .bar i { display: block; height: 100%; background: var(--save); border-radius: 99px; }
+  .conf small { font-family: var(--font-mono); font-size: 9px; color: var(--g-ink-3); width: 34px; text-align: right; }
+
+  /* the flagged field, expanded — confidence ROUTES attention */
+  .flagged { border: 1px solid rgba(224,164,88,0.4); background: rgba(224,164,88,0.06); border-radius: 12px; padding: 14px 16px; margin: 12px 0; }
+  .flagged .crop { margin: 10px 0; background: #ece9df; border-radius: 6px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; color: #4a463c; font-size: 10px; border: 1px solid rgba(224,164,88,0.5); }
+  .flagged .crop b { font-family: var(--font-mono); font-size: 15px; letter-spacing: 1px; }
+
+  /* the verification gate */
+  .gate { display: flex; align-items: center; gap: 18px; padding: 16px 22px; border-top: 1px solid var(--g-hairline-soft); background: linear-gradient(90deg, rgba(76,195,138,0.07), transparent 65%); }
+  .gate .txt b { font-size: 14.5px; }
+  .gate .txt p { margin: 3px 0 0; font-size: 12.5px; color: var(--g-ink-2); }
+
+  /* ------------------------------------------------------ return anatomy -- */
+  .anatomy { display: grid; grid-template-columns: 1.1fr 1fr; gap: 22px; margin-top: 22px; align-items: start; }
+  .wf { padding: 20px 22px 10px; }
+  /* the cascade: label · proportional bar lane · figure — no charts lib, no distortion */
+  .wf-row { display: grid; grid-template-columns: 168px 1fr 110px; gap: 14px; align-items: center; padding: 7px 0; }
+  .wf-row .lbl { font-size: 12px; color: var(--g-ink-2); }
+  .wf-row .lbl small { display: block; font-family: var(--font-mono); font-size: 9px; color: var(--g-ink-3); }
+  .wf-row .lane { position: relative; height: 22px; }
+  .wf-row .bar { position: absolute; top: 0; bottom: 0; border-radius: 4px; }
+  .wf-row .val { font-family: var(--font-mono); font-size: 11.5px; text-align: right; }
+  .wf-con { height: 10px; border-left: 1.5px dashed rgba(238,240,244,0.18); margin-left: calc(168px + 14px + 2px); }
+  .lineledger td .src { display: inline-block; width: 7px; height: 7px; border-radius: 2.5px; margin-right: 9px; vertical-align: 0; }
+  .src.doc { background: #5b86a8; } .src.eng { background: var(--agent); } .src.adv { background: var(--seal); }
+  .keyrow { display: flex; gap: 14px; padding: 12px 20px; border-top: 1px solid var(--g-hairline-soft); font-size: 11px; color: var(--g-ink-3); }
+</style>
+</head>
+<body class="grain">
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="wordmark" href="01-desk.html"><span class="mk"></span><b>‹ Desk</b></a>
+    <span class="client-crumb">
+      <span class="cavatar" style="--chue:#c2884f">DH</span>
+      <span><b>Dolores Hartman</b><div class="meta">CF-0044 · hoh · TX · tax year 2025</div></span>
+    </span>
+    <nav class="nav">
+      <a href="03-casefile.html">Case</a>
+      <a class="on" href="04-return.html">Return</a>
+      <a href="08-entities.html">Entities</a>
+      <a href="09-goals.html">Brief</a>
+      <a href="05-lab.html">Lab</a>
+      <a href="06-memo.html">Memo</a>
+      <a href="07-plan.html">Plan</a>
+    </nav>
+    <div class="topbar-right">
+      <span class="chip">uploaded via client link · 16:09</span>
+      <span class="kbd">⌘K</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap page">
+
+  <!-- ========================================================= theater ==== -->
+  <section class="panel rise">
+    <div class="panel-head">
+      <span class="microlabel" style="color:var(--agent)">Import · the clerk reads the scan, the engines check the math</span>
+      <span class="annotation" style="font-size:13.5px">designed to be watched on a screen-share — 38 seconds, no spinner</span>
+      <span style="margin-left:auto; font-family:var(--font-mono); font-size:10px; color:var(--g-ink-3)">1040 (2025) · scanned · 4 pages · vision OCR @ 200dpi</span>
+    </div>
+
+    <div class="theater">
+      <!-- the scanned page with live bounding boxes -->
+      <div class="scanwrap">
+        <div class="scan">
+          <div class="f-head"><b>≡ 1040 <span style="font-weight:400; font-size:9px">(2025)</span></b><span>Department of the Treasury — Internal Revenue Service<br/>U.S. Individual Income Tax Return</span></div>
+          <div class="f-line"><span class="no">1z</span><span class="lbl">Wages, salaries, tips (W-2 box 1)</span><span class="val">95,000.</span></div>
+          <div class="f-line"><span class="no">2b</span><span class="lbl">Taxable interest</span><span class="val">—</span></div>
+          <div class="f-line"><span class="no">5a</span><span class="lbl">Pensions and annuities</span><span class="val">12,000.</span></div>
+          <div class="f-line"><span class="no">5b</span><span class="lbl">Taxable amount</span><span class="val">12,000.</span></div>
+          <div class="f-line"><span class="no">11</span><span class="lbl">Adjusted gross income</span><span class="val">107,000.</span></div>
+          <div class="f-line"><span class="no">12</span><span class="lbl">Standard deduction (HoH)</span><span class="val">23,625.</span></div>
+          <div class="f-line"><span class="no">15</span><span class="lbl">Taxable income</span><span class="val">83,375.</span></div>
+          <div class="f-line"><span class="no">22</span><span class="lbl">Total tax</span><span class="val">11,518.</span></div>
+          <div class="f-line"><span class="no">25</span><span class="lbl">Federal income tax withheld</span><span class="val">15,000.</span></div>
+          <div class="f-line"><span class="no">34</span><span class="lbl">Refund</span><span class="val">3,482.</span></div>
+          <!-- live read boxes -->
+          <span class="bbox" style="left:73%; top:18.5%; width:21%; height:4.6%"><span class="tag">1z ✓ 99.7</span></span>
+          <span class="bbox warn" style="left:73%; top:35.8%; width:21%; height:4.6%"><span class="tag">5b · 88.0 — your eye</span></span>
+          <span class="bbox" style="left:73%; top:64.5%; width:21%; height:4.6%"><span class="tag">22 ✓ 99.4</span></span>
+        </div>
+      </div>
+
+      <!-- extraction rail: staged progress + confidence-sorted fields -->
+      <div class="extract">
+        <div class="stages">
+          <span class="stg done">✓ 4 pages classified</span>
+          <span class="stg done">✓ 11 fields read</span>
+          <span class="stg done">✓ engine recompute</span>
+          <span class="stg done">✓ cross-check vs return</span>
+          <span class="stg" style="color:var(--cost); border-color:rgba(224,164,88,0.4)">● 1 field needs you</span>
+        </div>
+
+        <!-- lowest confidence FIRST: confidence routes attention, never decorates -->
+        <div class="flagged">
+          <div style="display:flex; align-items:center; gap:10px">
+            <b style="font-size:13px">Line 5b — pension taxable amount</b>
+            <span class="chip cost" style="margin-left:auto">88.0% · handwriting over print</span>
+          </div>
+          <div class="crop"><span>source · page 1, region 5b ↗</span><b>12,OOO.</b><span>letter “O”s read as zeros</span></div>
+          <div style="display:flex; gap:8px; align-items:center">
+            <a class="mini-btn go" href="#">Confirm $12,000</a>
+            <a class="mini-btn" href="#">Correct…</a>
+            <span style="margin-left:auto; font-family:var(--font-mono); font-size:9.5px; color:var(--g-ink-3)">a fix re-runs the recompute check instantly</span>
+          </div>
+        </div>
+
+        <div class="field"><code>1z · wages</code><span class="fig">$95,000</span><span class="conf"><span class="bar"><i style="width:99%"></i></span><small>99.7</small></span></div>
+        <div class="field"><code>12 · std deduction (HoH)</code><span class="fig">$23,625</span><span class="conf"><span class="bar"><i style="width:99%"></i></span><small>99.6</small></span></div>
+        <div class="field"><code>22 · total tax</code><span class="fig">$11,518</span><span class="conf"><span class="bar"><i style="width:99%"></i></span><small>99.4</small></span></div>
+        <div class="field"><code>25 · withholding</code><span class="fig">$15,000</span><span class="conf"><span class="bar"><i style="width:99%"></i></span><small>99.2</small></span></div>
+        <div class="field" style="color:var(--g-ink-3)"><code style="color:var(--g-ink-3)">+ 6 more ≥ 99%</code><span></span><span></span></div>
+      </div>
+    </div>
+
+    <!-- THE GATE: nothing unlocks until the engines reproduce the return -->
+    <div class="gate">
+      <span class="stamp stamp-verified fresh">Verified</span>
+      <div class="txt" style="flex:1">
+        <b>Engine recomputed this return: total tax <span class="fig prov">$11,518</span> — matches the filed figure to the dollar.</b>
+        <p>Bracket walk + HoH standard deduction on Rev. Proc. 2024-40 constants. A mismatch would block here and show the per-line diff — that gate is why the analysis can be trusted.</p>
+      </div>
+      <a class="btn btn-ink" href="03-casefile.html">Confirm baseline → open the case</a>
+    </div>
+  </section>
+
+  <!-- ========================================================= anatomy ==== -->
+  <div class="anatomy">
+    <!-- the waterfall: how income became tax -->
+    <section class="panel wf rise d2">
+      <div class="panel-head" style="padding:0 0 14px; border:0">
+        <span class="microlabel">The waterfall · how $107,000 became $11,518</span>
+        <span class="chip" style="margin-left:auto">every step = an engine line</span>
+      </div>
+      <div style="padding: 6px 0 10px">
+        <div class="wf-row">
+          <span class="lbl">Total income<small>1z + 5b</small></span>
+          <span class="lane"><span class="bar" style="left:0; width:100%; background:#5b86a8; opacity:0.85"></span></span>
+          <span class="val">$107,000</span>
+        </div>
+        <div class="wf-con"></div>
+        <div class="wf-row">
+          <span class="lbl">Adjusted gross income<small>no adjustments</small></span>
+          <span class="lane"><span class="bar" style="left:0; width:100%; background:#5b86a8; opacity:0.6"></span></span>
+          <span class="val">$107,000</span>
+        </div>
+        <div class="wf-con"></div>
+        <div class="wf-row">
+          <span class="lbl" style="color:var(--save)">− Standard deduction<small>HoH · Rev. Proc. 2024-40</small></span>
+          <span class="lane">
+            <span class="bar" style="left:0; width:77.9%; background:#8a93a8; opacity:0.45"></span>
+            <span class="bar" style="left:77.9%; width:22.1%; background:repeating-linear-gradient(135deg, rgba(76,195,138,0.55) 0 5px, rgba(76,195,138,0.2) 5px 10px)"></span>
+          </span>
+          <span class="val" style="color:var(--save)">($23,625)</span>
+        </div>
+        <div class="wf-con"></div>
+        <div class="wf-row">
+          <span class="lbl">Taxable income</span>
+          <span class="lane"><span class="bar" style="left:0; width:77.9%; background:#8a93a8; opacity:0.7"></span></span>
+          <span class="val">$83,375</span>
+        </div>
+        <div class="wf-con"></div>
+        <div class="wf-row">
+          <span class="lbl">Tax — the bracket walk<small>10 → 12 → 22%</small></span>
+          <span class="lane">
+            <span class="bar" style="left:0; width:11.5%; background:var(--s10)" title="$1,700 in the 10%"></span>
+            <span class="bar" style="left:12%; width:38.7%; background:var(--s12)" title="$5,742 in the 12%"></span>
+            <span class="bar" style="left:51.2%; width:26.6%; background:var(--s22)" title="$4,076 in the 22%"></span>
+          </span>
+          <span class="val">$11,518</span>
+        </div>
+        <div class="wf-row" style="padding-top:0">
+          <span></span>
+          <span style="font-family:var(--font-mono); font-size:9px; color:var(--g-ink-3)">$1,700 · 10% &nbsp;&nbsp; $5,742 · 12% &nbsp;&nbsp; $4,076 · 22% — hover any segment for the engine line</span>
+          <span></span>
+        </div>
+        <div class="wf-con"></div>
+        <div class="wf-row">
+          <span class="lbl" style="color:var(--seal)">Withheld → refund</span>
+          <span class="lane">
+            <span class="bar" style="left:0; width:77%; background:rgba(238,240,244,0.18)" title="withholding $15,000"></span>
+            <span class="bar" style="left:59%; width:18%; background:var(--seal); opacity:0.9" title="refund $3,482"></span>
+          </span>
+          <span class="val" style="color:var(--seal)">$3,482</span>
+        </div>
+      </div>
+      <div class="keyrow"><span><span class="src doc"></span>read from the return</span><span><span class="src eng"></span>engine-computed</span><span style="margin-left:auto">click any step → provenance</span></div>
+    </section>
+
+    <!-- the line ledger -->
+    <section class="panel lineledger rise d3">
+      <div class="panel-head">
+        <span class="microlabel">Line ledger · 2025 baseline (locked)</span>
+        <span class="stamp stamp-verified" style="margin-left:auto; transform:none; font-size:9px">baseline</span>
+      </div>
+      <table class="ledger">
+        <thead><tr><th>line</th><th>item</th><th class="r">amount</th></tr></thead>
+        <tbody>
+          <tr><td class="fig" style="color:var(--g-ink-3)">1z</td><td><span class="src doc"></span>Wages — W-2</td><td class="r fig">95,000</td></tr>
+          <tr><td class="fig" style="color:var(--g-ink-3)">5b</td><td><span class="src doc"></span>Pension, taxable <span class="chip cost" style="font-size:9px; padding:1px 7px; margin-left:6px">you confirmed</span></td><td class="r fig">12,000</td></tr>
+          <tr><td class="fig" style="color:var(--g-ink-3)">11</td><td><span class="src eng"></span>Adjusted gross income</td><td class="r fig">107,000</td></tr>
+          <tr><td class="fig" style="color:var(--g-ink-3)">12</td><td><span class="src eng"></span>Standard deduction — HoH 2025</td><td class="r fig">(23,625)</td></tr>
+          <tr><td class="fig" style="color:var(--g-ink-3)">15</td><td><span class="src eng"></span>Taxable income</td><td class="r fig">83,375</td></tr>
+          <tr><td class="fig" style="color:var(--g-ink-3)">16</td><td><span class="src eng"></span>Tax — bracket walk, HoH</td><td class="r fig">11,518</td></tr>
+          <tr><td class="fig" style="color:var(--g-ink-3)">25</td><td><span class="src doc"></span>Withholding</td><td class="r fig">15,000</td></tr>
+          <tr style="background:rgba(211,178,119,0.05)"><td class="fig" style="color:var(--g-ink-3)">34</td><td><span class="src eng"></span><b>Refund</b></td><td class="r fig"><b>3,482</b></td></tr>
+        </tbody>
+      </table>
+      <div style="padding:12px 20px; font-size:12px; color:var(--g-ink-3); border-top:1px solid var(--g-hairline-soft)">
+        Over-withheld by <b class="fig" style="color:var(--g-ink-2)">$3,482</b> — the bookrunner flagged a W-4 adjustment as her first opportunity. TX → no state return.
+      </div>
+      <div class="spec-note" style="margin:0 18px 16px">SPEC · sources: blue = document read (click → page region) · teal = engine-computed (click → trace) · gold = advisor-entered. Negatives in parentheses — CPA dialect.</div>
+    </section>
+  </div>
+
+  <footer style="padding:26px 0 0; display:flex; gap:14px; flex-wrap:wrap">
+    <span class="spec-note">№ 04 — THE RETURN · import is a watchable verification ritual, not a file-picker; the baseline is the locked truth every plan clones from.</span>
+  </footer>
+</main>
+
+</body>
+</html>

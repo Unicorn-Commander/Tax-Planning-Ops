@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Marcus Webb — Memo M-2026-014</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/system.css" />
+<style>
+  body { --chue: #5b86a8; }
+  .page { padding: 26px 0 80px; }
+
+  /* ------------------------------------------------------ the run theater - */
+  .theater { display: grid; grid-template-columns: 300px 1fr 320px; gap: 0; overflow: hidden; }
+  .theater > div { padding: 18px 20px; }
+  .theater .plancard { border-right: 1px solid var(--g-hairline-soft); }
+  .theater .calls { border-right: 1px solid var(--g-hairline-soft); padding: 8px 0; }
+  .plan-step { display: flex; gap: 10px; padding: 7px 0; font-size: 12.5px; color: var(--g-ink-2); }
+  .plan-step .n { font-family: var(--font-mono); font-size: 10px; color: var(--g-ink-3); width: 16px; flex: none; padding-top: 2px; }
+  .plan-step.done { color: var(--g-ink-3); }
+  .plan-step.done .n { color: var(--save); }
+  .qblock { background: rgba(224,164,88,0.07); border: 1px solid rgba(224,164,88,0.35); border-radius: 10px; padding: 12px 14px; }
+  .qblock b { font-size: 12.5px; }
+  .qblock p { margin: 6px 0 10px; font-size: 12px; color: var(--g-ink-2); line-height: 1.5; }
+
+  /* ----------------------------------------------------------- the sheet -- */
+  .docwrap { display: grid; grid-template-columns: 200px minmax(0, 880px); gap: 34px; margin-top: 26px; justify-content: center; }
+  .toc { position: sticky; top: 84px; align-self: start; font-size: 12px; }
+  .toc a { display: block; color: var(--g-ink-3); text-decoration: none; padding: 5px 0 5px 12px; border-left: 1.5px solid var(--g-hairline-soft); }
+  .toc a.on { color: var(--g-ink); border-left-color: var(--seal); }
+  .toc a:hover { color: var(--g-ink-2); }
+  .toc .meta { margin-top: 18px; font-family: var(--font-mono); font-size: 9.5px; color: var(--g-ink-3); line-height: 1.9; }
+
+  .sheet { padding: 58px 68px 46px; }
+  .sheet .from-to { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 30px; margin: 22px 0 6px; font-size: 13px; }
+  .sheet .from-to .k { font-family: var(--font-ui); font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--p-ink-3); }
+
+  /* engine citations: superscript markers, three source types */
+  .cite { font-family: var(--font-mono); font-size: 9.5px; vertical-align: super; line-height: 0; margin-left: 1px; cursor: help; font-style: normal; }
+  .cite.eng { color: #167a66; }   /* engine-computed */
+  .cite.doc { color: #3c6491; }   /* read from a document */
+  .cite.bks { color: var(--p-seal); } /* federated from the books */
+
+  .headline-num { font-family: var(--font-ui); font-weight: 750; font-size: 44px; letter-spacing: -0.03em; line-height: 1; color: var(--p-ink); }
+
+  /* exhibits with editorial affordances — the advisor curates before any client sees it */
+  .exhibit { position: relative; }
+  .exhibit .tools { position: absolute; top: -13px; right: 14px; display: flex; gap: 6px; }
+  .exhibit .tools a {
+    font-family: var(--font-ui); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--p-ink-3); background: var(--p-bg); border: 1px solid var(--p-hairline); border-radius: 7px;
+    padding: 3.5px 9px; text-decoration: none;
+  }
+  .exhibit .tools a:hover { color: var(--p-ink); }
+  .exhibit .tools a.accept { color: #14563d; border-color: rgba(29,122,82,0.5); }
+  .x-body { font-size: 14.5px; line-height: 1.65; color: var(--p-ink-2); margin-top: 8px; }
+  .x-meta { display: flex; gap: 14px; margin-top: 10px; font-family: var(--font-mono); font-size: 10px; color: var(--p-ink-3); flex-wrap: wrap; }
+  .x-meta .auth { color: #3c6491; }
+
+  /* the sequencing diagram inside exhibit A — order is the advice */
+  .seq { display: flex; align-items: stretch; gap: 0; margin-top: 14px; }
+  .seq .step { flex: 1; border: 1px solid var(--p-hairline); padding: 10px 12px; position: relative; background: rgba(255,255,255,0.5); }
+  .seq .step + .step { margin-left: 26px; }
+  .seq .step + .step::before { content: "→"; position: absolute; left: -21px; top: 50%; transform: translateY(-50%); color: var(--p-ink-3); font-size: 15px; }
+  .seq .step b { font-family: var(--font-ui); font-size: 11.5px; display: block; }
+  .seq .step span { font-size: 11px; color: var(--p-ink-3); display: block; margin-top: 3px; line-height: 1.45; }
+  .seq .step.crit { border-color: var(--p-cliff); }
+  .seq .step.crit b { color: var(--p-cliff); }
+
+  /* mini chart: filed vs plan years (IBCS fills) for exhibit D */
+  .ybars { display: flex; align-items: flex-end; gap: 18px; height: 110px; margin-top: 14px; padding: 0 8px; }
+  .ybars .yb { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 5px; text-align: center; }
+  .ybars .bar { border-radius: 3px 3px 0 0; background: var(--p-ink); }
+  .ybars .bar.proj { background: transparent; border: 1.5px dashed var(--p-ink-2); border-bottom: 0; }
+  .ybars .yb small { font-family: var(--font-mono); font-size: 9px; color: var(--p-ink-3); }
+  .ybars .yb .v { font-family: var(--font-ui); font-size: 10.5px; font-weight: 700; }
+
+  .fn-list { margin-top: 30px; border-top: 1px solid var(--p-ink); padding-top: 14px; }
+  .fn-list .fn { display: flex; gap: 10px; padding: 4px 0; }
+  .fn-list .fn .m { flex: none; width: 22px; }
+
+  .register { display: inline-flex; border: 1px solid var(--g-hairline); border-radius: 999px; overflow: hidden; font-size: 11px; font-weight: 600; }
+  .register a { padding: 5px 12px; color: var(--g-ink-3); text-decoration: none; }
+  .register a.on { background: rgba(238,240,244,0.1); color: var(--g-ink); }
+</style>
+</head>
+<body class="grain">
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="wordmark" href="01-desk.html"><span class="mk"></span><b>‹ Desk</b></a>
+    <span class="client-crumb">
+      <span class="cavatar" style="--chue:#5b86a8">MW</span>
+      <span><b>Marcus Webb</b><div class="meta">CF-0038 · single · CA · plan year 2026</div></span>
+    </span>
+    <nav class="nav">
+      <a href="03-casefile.html">Case</a>
+      <a href="04-return.html">Return</a>
+      <a href="08-entities.html">Entities</a>
+      <a href="09-goals.html">Brief</a>
+      <a href="05-lab.html">Lab</a>
+      <a class="on" href="06-memo.html">Memo</a>
+      <a href="07-plan.html">Plan</a>
+    </nav>
+    <div class="topbar-right">
+      <span class="register"><a class="on" href="#">Technical</a><a href="#">Client-friendly</a></span>
+      <span class="stamp stamp-draft" style="transform:none">Draft v1</span>
+      <span class="kbd">⌘K</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap page">
+
+  <!-- ============================================== how it was built ===== -->
+  <section class="panel rise">
+    <div class="panel-head">
+      <span class="dot dot-live"></span>
+      <span class="microlabel" style="color:var(--agent)">Run #221 · how this memo was built</span>
+      <span class="annotation" style="font-size:13px">the strategist calls engines as tools — watch the work, not a spinner</span>
+      <span style="margin-left:auto; font-family:var(--font-mono); font-size:10px; color:var(--g-ink-3)">17:18 · 41.2s · 14 engine calls · $0.00 local inference</span>
+    </div>
+    <div class="theater">
+      <!-- the agent's plan, approved before it ran -->
+      <div class="plancard">
+        <div class="microlabel" style="margin-bottom:8px">The plan you approved</div>
+        <div class="plan-step done"><span class="n">✓</span><span>Read: 2025 1040 (verified), goals brief, 2-yr trajectory, Webb Design Co books</span></div>
+        <div class="plan-step done"><span class="n">✓</span><span>Recompute 2026 baseline on Rev. Proc. 2025-32 constants</span></div>
+        <div class="plan-step done"><span class="n">✓</span><span>Model the 2027 exit: QSBS, residency ordering, CA vs TX</span></div>
+        <div class="plan-step done"><span class="n">✓</span><span>Run optimizers: Roth window, bunching, TLH</span></div>
+        <div class="plan-step done"><span class="n">✓</span><span>Draft memo — engine figures only, tied to stated goals</span></div>
+        <div class="spec-note" style="margin-top:12px">SPEC · plan streams BEFORE the run; 30s auto-proceed + “Hold for my review”. Editing a step regenerates downstream only.</div>
+      </div>
+
+      <!-- the engine call feed -->
+      <div class="calls">
+        <div class="call"><span class="glyph">∑</span><code>form1040.recompute(ty=2026, inputs=verified)</code><span class="res">total $50,811 · matches filed ✓</span></div>
+        <div class="call"><span class="glyph">∑</span><code>qsbs.exclusion(basis=500k, proceeds=5.0M, acq=2019-03)</code><span class="res save">100% tier · excl. $5.0M → −$1,190,000</span></div>
+        <div class="call"><span class="glyph">∑</span><code>state.delta(event=sale_2027, CA → TX)</code><span class="res save">−$635,078 on the event</span></div>
+        <div class="call"><span class="glyph">∑</span><code>charitable.bunching(giving=25k/yr, horizon=3)</code><span class="res save">DAF 2026 → −$8,212</span></div>
+        <div class="call"><span class="glyph">∑</span><code>roth.window(2028–2030, post-exit)</code><span class="res save">fill 24% → −$9,400/yr</span></div>
+        <div class="call"><span class="glyph">∑</span><code>irmaa.proximity(magi=2026)</code><span class="res">n/a until 2033 · noted</span></div>
+        <div class="call"><span class="glyph">∑</span><code>tlh.scan(brokerage positions)</code><span class="res save">harvest $15,100 → −$3,600</span></div>
+        <div class="call running"><span class="glyph">✍</span><code>memo.compose(register=technical, goals-aware)</code><span class="ok">drafted · awaiting your signature</span></div>
+      </div>
+
+      <!-- the agent pauses and asks — never guesses -->
+      <div>
+        <div class="microlabel" style="margin-bottom:10px; color:var(--cost)">Question for you · 1</div>
+        <div class="qblock">
+          <b>Confirm stock basis — Webb Design Co</b>
+          <p>Exhibit A assumes basis <b class="fig">$500,000</b> (your note, Mar 3). The §1202 cap is the greater of $15M or <b>10× basis</b> — a correction moves the exclusion ceiling directly.</p>
+          <div style="display:flex; gap:8px">
+            <a class="mini-btn go" href="#">Confirm $500,000</a>
+            <a class="mini-btn" href="#">Correct…</a>
+          </div>
+        </div>
+        <div class="spec-note" style="margin-top:12px">SPEC · ambiguity blocks the affected exhibit only; the agent proposes options, never silently assumes. Unconfirmed inputs are marked in the memo margin.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================== the document == -->
+  <div class="docwrap rise d2">
+    <nav class="toc">
+      <div class="microlabel" style="margin-bottom:10px">Memorandum</div>
+      <a class="on" href="#">Summary</a>
+      <a href="#">I · The situation</a>
+      <a href="#">II · The 2027 exit</a>
+      <a href="#">III · This year</a>
+      <a href="#">IV · The window ahead</a>
+      <a href="#">V · Cadence &amp; estimates</a>
+      <a href="#">Engine notes</a>
+      <div class="meta">
+        M-2026-014 · draft v1<br/>
+        run #221 · 14 calls<br/>
+        constants 2026 ✓<br/>
+        figures: <span style="color:#167a66">engine</span> · <span style="color:#3c6491">document</span> · <span style="color:var(--seal)">books</span>
+      </div>
+      <div class="spec-note" style="margin-top:16px">SPEC · sticky TOC; markers scroll-sync. Hover any cited figure → mini calc card; click → full trace.</div>
+    </nav>
+
+    <article class="sheet">
+      <div class="letterhead">
+        <span class="firm">Northstar Tax Advisory</span>
+        <span style="font-family:var(--font-ui); font-size:10px; letter-spacing:0.14em; color:var(--p-ink-3)">MEMORANDUM</span>
+        <span class="doc-ref">M-2026-014 · JUNE 12, 2026 · 7 MIN READ</span>
+      </div>
+
+      <div class="from-to">
+        <div><div class="k">Prepared for</div>Marcus Webb</div>
+        <div><div class="k">Prepared by</div>The Strategist · reviewed by D. Reyes, EA</div>
+        <div><div class="k">Re</div>2026–2030 tax position · sale of Webb Design Co</div>
+        <div><div class="k">Basis</div>2025 return (verified) · live books · stated goals</div>
+      </div>
+
+      <h1>Sequencing the exit pays for the decade.</h1>
+      <p class="lede">You plan to sell Webb Design Co in 2027 for roughly $5.0M, move to Texas, give seriously, and retire by 2030. Run in the right order, current law makes most of that tax-free. Run in the wrong order, the same facts cost seven figures.</p>
+
+      <div style="display:flex; align-items:flex-end; gap:26px; margin:26px 0 8px">
+        <div>
+          <div class="microlabel" style="color:var(--p-ink-3)">Identified, engine-verified</div>
+          <div class="headline-num fig-serif">$1,846,290<span class="cite eng">1–5</span></div>
+        </div>
+        <div style="font-size:13px; color:var(--p-ink-2); padding-bottom:6px; max-width:330px">
+          $1,825,078 rides on the 2027 event; $21,212 is repeatable annual work starting now. Five findings follow, ordered by what must happen first.
+        </div>
+      </div>
+
+      <h2><span class="no">I</span>The situation</h2>
+      <p>Your 2025 return shows $216,200 of total income<span class="cite doc">a</span> against $50,811 of combined federal and California tax<span class="cite eng">6</span> — a 23.5% average rate, with California taking $14,666<span class="cite eng">6</span>. Income has risen two years running, and the studio’s 2026 books are tracking ahead of plan<span class="cite bks">b</span>. Nothing in the current year is mispriced; the leverage is all in what happens next.</p>
+
+      <h2><span class="no">II</span>The 2027 exit — order of operations</h2>
+
+      <div class="exhibit">
+        <div class="tools">
+          <a href="#">✎ Edit</a><a href="#">↕ Reorder</a><a href="#">◌ Hide</a><a class="accept" href="07-plan.html">✓ Accept → plan</a>
+        </div>
+        <div class="x-head">
+          <span class="x-no">EXHIBIT A</span>
+          <b style="font-family:var(--font-ui); font-size:15px">§1202 qualified small business stock — 100% exclusion</b>
+          <span class="x-impact save fig-serif">−$1,190,000<span class="cite eng">1</span></span>
+        </div>
+        <div class="x-body">
+          Your founder shares were acquired March 2019<span class="cite doc">c</span> — past the five-year holding gate, in the post-OBBBA 100% tier. At a $5.0M sale price on $500,000 basis, the entire $4.5M gain sits inside the exclusion ceiling (greater of $15M or 10× basis). Federal LTCG and NIIT on the gain fall to zero. <b>Do not</b> let a partial secondary sale before 2027 reset the holding analysis on new shares.
+        </div>
+        <div class="x-meta"><span class="auth">IRC §1202(a)(4) · OBBBA §70423</span><span>engine: corporate.qsbs v2026.1</span><span>asset ceiling $75M ✓ · C-corp ✓ · original issue ✓</span></div>
+      </div>
+
+      <div class="exhibit">
+        <div class="tools"><a href="#">✎ Edit</a><a href="#">↕ Reorder</a><a href="#">◌ Hide</a><a class="accept" href="07-plan.html">✓ Accept → plan</a></div>
+        <div class="x-head">
+          <span class="x-no">EXHIBIT B</span>
+          <b style="font-family:var(--font-ui); font-size:15px">Residency before closing — CA → TX</b>
+          <span class="x-impact save fig-serif">−$635,078<span class="cite eng">2</span></span>
+        </div>
+        <div class="x-body">
+          California taxes the sale if you are resident when the gain is recognized — §1202 does not shield you from Sacramento (CA never conformed). Texas has no income tax. The engine prices the same 2027 sale both ways; the difference is $635,078. Residency must be <i>established and defensible</i> before the closing date: domicile, days, and the burden of proof run against you in a departure year.
+        </div>
+        <div class="seq">
+          <div class="step"><b>1 · H2 2026</b><span>Lease/buy in TX · driver’s license · voter reg · move the studio’s books</span></div>
+          <div class="step crit"><b>2 · Before close</b><span>Domicile established — the date that decides $635,078</span></div>
+          <div class="step"><b>3 · 2027</b><span>Close the sale · file CA 540NR part-year · keep the evidence file</span></div>
+        </div>
+        <div class="x-meta"><span class="auth">CA FTB Pub. 1031 · R&amp;TC §17014</span><span>engine: state.delta v2026.1 (CA brackets + 1% MHS vs TX none)</span><span>caveat: FTB residency audits are routine at this size — document everything</span></div>
+      </div>
+
+      <h2><span class="no">III</span>This year — 2026</h2>
+
+      <div class="exhibit">
+        <div class="tools"><a href="#">✎ Edit</a><a href="#">↕ Reorder</a><a href="#">◌ Hide</a><a class="accept" href="07-plan.html">✓ Accept → plan</a></div>
+        <div class="x-head">
+          <span class="x-no">EXHIBIT C</span>
+          <b style="font-family:var(--font-ui); font-size:15px">Bunch three years of giving into a 2026 DAF</b>
+          <span class="x-impact save fig-serif">−$8,212<span class="cite eng">3</span></span>
+        </div>
+        <div class="x-body">
+          You give about $25,000 a year<span class="cite doc">d</span>. Under the 2026 rules a new 0.5%-of-AGI floor shaves itemized gifts, and your standard deduction already covers $16,100. Funding $75,000 into a donor-advised fund this year clears both hurdles at your peak CA bracket — your last full California year — then grants flow to the same charities on your schedule.
+        </div>
+        <div class="x-meta"><span class="auth">§170 · OBBBA floor (2026) · Rev. Proc. 2025-32</span><span>engine: charitable.bunching v2026.1 — bunch-vs-annual, net of std deduction</span></div>
+      </div>
+
+      <p>Alongside the DAF: the brokerage carries <b class="fig-serif">$15,100</b> of harvestable losses<span class="cite doc">d</span> against this year’s gains — worth <b class="fig-serif">$3,600</b><span class="cite eng">5</span> at your blended rate, and the dry powder matters more in your exit year.</p>
+
+      <h2><span class="no">IV</span>The window ahead — 2028–2030</h2>
+
+      <div class="exhibit">
+        <div class="tools"><a href="#">✎ Edit</a><a href="#">↕ Reorder</a><a href="#">◌ Hide</a><a class="accept" href="07-plan.html">✓ Accept → plan</a></div>
+        <div class="x-head">
+          <span class="x-no">EXHIBIT D</span>
+          <b style="font-family:var(--font-ui); font-size:15px">Roth conversions in the post-exit valley</b>
+          <span class="x-impact save fig-serif">−$9,400<span style="font-size:12px">/yr</span><span class="cite eng">4</span></span>
+        </div>
+        <div class="x-body">
+          After the sale and before retirement income starts, 2028–2030 are low-bracket years — a valley the engine prices at three conversions filling the 24% bracket in Texas (no state drag), versus the same dollars coming out at 32%+ later. IRMAA is not yet in range; the window closes when it is (2033).
+        </div>
+        <div class="ybars">
+          <div class="yb"><span class="v">$50.8k</span><div class="bar" style="height:62px"></div><small>2025 filed</small></div>
+          <div class="yb"><span class="v">$48.2k</span><div class="bar" style="height:58px"></div><small>2026 est</small></div>
+          <div class="yb"><span class="v">$71k*</span><div class="bar proj" style="height:84px"></div><small>2027 exit*</small></div>
+          <div class="yb"><span class="v">$18k</span><div class="bar proj" style="height:22px"></div><small>2028 valley</small></div>
+          <div class="yb"><span class="v">$19k</span><div class="bar proj" style="height:24px"></div><small>2029 valley</small></div>
+          <div class="yb"><span class="v">$21k</span><div class="bar proj" style="height:26px"></div><small>2030 retire</small></div>
+        </div>
+        <div class="x-meta"><span>solid = filed · dashed = engine projection</span><span class="auth">§408A</span><span>engine: multiyear.project + roth.window v2026.1 · *exit-year tax shown post-QSBS/TX</span></div>
+      </div>
+
+      <p>For the education goal, a 529 superfund (five years of gift exclusion at once) fits best in 2027 cash-flow<span class="cite eng">5</span> — flagged for next year’s memo, not this one.</p>
+
+      <h2><span class="no">V</span>Cadence &amp; estimates</h2>
+      <p>Q2 federal estimate of <b class="fig-serif">$8,920</b><span class="cite eng">6</span> is funded and due Monday. The DAF decision changes Q3 — accept Exhibit C and the voucher set re-computes before September 15. This memo re-runs automatically when the studio’s books close each month; material drift returns it to your desk as a redline, never a silent change.</p>
+
+      <!-- sign & seal: gold is reserved for exactly this -->
+      <div class="signoff" style="margin-top:34px">
+        <div class="seal-disc">Northstar<br/>· seal ·</div>
+        <div style="flex:1">
+          <b style="font-family:var(--font-ui); font-size:14px">Sign &amp; seal memo v1</b>
+          <p style="margin:5px 0 0; font-size:13px; color:var(--p-ink-2)">Signing locks this version, stamps the audit chain, and unlocks <i>Accept → plan</i> and the client deliverable. Your edits above are preserved as the signed text.</p>
+          <p class="fn" style="margin-top:6px">payload sha-256 e3b0…a41f · audit #A-1192 · engines v2026.1 · LLM narrates, engines compute — the model cannot invent a figure.</p>
+        </div>
+        <a class="btn btn-seal" href="07-plan.html">✍ Sign &amp; seal</a>
+      </div>
+
+      <!-- engine notes: the footnote register, verbatim traces -->
+      <div class="fn-list">
+        <div class="microlabel" style="color:var(--p-ink-3); margin-bottom:8px">Engine notes — every figure, shown working</div>
+        <div class="fn"><span class="m cite eng">1</span><span class="fn">qsbs.exclusion · gain $4,500,000 excluded 100% → fed LTCG 20% + NIIT 3.8% on $5.0M avoided = <b>$1,190,000</b> · ceiling max($15M, 10×$500,000) ✓</span></div>
+        <div class="fn"><span class="m cite eng">2</span><span class="fn">state.delta · CA 2027 on event: $663,4xx (12.3% top + 1% MHS, bracket walk) vs TX $0; net of part-year wages allocation → <b>$635,078</b></span></div>
+        <div class="fn"><span class="m cite eng">3</span><span class="fn">charitable.bunching · DAF $75,000 in 2026 vs $25,000 × 3 · itemized over std $16,100, 0.5% AGI floor applied → NPV <b>$8,212</b></span></div>
+        <div class="fn"><span class="m cite eng">4</span><span class="fn">roth.window · fill-to-top-of-24% 2028–2030, TX resident, IRMAA horizon 2033 clear → <b>$9,400/yr</b> vs 32% later</span></div>
+        <div class="fn"><span class="m cite eng">5</span><span class="fn">tlh.scan $15,100 × blended 23.8% = <b>$3,600</b> · 529 superfund modeled, deferred to 2027</span></div>
+        <div class="fn"><span class="m cite eng">6</span><span class="fn">form1040 + state.CA on 2025 verified inputs → fed $36,145 + CA $14,666 = <b>$50,811</b> · matches filed return exactly ✓</span></div>
+        <div class="fn"><span class="m cite doc">a–d</span><span class="fn">document reads: (a) 1040 line 9 verbatim “$216,200” · (c) cap table, stock cert #4 dated 2019-03-11 · (d) Schedule A history + brokerage 1099-B — each opens the source page at the highlighted region</span></div>
+        <div class="fn"><span class="m cite bks">b</span><span class="fn">Webb Design Co · Accounting-Ops P&amp;L, pulled Jun 12 17:02 — net income YTD, federation token aud=accounting-ops</span></div>
+      </div>
+    </article>
+  </div>
+
+  <footer class="wrap" style="padding:26px 0 0; display:flex; gap:14px; flex-wrap:wrap">
+    <span class="spec-note">№ 06 — THE MEMO · the product: an agent-drafted, advisor-curated, engine-footnoted document worth what the firm bills for it. Paper on the desk.</span>
+  </footer>
+</main>
+
+</body>
+</html>

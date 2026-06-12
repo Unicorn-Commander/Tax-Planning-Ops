@@ -1,0 +1,461 @@
+/* ===========================================================================
+   Tax-Planning-Ops design system v2 — "GRAPHITE & PAPER"
+   ---------------------------------------------------------------------------
+   The one idea: THE STRATEGIST WORKS THE FILE; YOU SIGN THE MEMO.
+
+   Two environments:
+
+   1. GRAPHITE (--g-*): the operating chrome. A cool, dark instrument panel
+      where the firm runs: the desk, the book, the lab, the staff. Numbers
+      are instruments here — every figure is positioned against brackets,
+      cliffs and thresholds, and every figure can be interrogated for its
+      engine provenance ("no naked numbers").
+
+   2. PAPER (--p-*): the document environment. Tax is a document profession.
+      The memo, the plan, the client deliverable render as lit sheets of
+      paper ON the graphite desk — serif, footnoted, letterheaded, signed.
+      The contrast IS the product story: dark mission control, and on it,
+      a deliverable worth what the advisor bills for it.
+
+   Signatures:
+   - THE STRATA: the marginal-rate spectrum (10→37%, cool→hot). The tool
+     that masters the brackets owns the gradient of marginal rates. Appears
+     as the wordmark underline, the position instrument, micro-meters.
+   - GOLD = SIGNED. The seal color is reserved for finalized, hash-stamped
+     work (signed memos, delivered plans). Nothing unsigned wears gold.
+   - PROVENANCE EVERYWHERE: dotted-underline figures open a lineage card
+     (engine · inputs · Rev. Proc. constants · audit ref). The trust machine
+     that makes an AI-drafted memo sellable.
+   =========================================================================== */
+
+:root {
+  /* -- Graphite chrome -- */
+  --g-bg: #0b0d11;
+  --g-bg-2: #0f1218;
+  --g-surface: #11141c;
+  --g-surface-2: #161a24;
+  --g-ink: #eef0f4;
+  --g-ink-2: rgba(238, 240, 244, 0.64);
+  --g-ink-3: rgba(238, 240, 244, 0.40);
+  --g-hairline: rgba(238, 240, 244, 0.12);
+  --g-hairline-soft: rgba(238, 240, 244, 0.06);
+
+  --font-ui: "Libre Franklin", "Inter", system-ui, sans-serif;   /* Franklin: the 1040's own letterform heritage */
+  --font-doc: "Source Serif 4", Georgia, serif;                  /* the memo voice */
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;         /* the ledger voice: figures, calls, hashes */
+
+  /* -- Semantics -- */
+  --save: #4cc38a;          /* engine-verified savings */
+  --cost: #e0a458;          /* amounts due, costs of action */
+  --cliff: #e25d6d;         /* thresholds with teeth: IRMAA, phase-outs */
+  --agent: #56c4bd;         /* agent presence / live work */
+  --seal: #d3b277;          /* GOLD = signed, finalized, hash-stamped. Reserved. */
+  --info: #8a93a8;
+
+  /* -- THE STRATA: ordinary-income marginal rates, cool → hot -- */
+  --s10: #4e9a8e;
+  --s12: #63a06a;
+  --s22: #a39a4e;
+  --s24: #bd8a45;
+  --s32: #c97243;
+  --s35: #c75a4b;
+  --s37: #b94556;
+  /* LTCG strata (the parallel, cooler ladder) */
+  --cg0: #5b86a8;
+  --cg15: #4a6fa6;
+  --cg20: #415e9c;
+  /* the signature ribbon — stop widths echo the real 2026 single-filer bracket spans */
+  --strata: linear-gradient(90deg,
+    var(--s10) 0%,  var(--s10) 6%,
+    var(--s12) 6%,  var(--s12) 19%,
+    var(--s22) 19%, var(--s22) 39%,
+    var(--s24) 39%, var(--s24) 62%,
+    var(--s32) 62%, var(--s32) 78%,
+    var(--s35) 78%, var(--s35) 95%,
+    var(--s37) 95%, var(--s37) 100%);
+
+  /* -- Paper environment -- */
+  --p-bg: #f5f2e9;
+  --p-bg-2: #ece7d9;
+  --p-ink: #211d15;
+  --p-ink-2: rgba(33, 29, 21, 0.66);
+  --p-ink-3: rgba(33, 29, 21, 0.44);
+  --p-hairline: rgba(33, 29, 21, 0.16);
+  --p-save: #1d7a52;
+  --p-cliff: #a83246;
+  --p-seal: #8d6f33;
+
+  --radius: 14px;
+  --radius-sm: 9px;
+  --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.5), 0 16px 48px -18px rgba(0, 0, 0, 0.75);
+  --shadow-deep: 0 2px 6px rgba(0, 0, 0, 0.4), 0 28px 90px -24px rgba(0, 0, 0, 0.72);
+  /* paper floats above the desk: warm key light, cold ambient */
+  --shadow-sheet: 0 1px 0 rgba(255, 252, 240, 0.06), 0 2px 8px rgba(0, 0, 0, 0.5),
+                  0 30px 80px -18px rgba(0, 0, 0, 0.85), 0 60px 140px -40px rgba(211, 178, 119, 0.07);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+body {
+  background:
+    radial-gradient(1100px 640px at 12% -10%, rgba(86, 196, 189, 0.05), transparent 60%),
+    radial-gradient(960px 700px at 100% -6%, rgba(91, 134, 168, 0.05), transparent 58%),
+    radial-gradient(900px 640px at 50% 116%, rgba(211, 178, 119, 0.04), transparent 60%),
+    var(--g-bg);
+  color: var(--g-ink);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Film grain — suite texture; kills flat-gradient sheen. */
+.grain::before {
+  content: "";
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 1;
+  opacity: 0.06; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
+}
+
+.wrap { max-width: 1380px; margin: 0 auto; padding: 0 36px; position: relative; z-index: 2; }
+
+/* ---------------------------------------------------------------- topbar -- */
+.topbar {
+  position: sticky; top: 0; z-index: 50;
+  backdrop-filter: blur(16px) saturate(1.1);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1);
+  background: color-mix(in srgb, var(--g-bg) 74%, transparent);
+  border-bottom: 1px solid var(--g-hairline-soft);
+}
+.topbar-inner {
+  max-width: 1380px; margin: 0 auto; padding: 0 36px;
+  height: 58px; display: flex; align-items: center; gap: 24px;
+}
+.wordmark { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; }
+.wordmark .mk {
+  width: 26px; height: 26px; border-radius: 7px; position: relative; overflow: hidden;
+  background: linear-gradient(160deg, #1a1f2b, #0d1016);
+  box-shadow: inset 0 0 0 1px rgba(238,240,244,0.14);
+}
+.wordmark .mk::after { content: ""; position: absolute; left: 4px; right: 4px; bottom: 5px; height: 3px; border-radius: 99px; background: var(--strata); }
+.wordmark .mk::before { content: ""; position: absolute; left: 4px; right: 12px; top: 6px; height: 1.5px; background: rgba(238,240,244,0.55); }
+.wordmark b { font-weight: 650; font-size: 14.5px; letter-spacing: -0.01em; position: relative; }
+.wordmark b::after { content: ""; position: absolute; left: 0; right: 0; bottom: -5px; height: 2px; border-radius: 99px; background: var(--strata); opacity: 0.9; }
+.wordmark span { font-size: 11px; color: var(--g-ink-3); }
+
+.workspace-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 600; color: var(--g-ink-2);
+  border: 1px solid var(--g-hairline); border-radius: 999px; padding: 6px 12px;
+}
+.workspace-chip .sw { width: 10px; height: 10px; border-radius: 3px; background: linear-gradient(135deg, #b66eff, #00d4ff); }
+
+.nav { display: flex; gap: 4px; align-items: center; }
+.nav a {
+  text-decoration: none; color: var(--g-ink-2); font-size: 13.5px; font-weight: 500;
+  padding: 7px 12px; border-radius: 8px; position: relative;
+  transition: background 0.15s, color 0.15s;
+}
+.nav a:hover { color: var(--g-ink); background: rgba(255,255,255,0.05); }
+.nav a.on { color: var(--g-ink); background: rgba(255,255,255,0.07); }
+.nav a.on::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: 2.5px; height: 1.5px; border-radius: 99px; background: var(--strata); opacity: 0.9; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.kbd { font-family: var(--font-mono); font-size: 11px; color: var(--g-ink-3); border: 1px solid var(--g-hairline); border-radius: 7px; padding: 4px 8px; }
+
+/* case-file topbar variant: the client is the context */
+.client-crumb { display: flex; align-items: center; gap: 10px; }
+.client-crumb .cavatar { width: 30px; height: 30px; }
+.client-crumb b { font-size: 14px; letter-spacing: -0.01em; }
+.client-crumb .meta { font-size: 11px; color: var(--g-ink-3); font-family: var(--font-mono); }
+
+/* ------------------------------------------------------------ primitives -- */
+.microlabel {
+  font-size: 10.5px; font-weight: 650; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--g-ink-3);
+}
+.annotation {
+  font-family: var(--font-doc); font-style: italic; font-size: 15.5px;
+  color: var(--g-ink-2); letter-spacing: 0.004em;
+}
+.hairline { border: 0; border-top: 1px solid var(--g-hairline-soft); margin: 0; }
+.strata-line { height: 2px; border-radius: 99px; background: var(--strata); }
+
+.panel {
+  border: 1px solid var(--g-hairline); border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(255,255,255,0.028), rgba(255,255,255,0.012)), var(--g-surface);
+  box-shadow: var(--shadow-panel);
+}
+.panel-head { padding: 14px 20px; border-bottom: 1px solid var(--g-hairline-soft); display: flex; align-items: center; gap: 12px; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--font-ui); font-size: 13.5px; font-weight: 600;
+  padding: 9px 16px; border-radius: 10px; border: 1px solid transparent;
+  cursor: pointer; text-decoration: none; color: var(--g-ink);
+  transition: transform 0.12s, box-shadow 0.2s, background 0.15s;
+}
+.btn:active { transform: translateY(1px); }
+.btn-ink { background: var(--g-ink); color: #0c0d10; }
+.btn-ink:hover { box-shadow: 0 8px 26px -8px rgba(238,240,244,0.4); }
+.btn-ghost { border-color: var(--g-hairline); background: transparent; }
+.btn-ghost:hover { background: rgba(255,255,255,0.05); }
+.btn-seal { background: linear-gradient(180deg, #e3c896, var(--seal)); color: #211a0d; box-shadow: 0 6px 22px -8px rgba(211,178,119,0.55); }
+.btn-agent { background: rgba(86,196,189,0.14); border-color: rgba(86,196,189,0.4); color: var(--agent); }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11.5px; font-weight: 600; padding: 4px 10px; border-radius: 999px;
+  border: 1px solid var(--g-hairline); color: var(--g-ink-2); text-decoration: none;
+  white-space: nowrap;
+}
+a.chip:hover { background: rgba(255,255,255,0.06); color: var(--g-ink); }
+.chip.save { color: var(--save); border-color: rgba(76,195,138,0.4); background: rgba(76,195,138,0.07); }
+.chip.cost { color: var(--cost); border-color: rgba(224,164,88,0.4); background: rgba(224,164,88,0.07); }
+.chip.cliff { color: var(--cliff); border-color: rgba(226,93,109,0.4); background: rgba(226,93,109,0.07); }
+.chip.agent { color: var(--agent); border-color: rgba(86,196,189,0.4); background: rgba(86,196,189,0.07); }
+.chip.seal { color: var(--seal); border-color: rgba(211,178,119,0.45); background: rgba(211,178,119,0.08); }
+
+.dot { width: 7px; height: 7px; border-radius: 999px; display: inline-block; flex: none; }
+.dot-live { background: var(--agent); animation: pulse 2.4s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(86,196,189,0.4);} 50% { box-shadow: 0 0 0 5px rgba(86,196,189,0);} }
+
+/* --------------------------------------------------- money & provenance -- */
+/* No naked numbers: a figure with provenance carries a dotted underline and
+   opens the lineage card. In mockups, .prov-card shows the anatomy once.   */
+.money { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; letter-spacing: -0.01em; }
+.fig { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.prov {
+  text-decoration: underline dotted color-mix(in srgb, currentColor 42%, transparent);
+  text-decoration-thickness: 1px; text-underline-offset: 4px; cursor: help;
+}
+.tone-save { color: var(--save); } .tone-cost { color: var(--cost); }
+.tone-cliff { color: var(--cliff); } .tone-seal { color: var(--seal); } .tone-agent { color: var(--agent); }
+
+.prov-card {
+  width: 360px; border: 1px solid var(--g-hairline); border-radius: 12px;
+  background: var(--g-surface-2); box-shadow: var(--shadow-deep); overflow: hidden;
+}
+.prov-card .ph { padding: 12px 16px; border-bottom: 1px solid var(--g-hairline-soft); display: flex; align-items: baseline; gap: 10px; }
+.prov-card .ph b { font-size: 18px; }
+.prov-row { display: flex; gap: 10px; padding: 8px 16px; font-size: 12px; border-top: 1px solid var(--g-hairline-soft); }
+.prov-row .k { width: 86px; flex: none; color: var(--g-ink-3); }
+.prov-row .v { color: var(--g-ink-2); font-family: var(--font-mono); font-size: 11.5px; }
+
+/* ------------------------------------------- THE POSITION INSTRUMENT ----- */
+/* The signature visualization: income filling the bracket strata, with
+   threshold pins (cliffs) and the NOW marker. Reused at three sizes:
+   hero (case file), bar (lab), micro (roster rows).                        */
+.instrument { position: relative; }
+.inst-track { position: relative; display: flex; height: 56px; border-radius: 8px; overflow: visible; }
+.inst-seg { position: relative; height: 100%; }
+.inst-seg i {
+  position: absolute; inset: 0; border-radius: 2px;
+  background: var(--seg, #444); opacity: 0.16;
+}
+.inst-seg.filled i { opacity: 0.78; box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.25); }
+.inst-seg.partial i {
+  opacity: 0.78;
+  -webkit-mask: linear-gradient(90deg, #000 var(--fillpct, 50%), rgba(0,0,0,0.18) var(--fillpct, 50%));
+  mask: linear-gradient(90deg, #000 var(--fillpct, 50%), rgba(0,0,0,0.18) var(--fillpct, 50%));
+}
+.inst-seg + .inst-seg { margin-left: 3px; }
+.inst-seg .rt {
+  position: absolute; top: -19px; left: 0; font-family: var(--font-mono);
+  font-size: 9.5px; color: var(--g-ink-3); letter-spacing: 0.04em;
+}
+.inst-seg .bd { position: absolute; bottom: -19px; left: 0; font-family: var(--font-mono); font-size: 9px; color: var(--g-ink-3); }
+/* the NOW marker: where this client's taxable income sits */
+.inst-now { position: absolute; top: -26px; bottom: -8px; width: 0; border-left: 2px solid var(--g-ink); z-index: 3; }
+.inst-now::after { content: ""; position: absolute; left: -4px; top: -3px; width: 7px; height: 7px; border-radius: 99px; background: var(--g-ink); }
+.inst-now .tag {
+  position: absolute; top: -24px; left: 50%; transform: translateX(-50%);
+  font-family: var(--font-mono); font-size: 10px; color: var(--g-ink);
+  background: var(--g-surface-2); border: 1px solid var(--g-hairline);
+  border-radius: 6px; padding: 2px 8px; white-space: nowrap;
+}
+/* threshold pins: cliffs & phase-outs (IRMAA, QBI, AMT, SS) */
+.inst-pin { position: absolute; top: -8px; bottom: -8px; width: 0; border-left: 1.5px dashed var(--cliff); opacity: 0.85; z-index: 2; }
+.inst-pin .tag {
+  position: absolute; bottom: -22px; left: 50%; transform: translateX(-50%);
+  font-family: var(--font-mono); font-size: 9px; color: var(--cliff); white-space: nowrap;
+}
+.inst-pin.soft { border-left-color: var(--cost); } .inst-pin.soft .tag { color: var(--cost); }
+/* headroom band: the planning space between NOW and the next threshold */
+.inst-headroom {
+  position: absolute; top: 0; bottom: 0; z-index: 1; border-radius: 4px;
+  background: repeating-linear-gradient(135deg, rgba(76,195,138,0.16) 0 6px, transparent 6px 12px);
+  outline: 1px dashed rgba(76,195,138,0.45);
+}
+.inst-headroom .tag { position: absolute; top: -22px; left: 50%; transform: translateX(-50%); font-family: var(--font-mono); font-size: 10px; color: var(--save); white-space: nowrap; }
+/* micro variant for roster rows */
+.inst-micro { display: flex; height: 8px; border-radius: 99px; overflow: hidden; width: 120px; position: relative; }
+.inst-micro i { height: 100%; opacity: 0.85; }
+.inst-micro .pin { position: absolute; top: -2px; bottom: -2px; width: 1.5px; background: var(--cliff); }
+
+/* ----------------------------------------------------------- cliff gauge -- */
+.gauge { position: relative; padding-top: 16px; }
+.gauge .track { display: flex; height: 10px; border-radius: 99px; overflow: hidden; }
+.gauge .needle { position: absolute; top: 8px; width: 2px; height: 26px; background: var(--g-ink); border-radius: 2px; }
+.gauge .needle::before { content: ""; position: absolute; top: -5px; left: -3.5px; border: 4.5px solid transparent; border-top-color: var(--g-ink); }
+.gauge .lbl { display: flex; justify-content: space-between; margin-top: 8px; font-family: var(--font-mono); font-size: 9.5px; color: var(--g-ink-3); }
+
+/* ------------------------------------------------------------ tool calls -- */
+/* The run theater: the strategist literally calls engines as tools.
+   Show the work — this is what "every dollar from an engine" looks like.  */
+.call { display: flex; align-items: center; gap: 12px; padding: 9px 14px; border-top: 1px solid var(--g-hairline-soft); font-size: 12px; }
+.call:first-child { border-top: 0; }
+.call .glyph {
+  width: 22px; height: 22px; border-radius: 6px; flex: none;
+  display: grid; place-items: center; font-family: var(--font-mono); font-size: 10.5px;
+  background: rgba(86,196,189,0.12); color: var(--agent); border: 1px solid rgba(86,196,189,0.25);
+}
+.call code { font-family: var(--font-mono); font-size: 11.5px; color: var(--g-ink-2); }
+.call .res { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--g-ink); white-space: nowrap; }
+.call .res.save { color: var(--save); } .call .res.cliff { color: var(--cliff); }
+.call.running { background: rgba(86,196,189,0.05); }
+.call .ok { font-family: var(--font-mono); font-size: 10px; color: var(--save); }
+
+/* -------------------------------------------------------- agent presence -- */
+.aavatar {
+  width: 38px; height: 38px; border-radius: 11px; flex: none; position: relative;
+  display: grid; place-items: center; font-weight: 700; font-size: 14px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--ahue, var(--agent)) 30%, #10141c), #0d1016);
+  color: var(--ahue, var(--agent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ahue, var(--agent)) 40%, transparent);
+}
+.aavatar .st { position: absolute; right: -2px; bottom: -2px; width: 10px; height: 10px; border-radius: 99px; border: 2px solid var(--g-bg); background: var(--agent); }
+.aavatar .st.idle { background: var(--g-ink-3); }
+.cavatar {
+  width: 38px; height: 38px; border-radius: 999px; flex: none;
+  display: grid; place-items: center; font-weight: 650; font-size: 13px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--chue, #8a93a8) 34%, #141821), #0e1117);
+  color: color-mix(in srgb, var(--chue, #8a93a8) 85%, #fff);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--chue, #8a93a8) 38%, transparent);
+}
+.w-dots span { display: inline-block; width: 3.5px; height: 3.5px; margin-right: 2.5px; border-radius: 99px; background: var(--agent); animation: wd 1.2s ease-in-out infinite; }
+.w-dots span:nth-child(2) { animation-delay: 0.15s; } .w-dots span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes wd { 0%,100% { opacity: 0.25; transform: translateY(0);} 50% { opacity: 1; transform: translateY(-2px);} }
+
+/* -------------------------------------------------------------- stamps ---- */
+.stamp {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 5px 10px; border-radius: 7px; transform: rotate(-2deg);
+  font-family: var(--font-ui);
+}
+.stamp-verified { color: var(--save); border: 1.5px solid var(--save); background: rgba(76,195,138,0.08); }
+.stamp-draft { color: var(--info); border: 1.5px dashed var(--info); background: rgba(138,147,168,0.07); }
+.stamp-signed { color: var(--seal); border: 1.5px solid var(--seal); background: rgba(211,178,119,0.1); }
+.stamp-flag { color: var(--cliff); border: 1.5px solid var(--cliff); background: rgba(226,93,109,0.08); }
+@keyframes stamp-in { 0% { transform: rotate(-2deg) scale(1.6); opacity: 0; } 60% { transform: rotate(-2deg) scale(0.94); opacity: 1; } 100% { transform: rotate(-2deg) scale(1); } }
+.stamp.fresh { animation: stamp-in 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+
+/* engagement stage chips (the case pipeline) */
+.stage { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--g-ink-3); }
+.stage::before { content: ""; width: 6px; height: 6px; border-radius: 2px; background: var(--g-ink-3); }
+.stage.on { color: var(--g-ink); } .stage.on::before { background: var(--agent); }
+.stage.done { color: var(--g-ink-2); } .stage.done::before { background: var(--save); }
+.stage.sealed { color: var(--seal); } .stage.sealed::before { background: var(--seal); }
+
+/* ------------------------------------------------------------- the queue -- */
+.queue-item { display: flex; align-items: center; gap: 14px; padding: 13px 18px; border-top: 1px solid var(--g-hairline-soft); }
+.queue-item:first-child { border-top: 0; }
+.queue-item .ttl { font-size: 13.5px; font-weight: 600; }
+.queue-item .sub { font-size: 12px; color: var(--g-ink-3); margin-top: 1px; }
+.queue-item .acts { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.mini-btn { font-size: 11.5px; font-weight: 600; padding: 6px 11px; border-radius: 8px; border: 1px solid var(--g-hairline); color: var(--g-ink); text-decoration: none; white-space: nowrap; }
+.mini-btn.go { background: var(--g-ink); border-color: transparent; color: #0c0d10; }
+.mini-btn.seal { background: rgba(211,178,119,0.13); border-color: rgba(211,178,119,0.5); color: var(--seal); }
+
+/* -------------------------------------------------------------- ticker ---- */
+.ticker { overflow: hidden; border-top: 1px solid var(--g-hairline-soft); border-bottom: 1px solid var(--g-hairline-soft); padding: 8px 0; }
+.ticker-track { display: inline-flex; gap: 44px; white-space: nowrap; animation: crawl 48s linear infinite; will-change: transform; }
+.ticker:hover .ticker-track { animation-play-state: paused; }
+@keyframes crawl { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.tick-item { display: inline-flex; align-items: center; gap: 9px; font-family: var(--font-mono); font-size: 10.5px; color: var(--g-ink-3); }
+.tick-item b { color: var(--g-ink-2); font-weight: 600; }
+.tick-item .t-dot { width: 5px; height: 5px; border-radius: 99px; }
+
+/* ------------------------------------------------------------- ledger ----- */
+.ledger { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ledger th { text-align: left; font-size: 10.5px; font-weight: 650; letter-spacing: 0.12em; text-transform: uppercase; color: var(--g-ink-3); padding: 10px 14px; border-bottom: 1px solid var(--g-hairline); }
+.ledger td { padding: 11px 14px; border-bottom: 1px solid var(--g-hairline-soft); vertical-align: middle; }
+.ledger td.r, .ledger th.r { text-align: right; }
+.ledger tr:hover td { background: rgba(255,255,255,0.025); }
+
+/* ------------------------------------------------------------ the sheet --- */
+/* Paper on the desk. Documents live here: the memo, the plan, the deliverable. */
+.sheet {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.5), rgba(255,255,255,0) 140px),
+    var(--p-bg);
+  color: var(--p-ink);
+  border-radius: 6px;
+  box-shadow: var(--shadow-sheet);
+  font-family: var(--font-doc);
+  position: relative;
+}
+.sheet .letterhead { display: flex; align-items: baseline; gap: 14px; padding: 0 0 18px; border-bottom: 2px solid var(--p-ink); }
+.sheet .letterhead .firm { font-family: var(--font-ui); font-weight: 750; font-size: 13px; letter-spacing: 0.2em; text-transform: uppercase; }
+.sheet .letterhead .doc-ref { margin-left: auto; font-family: var(--font-mono); font-size: 10.5px; color: var(--p-ink-3); }
+.sheet h1 { font-family: var(--font-doc); font-weight: 650; font-size: 33px; letter-spacing: -0.015em; line-height: 1.15; margin: 26px 0 6px; }
+.sheet h2 { font-family: var(--font-doc); font-weight: 650; font-size: 21px; letter-spacing: -0.01em; margin: 34px 0 10px; display: flex; align-items: baseline; gap: 12px; }
+.sheet h2 .no { font-family: var(--font-mono); font-size: 12px; color: var(--p-ink-3); font-weight: 500; }
+.sheet p { font-size: 15.5px; line-height: 1.72; margin: 10px 0; color: color-mix(in srgb, var(--p-ink) 92%, transparent); }
+.sheet .lede { font-size: 17px; line-height: 1.65; color: var(--p-ink-2); font-style: italic; }
+.sheet .fig-serif { font-variant-numeric: tabular-nums lining-nums; font-feature-settings: "tnum" 1, "lnum" 1; }
+.sheet .fn { font-size: 12.5px; color: var(--p-ink-3); line-height: 1.6; }
+.sheet sup { font-family: var(--font-mono); font-size: 10px; color: var(--p-seal); }
+.sheet .prov { text-decoration-color: color-mix(in srgb, var(--p-ink) 38%, transparent); }
+.sheet .microlabel { color: var(--p-ink-3); }
+.sheet .hairline { border-top-color: var(--p-hairline); }
+
+/* the seal: gold is reserved for signed work */
+.seal-disc {
+  width: 84px; height: 84px; border-radius: 999px; position: relative; flex: none;
+  display: grid; place-items: center; text-align: center;
+  font-family: var(--font-ui); font-size: 8px; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--p-seal); border: 2px solid var(--p-seal);
+}
+.seal-disc::before { content: ""; position: absolute; inset: 5px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--p-seal) 55%, transparent); }
+.signoff { border: 1.5px dashed color-mix(in srgb, var(--p-seal) 60%, transparent); border-radius: 10px; padding: 18px 22px; display: flex; gap: 20px; align-items: center; }
+
+/* findings as exhibits inside the sheet */
+.exhibit { border: 1px solid var(--p-hairline); border-radius: 8px; padding: 16px 20px; margin: 14px 0; background: rgba(255,255,255,0.4); }
+.exhibit .x-head { display: flex; align-items: baseline; gap: 10px; }
+.exhibit .x-no { font-family: var(--font-mono); font-size: 10.5px; color: var(--p-ink-3); letter-spacing: 0.08em; }
+.exhibit .x-impact { margin-left: auto; font-family: var(--font-ui); font-weight: 700; font-size: 17px; }
+.exhibit .x-impact.save { color: var(--p-save); } .exhibit .x-impact.cost { color: #9a6b2f; }
+
+/* ------------------------------------------------------------- entrances -- */
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.rise { animation: rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.d1 { animation-delay: 0.05s; } .d2 { animation-delay: 0.12s; } .d3 { animation-delay: 0.19s; }
+.d4 { animation-delay: 0.26s; } .d5 { animation-delay: 0.33s; } .d6 { animation-delay: 0.4s; }
+
+.shimmer {
+  position: relative; overflow: hidden;
+  background: linear-gradient(110deg, rgba(255,255,255,0.05) 8%, rgba(255,255,255,0.12) 18%, rgba(255,255,255,0.05) 33%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+@keyframes shimmer { to { background-position-x: -200%; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
+
+/* quiet scrollbars */
+* { scrollbar-width: thin; scrollbar-color: #232733 transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background-color: #232733; border-radius: 9999px; border: 2px solid transparent; background-clip: padding-box; }
+
+/* mockup-only: inline contract notes for the implementing agent */
+.spec-note {
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--g-ink-3);
+  border: 1px dashed var(--g-hairline); border-radius: 8px; padding: 6px 10px;
+}
+.sheet .spec-note { color: var(--p-ink-3); border-color: var(--p-hairline); }

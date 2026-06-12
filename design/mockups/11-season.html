@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tax-Planning-Ops — The Season</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/system.css" />
+<style>
+  .page { padding: 26px 0 70px; }
+  .head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  .head h1 { margin: 0; font-weight: 750; font-size: 30px; letter-spacing: -0.02em; }
+
+  /* the year as bands: surges and checkpoints */
+  .year { padding: 26px 28px 60px; position: relative; }
+  .y-track { position: relative; height: 3px; background: var(--g-hairline); border-radius: 99px; margin: 74px 16px 0; }
+  .surge { position: absolute; top: -30px; height: 62px; border-radius: 9px; }
+  .surge .lab { position: absolute; left: 50%; transform: translateX(-50%); bottom: -24px; font-family: var(--font-mono); font-size: 9.5px; white-space: nowrap; color: var(--g-ink-3); }
+  .surge.spring { background: rgba(76,195,138,0.1); outline: 1px solid rgba(76,195,138,0.25); }
+  .surge.fall { background: rgba(91,134,168,0.1); outline: 1px dashed rgba(91,134,168,0.3); }
+  .cp { position: absolute; top: -7px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; }
+  .cp i { width: 14px; height: 14px; border-radius: 99px; background: var(--g-surface-2); border: 2.5px solid var(--g-ink-3); z-index: 2; }
+  .cp.done i { border-color: var(--save); background: var(--save); }
+  .cp.due i { border-color: var(--cost); background: var(--cost); box-shadow: 0 0 0 6px rgba(224,164,88,0.16); }
+  .cp .card { position: absolute; bottom: 24px; width: 130px; text-align: center; }
+  .cp .card b { font-size: 12px; display: block; }
+  .cp .card span { font-size: 9.5px; color: var(--g-ink-3); }
+  .cp .yr { position: absolute; top: 20px; font-family: var(--font-mono); font-size: 9.5px; color: var(--g-ink-3); white-space: nowrap; }
+
+  .grid { display: grid; grid-template-columns: 1.62fr 1fr; gap: 22px; margin-top: 22px; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 22px; }
+
+  /* the surge queue: every client this checkpoint */
+  .srow { display: grid; grid-template-columns: auto 1.2fr 110px 130px 1fr auto; gap: 14px; align-items: center; padding: 12px 18px; border-top: 1px solid var(--g-hairline-soft); }
+  .srow:first-of-type { border-top: 0; }
+  .srow .nm b { font-size: 13.5px; display: block; }
+  .srow .nm span { font-family: var(--font-mono); font-size: 10px; color: var(--g-ink-3); }
+  .srow .st { font-family: var(--font-mono); font-size: 10.5px; }
+  .mini-step { display: flex; height: 6px; border-radius: 99px; overflow: hidden; background: rgba(238,240,244,0.08); position: relative; }
+  .mini-step i { background: var(--save); }
+  .mini-step .req { position: absolute; top: -2px; bottom: -2px; width: 1.5px; background: rgba(238,240,244,0.45); }
+
+  .camp { padding: 18px 20px; }
+  .camp p { margin: 6px 0 12px; font-size: 13px; color: var(--g-ink-2); line-height: 1.6; }
+</style>
+</head>
+<body class="grain">
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="wordmark" href="index.html"><span class="mk"></span><b>Tax-Planning-Ops</b></a>
+    <nav class="nav">
+      <a href="01-desk.html">Desk</a>
+      <a href="02-book.html">Book</a>
+      <a class="on" href="11-season.html">Season</a>
+      <a href="10-staff.html">Staff</a>
+      <a href="12-playbook.html">Playbook</a>
+    </nav>
+    <div class="topbar-right">
+      <span class="workspace-chip"><span class="sw"></span> Northstar Tax Advisory ▾</span>
+      <span class="kbd">⌘K</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap page">
+
+  <section class="head rise">
+    <h1>The Season</h1>
+    <span class="annotation">tax planning is calendar-driven — the year is the board</span>
+    <span class="chip cost" style="margin-left:auto">Q2 federal estimates · Mon Jun 15 · 3 days</span>
+  </section>
+
+  <!-- ===================================================== the year ====== -->
+  <section class="panel year rise d1">
+    <div class="panel-head" style="padding:0 0 8px; border:0">
+      <span class="microlabel">Planning year 2026 · surges and checkpoints</span>
+      <span class="chip" style="margin-left:auto">same agenda every surge — that’s how one advisor serves a whole book</span>
+    </div>
+    <div class="y-track">
+      <div class="surge spring" style="left:24%; width:14%"><span class="lab">SPRING REVIEW ✓ 6/6 returns in · promises reconciled</span></div>
+      <div class="surge fall" style="left:74%; width:16%"><span class="lab">Q4 CRUNCH · accelerate/defer · harvest · fund</span></div>
+
+      <span class="cp done" style="left:8%"><span class="card"><b>Filing handoff</b><span>CPA letters sent ✓</span></span><i></i><span class="yr">FEB–APR</span></span>
+      <span class="cp done" style="left:28%"><span class="card"><b>Q1</b><span>6/6 funded ✓</span></span><i></i><span class="yr">APR 15</span></span>
+      <span class="cp due" style="left:45%"><span class="card"><b>Q2</b><span>4/6 funded · $10,490 open</span></span><i></i><span class="yr">JUN 15 · NOW</span></span>
+      <span class="cp" style="left:66%"><span class="card"><b>Q3</b><span>re-projects on July books</span></span><i></i><span class="yr">SEP 15</span></span>
+      <span class="cp" style="left:92%"><span class="card"><b>Q4</b><span>final · Jan 15 ’27</span></span><i></i><span class="yr">JAN 15</span></span>
+    </div>
+  </section>
+
+  <div class="grid">
+    <div class="col">
+      <!-- ================================================ surge queue ===== -->
+      <section class="panel rise d2">
+        <div class="panel-head">
+          <span class="microlabel">Q2 board · cumulative paid vs required, per client</span>
+          <span class="annotation" style="font-size:13px">a dip below the step line = a 2210 penalty, priced</span>
+          <a class="chip agent" style="margin-left:auto" href="#">draft reminders for the unpaid · 2</a>
+        </div>
+
+        <div class="srow">
+          <span class="cavatar" style="--chue:#b65f72; width:32px; height:32px; font-size:11px">EC</span>
+          <div class="nm"><b>Evelyn &amp; Sam Cho</b><span>safe harbor 110% prior · annualized off</span></div>
+          <span class="st" style="color:var(--cost)">DUE $6,180</span>
+          <div class="mini-step"><i style="width:38%"></i><span class="req" style="left:45%"></span></div>
+          <span style="font-size:11.5px; color:var(--g-ink-3)">voucher staged · EFTPS link in the draft email · conversion changes Q3, not Q2</span>
+          <a class="mini-btn go" href="#">Send voucher + note</a>
+        </div>
+        <div class="srow">
+          <span class="cavatar" style="--chue:#5f9e6e; width:32px; height:32px; font-size:11px">TB</span>
+          <div class="nm"><b>Tom &amp; Lisa Becker</b><span>lumpy K-1s → 2210-AI annualized ✓</span></div>
+          <span class="st" style="color:var(--cost)">DUE $4,310</span>
+          <div class="mini-step"><i style="width:41%"></i><span class="req" style="left:45%"></span></div>
+          <span style="font-size:11.5px; color:var(--g-ink-3)">annualized method lowers Q2 by $1,140 vs equal quarters — engine picked it</span>
+          <a class="mini-btn go" href="#">Send voucher + note</a>
+        </div>
+        <div class="srow" style="opacity:0.65">
+          <span class="cavatar" style="--chue:#5b86a8; width:32px; height:32px; font-size:11px">MW</span>
+          <div class="nm"><b>Marcus Webb</b><span>110% prior-year basis</span></div>
+          <span class="st" style="color:var(--save)">PAID $8,920 ✓</span>
+          <div class="mini-step"><i style="width:47%"></i><span class="req" style="left:45%"></span></div>
+          <span style="font-size:11.5px; color:var(--g-ink-3)">DAF acceptance re-prices Q3 — flagged in memo §V</span>
+          <span></span>
+        </div>
+        <div class="srow" style="opacity:0.65">
+          <span class="cavatar" style="--chue:#56a3a0; width:32px; height:32px; font-size:11px">JA</span>
+          <div class="nm"><b>Jordan Alvarez</b><span>W-2 withholding + estimates mix</span></div>
+          <span class="st" style="color:var(--save)">PAID $3,470 ✓</span>
+          <div class="mini-step"><i style="width:48%"></i><span class="req" style="left:45%"></span></div>
+          <span style="font-size:11.5px; color:var(--g-ink-3)">payroll withholding now covers 61% — estimates shrink next year</span>
+          <span></span>
+        </div>
+        <div class="srow" style="opacity:0.65">
+          <span class="cavatar" style="--chue:#9a6fb8; width:32px; height:32px; font-size:11px">PN</span>
+          <div class="nm"><b>Priya &amp; Raj Nair</b><span>RSU withholding heavy</span></div>
+          <span class="st" style="color:var(--save)">W/H COVERS ✓</span>
+          <div class="mini-step"><i style="width:52%"></i><span class="req" style="left:45%"></span></div>
+          <span style="font-size:11.5px; color:var(--g-ink-3)">Aug vest may flip Q3 — bookrunner watching the comp plan</span>
+          <span></span>
+        </div>
+        <div class="srow" style="opacity:0.65">
+          <span class="cavatar" style="--chue:#c2884f; width:32px; height:32px; font-size:11px">DH</span>
+          <div class="nm"><b>Dolores Hartman</b><span>prior-year 100% basis</span></div>
+          <span class="st" style="color:var(--g-ink-3)">SAFE HARBOR MET</span>
+          <div class="mini-step"><i style="width:58%"></i><span class="req" style="left:45%"></span></div>
+          <span style="font-size:11.5px; color:var(--g-ink-3)">over-withheld — W-4 fix waits on baseline confirm</span>
+          <span></span>
+        </div>
+      </section>
+
+      <!-- post-filing campaign -->
+      <section class="panel camp rise d3">
+        <div class="microlabel" style="color:var(--agent); margin-bottom:4px">Campaign · post-filing review</div>
+        <p><b>The spring loop that fills the year:</b> drop the book’s just-filed returns in bulk → the clerk verifies each against a full recompute → the bookrunner re-ranks → outreach drafts carry each client’s headline number (“we found $11,240 on your 2025 return”). 6 of 6 collected this spring; 2 prospects in the hopper.</p>
+        <div style="display:flex; gap:8px">
+          <a class="mini-btn go" href="04-return.html">Drop returns (bulk)</a>
+          <a class="mini-btn" href="02-book.html">Ranked results →</a>
+          <span class="chip" style="margin-left:auto">prospect upload links: 2 active · 21-day expiry · auto-delete on</span>
+        </div>
+      </section>
+    </div>
+
+    <div class="col">
+      <!-- the meeting cheat sheet: agent-prepped, one per client, every surge -->
+      <section class="panel rise d3">
+        <div class="panel-head"><span class="microlabel">Surge prep · the cheat sheet</span><span class="chip agent" style="margin-left:auto">auto-drafted per meeting</span></div>
+        <div style="padding:16px 18px; font-size:12.5px; color:var(--g-ink-2); line-height:1.7">
+          <b style="font-size:13.5px; color:var(--g-ink)">Cho — Monday 10:00</b><br/>
+          · last year: $61,920 fed · 24% nominal, IRMAA shadow real<br/>
+          · promised → realized: first plan year, n/a<br/>
+          · open: <b class="fig">$6,180 Q2</b> · Roth $18,400 awaiting memo<br/>
+          · talk track: “the cliff prices the bigger conversion — we take the free $18.4k now, the rest after Sam’s consulting ends”<br/>
+          · docs: voucher, conversion one-pager, ladder schedule
+        </div>
+        <div style="display:flex; gap:8px; padding:0 18px 16px">
+          <a class="mini-btn" href="#">All 3 Monday briefs</a>
+          <a class="mini-btn go" href="13-present.html">Open present mode ▸</a>
+        </div>
+      </section>
+
+      <!-- season totals -->
+      <section class="panel rise d4">
+        <div class="panel-head"><span class="microlabel">Season totals</span></div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0">
+          <div style="padding:14px 18px; border-right:1px solid var(--g-hairline-soft)"><b style="font-size:20px" class="money">$26,350</b><div style="font-family:var(--font-mono); font-size:9px; color:var(--g-ink-3); letter-spacing:0.08em">Q2 REQUIRED · BOOK</div></div>
+          <div style="padding:14px 18px"><b style="font-size:20px" class="money tone-save">$15,860</b><div style="font-family:var(--font-mono); font-size:9px; color:var(--g-ink-3); letter-spacing:0.08em">FUNDED ✓</div></div>
+          <div style="padding:14px 18px; border-top:1px solid var(--g-hairline-soft); border-right:1px solid var(--g-hairline-soft)"><b style="font-size:20px" class="money tone-cost">$10,490</b><div style="font-family:var(--font-mono); font-size:9px; color:var(--g-ink-3); letter-spacing:0.08em">OPEN · 2 CLIENTS</div></div>
+          <div style="padding:14px 18px; border-top:1px solid var(--g-hairline-soft)"><b style="font-size:20px" class="money">$0</b><div style="font-family:var(--font-mono); font-size:9px; color:var(--g-ink-3); letter-spacing:0.08em">PENALTY EXPOSURE</div></div>
+        </div>
+      </section>
+
+      <div class="spec-note rise d5">SPEC · board = quarterly engine per client (safe-harbor basis shown; 2210-AI when income is lumpy). Mini-bars: paid vs the cumulative-required tick. Reminder drafts are agent work products — advisor sends. Cheat sheets compile from overview + analysis + plan + season state.</div>
+    </div>
+  </div>
+
+  <footer style="padding:26px 0 0; display:flex; gap:14px; flex-wrap:wrap">
+    <span class="spec-note">№ 11 — THE SEASON · four checkpoints and two surges run the whole practice; the board makes the calendar the interface.</span>
+  </footer>
+</main>
+
+</body>
+</html>

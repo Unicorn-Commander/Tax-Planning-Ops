@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tax-Planning-Ops — The Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/system.css" />
+<style>
+  .deck { padding: 30px 0 60px; }
+
+  /* ------------------------------------------------------------ header --- */
+  .head h1 { font-weight: 750; font-size: 40px; letter-spacing: -0.025em; line-height: 1.1; margin: 10px 0 8px; }
+  .head .statline { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 14px; font-size: 12.5px; color: var(--g-ink-3); }
+  .head .statline b { color: var(--g-ink); font-weight: 650; }
+  .head .statline .up { color: var(--save); font-family: var(--font-mono); font-size: 11px; }
+
+  /* the season strip: deadlines are weather — always on the glass */
+  .season-strip {
+    margin-top: 20px; display: flex; align-items: center; gap: 16px;
+    border: 1px solid rgba(224,164,88,0.35); border-radius: 12px;
+    background: linear-gradient(90deg, rgba(224,164,88,0.1), rgba(224,164,88,0.02) 60%);
+    padding: 12px 18px;
+  }
+  .season-strip .dnum { font-family: var(--font-mono); font-weight: 600; font-size: 26px; color: var(--cost); letter-spacing: -0.04em; }
+  .season-strip .dlab { font-size: 12.5px; color: var(--g-ink-2); line-height: 1.45; }
+  .season-strip .dlab b { color: var(--g-ink); }
+  .season-strip .acts { margin-left: auto; }
+
+  /* ------------------------------------------------------------ omnibar -- */
+  .omnibar {
+    margin-top: 18px; position: relative;
+    display: flex; align-items: center; gap: 14px;
+    background: rgba(255,255,255,0.035);
+    border: 1px solid var(--g-hairline); border-radius: 16px;
+    padding: 15px 18px; box-shadow: var(--shadow-panel);
+  }
+  .omnibar::before {
+    content: ""; position: absolute; inset: -1px; border-radius: 17px; padding: 1px;
+    background: var(--strata); opacity: 0.34;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
+  }
+  .omnibar .orb {
+    width: 34px; height: 34px; border-radius: 10px; flex: none; display: grid; place-items: center;
+    font-weight: 800; font-size: 13px; color: #0c1413;
+    background: radial-gradient(circle at 30% 28%, #9fe8e2, var(--agent) 58%, #1d5b56);
+    box-shadow: 0 0 22px rgba(86,196,189,0.4);
+  }
+  .omnibar .ph { flex: 1; font-size: 14.5px; color: var(--g-ink-3); }
+  .omnibar .ph b { color: var(--g-ink-2); font-weight: 500; }
+  .omnibar .caret { display: inline-block; width: 1.5px; height: 17px; background: var(--g-ink-2); vertical-align: -3px; margin-left: 2px; animation: blink 1.1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .omnibar .hint { font-family: var(--font-mono); font-size: 10.5px; color: var(--g-ink-3); white-space: nowrap; }
+  .quickrow { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+
+  /* ------------------------------------------------------------- ticker -- */
+  .ticker { margin-top: 22px; }
+
+  /* --------------------------------------------------------------- grid -- */
+  .grid { display: grid; grid-template-columns: 1.62fr 1fr; gap: 22px; margin-top: 26px; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 22px; }
+
+  /* sign-off queue: the human is the gate */
+  .q-count { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--seal); }
+  .q-ic { width: 34px; height: 34px; border-radius: 9px; flex: none; display: grid; place-items: center; font-size: 14px; }
+  .q-ic.memo { background: rgba(211,178,119,0.12); color: var(--seal); border: 1px solid rgba(211,178,119,0.3); }
+  .q-ic.ocr { background: rgba(91,134,168,0.14); color: #7fa6c4; border: 1px solid rgba(91,134,168,0.3); }
+  .q-ic.ao { background: rgba(86,196,189,0.12); color: var(--agent); border: 1px solid rgba(86,196,189,0.3); }
+  .q-ic.plan { background: rgba(76,195,138,0.1); color: var(--save); border: 1px solid rgba(76,195,138,0.3); }
+
+  /* book pulse rows */
+  .book-row { display: grid; grid-template-columns: auto 1.25fr auto 1fr auto; gap: 16px; align-items: center; padding: 14px 18px; border-top: 1px solid var(--g-hairline-soft); text-decoration: none; color: inherit; transition: background 0.15s; }
+  .book-row:hover { background: rgba(255,255,255,0.025); }
+  .book-row .nm { font-size: 14px; font-weight: 650; letter-spacing: -0.01em; }
+  .book-row .meta { font-size: 11px; color: var(--g-ink-3); margin-top: 2px; font-family: var(--font-mono); }
+  .book-row .stages { display: flex; gap: 12px; }
+  .book-row .opp { text-align: right; }
+  .book-row .opp b { font-size: 15px; font-weight: 700; }
+  .book-row .opp span { display: block; font-size: 10px; color: var(--g-ink-3); font-family: var(--font-mono); margin-top: 1px; }
+  .inst-cell { position: relative; padding: 4px 0; }
+
+  /* duty band */
+  .duty { display: flex; flex-direction: column; }
+  .duty-row { display: flex; gap: 12px; padding: 12px 18px; border-top: 1px solid var(--g-hairline-soft); align-items: center; }
+  .duty-row:first-of-type { border-top: 0; }
+  .duty-row .who b { display: block; font-size: 13px; font-weight: 650; }
+  .duty-row .who span { font-size: 11.5px; color: var(--g-ink-3); }
+  .duty-row .doing { margin-left: auto; text-align: right; font-size: 11.5px; color: var(--g-ink-2); max-width: 180px; }
+  .duty-row .doing .t { display: block; font-family: var(--font-mono); font-size: 9.5px; color: var(--g-ink-3); margin-top: 2px; }
+
+  /* season card */
+  .yearline { display: flex; align-items: center; gap: 0; margin: 16px 18px 6px; }
+  .yearline .node { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; position: relative; }
+  .yearline .node::before { content: ""; position: absolute; top: 5px; left: -50%; right: 50%; height: 1.5px; background: var(--g-hairline); }
+  .yearline .node:first-child::before { display: none; }
+  .yearline .node i { width: 11px; height: 11px; border-radius: 99px; background: var(--g-surface-2); border: 1.5px solid var(--g-ink-3); z-index: 1; }
+  .yearline .node.done i { background: var(--save); border-color: var(--save); }
+  .yearline .node.due i { background: var(--cost); border-color: var(--cost); box-shadow: 0 0 0 4px rgba(224,164,88,0.18); }
+  .yearline .node small { font-family: var(--font-mono); font-size: 9px; color: var(--g-ink-3); }
+  .yearline .node.due small { color: var(--cost); font-weight: 600; }
+  .qpay { display: flex; justify-content: space-between; padding: 9px 18px; font-size: 12.5px; border-top: 1px solid var(--g-hairline-soft); }
+  .qpay .st { font-family: var(--font-mono); font-size: 10.5px; }
+
+  /* constants card: the trust flex */
+  .constants { padding: 16px 18px; }
+  .constants .row { display: flex; gap: 10px; align-items: baseline; font-size: 12.5px; padding: 5px 0; color: var(--g-ink-2); }
+  .constants .row code { font-family: var(--font-mono); font-size: 10.5px; color: var(--g-ink-3); margin-left: auto; }
+
+  footer { padding: 26px 0 60px; display: flex; gap: 14px; flex-wrap: wrap; }
+</style>
+</head>
+<body class="grain">
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="wordmark" href="index.html"><span class="mk"></span><b>Tax-Planning-Ops</b></a>
+    <nav class="nav">
+      <a class="on" href="01-desk.html">Desk</a>
+      <a href="02-book.html">Book</a>
+      <a href="11-season.html">Season</a>
+      <a href="10-staff.html">Staff</a>
+      <a href="12-playbook.html">Playbook</a>
+    </nav>
+    <div class="topbar-right">
+      <span class="workspace-chip"><span class="sw"></span> Northstar Tax Advisory ▾</span>
+      <span class="kbd">⌘K</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap deck">
+
+  <!-- ===================================================== header ======= -->
+  <section class="head rise">
+    <div class="microlabel">The desk · planning year 2026 · Friday, June 12</div>
+    <h1>Q2 lands Monday.<br/>Four signatures clear the desk.</h1>
+    <p class="annotation">The strategist works the file. You sign the memo.</p>
+    <div class="statline">
+      <span><b class="money">6</b> clients</span>
+      <span>identified this season <b class="money tone-save prov">$1,878,520</b> <span class="up">▲ 2,140 today</span></span>
+      <span>signed <b class="money tone-seal prov">$9,170</b>/yr · realized $1,610</span>
+      <span>memos awaiting signature <b>2</b></span>
+      <span>engines on <b>2026 constants</b> <span class="fig" style="color:var(--save)">✓ 148 golden tests</span></span>
+    </div>
+  </section>
+
+  <!-- season weather: the one date that matters this week -->
+  <div class="season-strip rise d1">
+    <span class="dnum">3<span style="font-size:13px;letter-spacing:0">&nbsp;days</span></span>
+    <span class="dlab"><b>Federal Q2 estimates due Mon Jun 15.</b> 4 of 6 clients funded — Tom &amp; Lisa Becker <b class="fig">$4,310</b> and Evelyn Cho <b class="fig">$6,180</b> unpaid. Vouchers are staged.</span>
+    <span class="acts"><a class="mini-btn go" href="11-season.html">Open the season board</a></span>
+  </div>
+
+  <!-- the desk's command line: language-first, answers come from engines -->
+  <div class="omnibar rise d2">
+    <span class="orb">S</span>
+    <span class="ph">Ask the desk — <b>“who is within $25k of an IRMAA cliff if we do Roth conversions this year</b><span class="caret"></span>”</span>
+    <span class="hint">engines answer · figures cited</span>
+  </div>
+  <div class="quickrow rise d2">
+    <a class="chip" href="#">scan the book again</a>
+    <a class="chip" href="#">draft memos for everyone analyzed</a>
+    <a class="chip" href="#">who hasn’t paid Q2?</a>
+    <a class="chip" href="#">what changed in the 2026 constants?</a>
+    <a class="chip agent" href="10-staff.html">● 2 agents working</a>
+  </div>
+
+  <!-- live work ticker: the practice runs while you watch -->
+  <div class="ticker rise d3" aria-label="Live agent activity">
+    <div class="ticker-track">
+      <span class="tick-item"><span class="t-dot" style="background:var(--seal)"></span><b>strategist</b> drafted memo M-2026-014 · Marcus Webb · 7 findings · $1,846,290 <i>17:18</i></span>
+      <span class="tick-item"><span class="t-dot" style="background:var(--agent)"></span><b>bookrunner</b> re-ranked the book after 2026 IRMAA update · top mover Evelyn Cho +$2,140 <i>17:31</i></span>
+      <span class="tick-item"><span class="t-dot" style="background:var(--agent)"></span><b>ao-liaison</b> pulled Alvarez Design Studio P&amp;L · YTD $31,440 · 12% under pace <i>16:40</i></span>
+      <span class="tick-item"><span class="t-dot" style="background:#7fa6c4"></span><b>intake-clerk</b> extracted 1040 · Dolores Hartman · 11 fields · 1 flagged at 88% <i>16:12</i></span>
+      <span class="tick-item"><span class="t-dot" style="background:var(--save)"></span><b>engines</b> 2026 constants verified · Rev. Proc. 2025-32 + OBBBA · 148 golden tests <i>15:55</i></span>
+      <span class="tick-item"><span class="t-dot" style="background:var(--cost)"></span><b>season</b> Q2 voucher set staged · Tom &amp; Lisa Becker · $4,310 <i>15:21</i></span>
+      <!-- duplicated for the crawl loop -->
+      <span class="tick-item"><span class="t-dot" style="background:var(--seal)"></span><b>strategist</b> drafted memo M-2026-014 · Marcus Webb · 7 findings · $1,846,290 <i>17:18</i></span>
+      <span class="tick-item"><span class="t-dot" style="background:var(--agent)"></span><b>bookrunner</b> re-ranked the book after 2026 IRMAA update · top mover Evelyn Cho +$2,140 <i>17:31</i></span>
+      <span class="tick-item"><span class="t-dot" style="background:var(--agent)"></span><b>ao-liaison</b> pulled Alvarez Design Studio P&amp;L · YTD $31,440 · 12% under pace <i>16:40</i></span>
+      <span class="tick-item"><span class="t-dot" style="background:#7fa6c4"></span><b>intake-clerk</b> extracted 1040 · Dolores Hartman · 11 fields · 1 flagged at 88% <i>16:12</i></span>
+      <span class="tick-item"><span class="t-dot" style="background:var(--save)"></span><b>engines</b> 2026 constants verified · Rev. Proc. 2025-32 + OBBBA · 148 golden tests <i>15:55</i></span>
+      <span class="tick-item"><span class="t-dot" style="background:var(--cost)"></span><b>season</b> Q2 voucher set staged · Tom &amp; Lisa Becker · $4,310 <i>15:21</i></span>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- ============================================== left column ======= -->
+    <div class="col">
+
+      <!-- YOUR SIGN-OFF: agents propose, the advisor decides -->
+      <section class="panel rise d3">
+        <div class="panel-head">
+          <span class="microlabel" style="color:var(--seal)">Your sign-off</span>
+          <span class="annotation" style="font-size:13.5px">the only queue that blocks the practice</span>
+          <span class="q-count">4 waiting</span>
+        </div>
+
+        <div class="queue-item">
+          <span class="q-ic memo">✍</span>
+          <div>
+            <div class="ttl">Memo M-2026-014 — Marcus Webb</div>
+            <div class="sub">7 findings · <b class="tone-save fig">$1,846,290</b> identified (QSBS exit + relocation timing) · drafted 17:18 by the strategist</div>
+          </div>
+          <div class="acts"><span class="stamp stamp-draft">Draft</span><a class="mini-btn seal" href="06-memo.html">Review &amp; sign</a></div>
+        </div>
+
+        <div class="queue-item">
+          <span class="q-ic ocr">⌲</span>
+          <div>
+            <div class="ttl">1040 extraction — Dolores Hartman</div>
+            <div class="sub">11 of 12 fields ≥ 99% · line 5b pensions read <span class="fig">$12,000</span> at 88% — needs your eye before baseline locks</div>
+          </div>
+          <div class="acts"><a class="mini-btn go" href="04-return.html">Review fields</a></div>
+        </div>
+
+        <div class="queue-item">
+          <span class="q-ic ao">⇄</span>
+          <div>
+            <div class="ttl">Books pull — Alvarez Design Studio</div>
+            <div class="sub">Accounting-Ops YTD net <b class="fig">$31,440</b> (thru Jun 12) — 12% under the plan’s pace · re-project Jordan’s year?</div>
+          </div>
+          <div class="acts"><a class="mini-btn" href="08-entities.html">Inspect</a><a class="mini-btn go" href="08-entities.html">Re-project</a></div>
+        </div>
+
+        <div class="queue-item">
+          <span class="q-ic plan">⛁</span>
+          <div>
+            <div class="ttl">Plan v3 ready to seal — Tom &amp; Lisa Becker</div>
+            <div class="sub">QBI aggregation + bunching accepted · Q3 estimate moves <b class="fig">+$1,210</b> · finalize locks the year &amp; stamps the hash</div>
+          </div>
+          <div class="acts"><a class="mini-btn seal" href="07-plan.html">Finalize &amp; seal</a></div>
+        </div>
+      </section>
+
+      <!-- BOOK PULSE: ranked by recomputed savings, not by tax owed -->
+      <section class="panel rise d4">
+        <div class="panel-head">
+          <span class="microlabel">Book pulse</span>
+          <span class="annotation" style="font-size:13.5px">every client re-ranked by what the engines can still recover</span>
+          <a class="chip" style="margin-left:auto" href="02-book.html">Open the book →</a>
+        </div>
+
+        <a class="book-row" href="06-memo.html" style="--chue:#5b86a8">
+          <span class="cavatar">MW</span>
+          <div><div class="nm">Marcus Webb</div><div class="meta">single · CA · sale of business 2027 · retire 2030</div></div>
+          <div class="stages"><span class="stage done">base</span><span class="stage done">analysis</span><span class="stage on">memo</span><span class="stage">sign</span></div>
+          <div class="inst-cell">
+            <div class="inst-micro">
+              <i style="background:var(--s10);flex:6"></i><i style="background:var(--s12);flex:13"></i><i style="background:var(--s22);flex:20"></i><i style="background:var(--s24);flex:23;opacity:.25"></i><i style="background:var(--s32);flex:16;opacity:.18"></i><i style="background:var(--s35);flex:17;opacity:.18"></i><i style="background:var(--s37);flex:5;opacity:.18"></i>
+              <span class="pin" style="left:64%"></span>
+            </div>
+            <div class="meta" style="margin-top:5px">24% marginal · IRMAA n/a · QSBS window opens 2027</div>
+          </div>
+          <div class="opp"><b class="tone-save money">$1,846,290</b><span>event + $14,950/yr</span></div>
+        </a>
+
+        <a class="book-row" href="05-lab.html" style="--chue:#b65f72">
+          <span class="cavatar">EC</span>
+          <div><div class="nm">Evelyn Cho</div><div class="meta">mfj · WA · retired 2024 · SS + IRA drawdown</div></div>
+          <div class="stages"><span class="stage done">base</span><span class="stage on">analysis</span><span class="stage">memo</span><span class="stage">sign</span></div>
+          <div class="inst-cell">
+            <div class="inst-micro">
+              <i style="background:var(--s10);flex:6"></i><i style="background:var(--s12);flex:13"></i><i style="background:var(--s22);flex:20"></i><i style="background:var(--s24);flex:23"></i><i style="background:var(--s32);flex:16;opacity:.25"></i><i style="background:var(--s35);flex:17;opacity:.18"></i><i style="background:var(--s37);flex:5;opacity:.18"></i>
+              <span class="pin" style="left:78%"></span>
+            </div>
+            <div class="meta" style="margin-top:5px">$18,400 below IRMAA tier 3 · Roth window open thru 2027</div>
+          </div>
+          <div class="opp"><b class="tone-save money">$11,240</b><span>/yr · cliff-aware</span></div>
+        </a>
+
+        <a class="book-row" href="03-casefile.html" style="--chue:#56a3a0">
+          <span class="cavatar">JA</span>
+          <div><div class="nm">Jordan Alvarez</div><div class="meta">single · FL · design studio + rental · S-corp electing</div></div>
+          <div class="stages"><span class="stage done">base</span><span class="stage done">analysis</span><span class="stage done">memo</span><span class="stage sealed">signed</span></div>
+          <div class="inst-cell">
+            <div class="inst-micro">
+              <i style="background:var(--s10);flex:6"></i><i style="background:var(--s12);flex:13"></i><i style="background:var(--s22);flex:20"></i><i style="background:var(--s24);flex:23;opacity:.45"></i><i style="background:var(--s32);flex:16;opacity:.18"></i><i style="background:var(--s35);flex:17;opacity:.18"></i><i style="background:var(--s37);flex:5;opacity:.18"></i>
+            </div>
+            <div class="meta" style="margin-top:5px">S-corp salary $45,000 — comp floor binds · QBI full 20%</div>
+          </div>
+          <div class="opp"><b class="tone-seal money">$9,170</b><span>signed · implementing 2/5</span></div>
+        </a>
+
+        <a class="book-row" href="07-plan.html" style="--chue:#5f9e6e">
+          <span class="cavatar">TB</span>
+          <div><div class="nm">Tom &amp; Lisa Becker</div><div class="meta">mfj · IL · two pass-throughs · QBI aggregation</div></div>
+          <div class="stages"><span class="stage done">base</span><span class="stage done">analysis</span><span class="stage done">memo</span><span class="stage on">seal</span></div>
+          <div class="inst-cell">
+            <div class="inst-micro">
+              <i style="background:var(--s10);flex:6"></i><i style="background:var(--s12);flex:13"></i><i style="background:var(--s22);flex:20"></i><i style="background:var(--s24);flex:23;opacity:.6"></i><i style="background:var(--s32);flex:16;opacity:.18"></i><i style="background:var(--s35);flex:17;opacity:.18"></i><i style="background:var(--s37);flex:5;opacity:.18"></i>
+              <span class="pin" style="left:55%;background:var(--cost)"></span>
+            </div>
+            <div class="meta" style="margin-top:5px">QBI phase-in starts $403,500 · $48k headroom</div>
+          </div>
+          <div class="opp"><b class="tone-save money">$7,820</b><span>/yr · plan v3</span></div>
+        </a>
+
+        <a class="book-row" href="02-book.html" style="--chue:#9a6fb8">
+          <span class="cavatar">PN</span>
+          <div><div class="nm">Priya &amp; Raj Nair</div><div class="meta">mfj · NY · RSU heavy · baseline confirmed Tue</div></div>
+          <div class="stages"><span class="stage done">base</span><span class="stage on">analysis</span><span class="stage">memo</span><span class="stage">sign</span></div>
+          <div class="inst-cell">
+            <div class="shimmer" style="height:8px;border-radius:99px;width:120px"></div>
+            <div class="meta" style="margin-top:5px;color:var(--agent)">strategist queued · position next</div>
+          </div>
+          <div class="opp"><b class="money" style="color:var(--g-ink-3)">—</b><span>running</span></div>
+        </a>
+
+        <a class="book-row" href="04-return.html" style="--chue:#c2884f">
+          <span class="cavatar">DH</span>
+          <div><div class="nm">Dolores Hartman</div><div class="meta">hoh · TX · scanned return uploaded today</div></div>
+          <div class="stages"><span class="stage on">base</span><span class="stage">analysis</span><span class="stage">memo</span><span class="stage">sign</span></div>
+          <div class="inst-cell"><div class="meta">extraction review pending — 1 field flagged</div></div>
+          <div class="opp"><b class="money" style="color:var(--g-ink-3)">—</b><span>intake</span></div>
+        </a>
+      </section>
+    </div>
+
+    <!-- ============================================= right column ======= -->
+    <div class="col">
+
+      <!-- duty band: the staff, visibly working -->
+      <section class="panel duty rise d4">
+        <div class="panel-head">
+          <span class="microlabel">On duty</span>
+          <a class="chip agent" style="margin-left:auto" href="10-staff.html">Staff →</a>
+        </div>
+        <div class="duty-row">
+          <span class="aavatar" style="--ahue:var(--agent)">S<span class="st"></span></span>
+          <div class="who"><b>The Strategist</b><span>memos · optimizers · engines-only figures</span></div>
+          <div class="doing">drafting Priya &amp; Raj <span class="w-dots"><span></span><span></span><span></span></span><span class="t">run #221 · 41s</span></div>
+        </div>
+        <div class="duty-row">
+          <span class="aavatar" style="--ahue:#7fa6c4">C<span class="st idle"></span></span>
+          <div class="who"><b>The Intake Clerk</b><span>1040 vision OCR · field confidence</span></div>
+          <div class="doing">idle<span class="t">last: Hartman 1040 · 16:12</span></div>
+        </div>
+        <div class="duty-row">
+          <span class="aavatar" style="--ahue:#a39a4e">B<span class="st idle"></span></span>
+          <div class="who"><b>The Bookrunner</b><span>book scan · opportunity ranking</span></div>
+          <div class="doing">book ranked 6/6<span class="t">17:31 · next: constants drift watch</span></div>
+        </div>
+        <div class="duty-row">
+          <span class="aavatar" style="--ahue:var(--seal)">L<span class="st idle"></span></span>
+          <div class="who"><b>The AO Liaison</b><span>pulls P&amp;L from the firm’s books</span></div>
+          <div class="doing">2 entities synced<span class="t">16:40 · federation: brigade ✓</span></div>
+        </div>
+      </section>
+
+      <!-- the season at a glance -->
+      <section class="panel rise d5">
+        <div class="panel-head"><span class="microlabel">The season</span><span class="chip cost" style="margin-left:auto">Q2 · 3 days</span></div>
+        <div class="yearline">
+          <span class="node done"><i></i><small>APR 15 ✓</small></span>
+          <span class="node due"><i></i><small>JUN 15</small></span>
+          <span class="node"><i></i><small>SEP 15</small></span>
+          <span class="node"><i></i><small>JAN 15</small></span>
+        </div>
+        <div style="padding: 10px 18px 6px">
+          <div class="qpay" style="border-top:0"><span>Marcus Webb</span><span class="st" style="color:var(--save)">PAID $8,920</span></div>
+          <div class="qpay"><span>Jordan Alvarez</span><span class="st" style="color:var(--save)">PAID $3,470</span></div>
+          <div class="qpay"><span>Evelyn Cho</span><span class="st" style="color:var(--cost)">DUE $6,180</span></div>
+          <div class="qpay"><span>Tom &amp; Lisa Becker</span><span class="st" style="color:var(--cost)">DUE $4,310</span></div>
+          <div class="qpay"><span>Priya &amp; Raj Nair</span><span class="st" style="color:var(--save)">W/H COVERS</span></div>
+          <div class="qpay"><span>Dolores Hartman</span><span class="st" style="color:var(--g-ink-3)">SAFE HARBOR MET</span></div>
+        </div>
+      </section>
+
+      <!-- the constants: correctness is a feature, show it -->
+      <section class="panel constants rise d6">
+        <div class="microlabel" style="margin-bottom:8px">The constants under everything</div>
+        <div class="row">2026 ordinary + LTCG brackets <code>Rev. Proc. 2025-32</code></div>
+        <div class="row">AMT exemption &amp; 50% phase-out <code>OBBBA §70107</code></div>
+        <div class="row">IRMAA 2026 tiers (Part B $202.90) <code>CMS · verified</code></div>
+        <div class="row">QBI thresholds $201,750 / $403,500 <code>§199A · golden ×31</code></div>
+        <div class="row" style="border-top:1px solid var(--g-hairline-soft);padding-top:10px;margin-top:6px">
+          <span class="stamp stamp-verified" style="transform:none">148 golden tests</span>
+          <a class="chip" style="margin-left:auto" href="12-playbook.html">Inspect the tables →</a>
+        </div>
+      </section>
+
+      <div class="spec-note rise d6">SPEC · Desk = scan-book (real engine savings, not total tax) + sign-off queue (drafted memos, unconfirmed extractions, AO pulls, unsealed plans) + duty band (agent registry states) + season (quarterly per client, IRS calendar). Omnibar answers route to engines via the strategist; every figure carries provenance hover. Ticker = audit-journal tail, newest-first, click-through.</div>
+    </div>
+  </div>
+</main>
+
+<footer class="wrap">
+  <span class="spec-note">№ 01 — THE DESK · the firm’s morning surface: what needs a human, what the staff did overnight, where the season stands.</span>
+</footer>
+
+</body>
+</html>

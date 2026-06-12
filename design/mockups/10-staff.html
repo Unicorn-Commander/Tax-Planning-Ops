@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tax-Planning-Ops — The Staff</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/system.css" />
+<style>
+  .page { padding: 26px 0 70px; }
+  .head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  .head h1 { margin: 0; font-weight: 750; font-size: 30px; letter-spacing: -0.02em; }
+  .statline { display: flex; gap: 20px; margin-left: auto; font-size: 12.5px; color: var(--g-ink-3); }
+  .statline b { color: var(--g-ink); }
+
+  .crew { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 20px; align-items: start; }
+  .agentcard .top { display: flex; gap: 14px; padding: 18px 20px 12px; }
+  .agentcard .aavatar { width: 46px; height: 46px; font-size: 17px; }
+  .agentcard .who b { font-size: 16px; display: block; letter-spacing: -0.01em; }
+  .agentcard .who span { font-size: 11.5px; color: var(--g-ink-3); font-family: var(--font-mono); }
+  .orders { margin: 0 20px; border: 1px dashed var(--g-hairline); border-radius: 9px; padding: 10px 13px; font-size: 12px; color: var(--g-ink-2); line-height: 1.6; }
+  .orders .s { font-family: var(--font-mono); color: var(--g-ink-3); margin-right: 6px; }
+  /* the autonomy dial: four tiers, per action class */
+  .dial { display: flex; gap: 0; margin: 12px 20px; border: 1px solid var(--g-hairline); border-radius: 9px; overflow: hidden; font-size: 10px; font-weight: 600; text-align: center; }
+  .dial span { flex: 1; padding: 6px 4px; color: var(--g-ink-3); border-left: 1px solid var(--g-hairline-soft); }
+  .dial span:first-child { border-left: 0; }
+  .dial span.set { background: rgba(86,196,189,0.13); color: var(--agent); }
+  .stats { display: flex; gap: 0; border-top: 1px solid var(--g-hairline-soft); margin-top: 4px; }
+  .stats div { flex: 1; padding: 10px 20px; border-left: 1px solid var(--g-hairline-soft); }
+  .stats div:first-child { border-left: 0; }
+  .stats b { display: block; font-size: 15px; }
+  .stats span { font-family: var(--font-mono); font-size: 9px; color: var(--g-ink-3); letter-spacing: 0.08em; text-transform: uppercase; }
+  .decision { display: flex; gap: 10px; padding: 9px 20px; border-top: 1px solid var(--g-hairline-soft); font-size: 12px; color: var(--g-ink-2); align-items: baseline; }
+  .decision .t { margin-left: auto; font-family: var(--font-mono); font-size: 9.5px; color: var(--g-ink-3); white-space: nowrap; }
+
+  .doors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; }
+  .door { padding: 16px 20px; border-left: 1px solid var(--g-hairline-soft); }
+  .door:first-child { border-left: 0; }
+  .door b { font-size: 14px; display: block; }
+  .door .n { font-size: 22px; font-weight: 750; margin-top: 8px; }
+  .door .d { font-size: 11px; color: var(--g-ink-3); margin-top: 3px; }
+  .door.hot { background: rgba(86,196,189,0.05); }
+  .traffic { font-family: var(--font-mono); font-size: 10.5px; }
+  .traffic .row { display: flex; gap: 14px; padding: 7px 20px; border-top: 1px solid var(--g-hairline-soft); color: var(--g-ink-3); }
+  .traffic .row b { color: var(--g-ink-2); font-weight: 500; }
+  .traffic .ok { color: var(--save); } .traffic .deny { color: var(--cliff); }
+
+  .rules { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-top: 22px; }
+  .rule { border: 1px solid var(--g-hairline); border-radius: 12px; padding: 14px 16px; background: var(--g-surface); }
+  .rule .no { font-family: var(--font-mono); font-size: 9.5px; color: var(--seal); letter-spacing: 0.1em; }
+  .rule b { display: block; font-size: 12.5px; margin-top: 6px; }
+  .rule p { margin: 5px 0 0; font-size: 11px; color: var(--g-ink-3); line-height: 1.5; }
+</style>
+</head>
+<body class="grain">
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="wordmark" href="index.html"><span class="mk"></span><b>Tax-Planning-Ops</b></a>
+    <nav class="nav">
+      <a href="01-desk.html">Desk</a>
+      <a href="02-book.html">Book</a>
+      <a href="11-season.html">Season</a>
+      <a class="on" href="10-staff.html">Staff</a>
+      <a href="12-playbook.html">Playbook</a>
+    </nav>
+    <div class="topbar-right">
+      <span class="workspace-chip"><span class="sw"></span> Northstar Tax Advisory ▾</span>
+      <span class="kbd">⌘K</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap page">
+
+  <section class="head rise">
+    <h1>The Staff</h1>
+    <span class="annotation">staff, not features — named, scoped, accountable, and on the record</span>
+    <div class="statline">
+      <span>on duty <b>4</b></span><span>actions this week <b>312</b></span>
+      <span>approved <b>96%</b></span><span>inference this month <b class="fig">$0.00 — local</b></span>
+    </div>
+  </section>
+
+  <div class="crew">
+    <!-- ===================================================== strategist === -->
+    <section class="panel agentcard rise d1">
+      <div class="top">
+        <span class="aavatar" style="--ahue:var(--agent)">S<span class="st"></span></span>
+        <div class="who" style="flex:1">
+          <b>The Strategist</b>
+          <span>qwen3.6-35b · suite gateway · engines as tools · per-client memory</span>
+        </div>
+        <a class="mini-btn" href="#">Talk →</a>
+      </div>
+      <div class="orders"><span class="s">§</span>Figures from engines only — never compose a number. Tie every finding to a stated goal. Pause and ask on any unverified input. Draft in the firm’s voice; the advisor signs.</div>
+      <div class="dial"><span>observe</span><span class="set">propose · memos</span><span>act w/ review</span><span>act in bounds</span></div>
+      <div class="stats">
+        <div><b>34</b><span>runs / wk</span></div>
+        <div><b>94%</b><span>findings accepted</span></div>
+        <div><b>41s</b><span>avg run</span></div>
+        <div><b class="fig">14</b><span>engine calls / run</span></div>
+      </div>
+      <div class="decision">↳ declined to size Webb’s conversion — basis unverified → asked instead<span class="t">17:18</span></div>
+      <div class="decision">↳ escalated: Nair RSU double-count suspicion in OCR vs W-2<span class="t">16:55</span></div>
+    </section>
+
+    <!-- ===================================================== clerk ======== -->
+    <section class="panel agentcard rise d2">
+      <div class="top">
+        <span class="aavatar" style="--ahue:#7fa6c4">C<span class="st idle"></span></span>
+        <div class="who" style="flex:1">
+          <b>The Intake Clerk</b>
+          <span>qwen3.6-vision (P40) → structurer · 200dpi 2-step · bbox provenance</span>
+        </div>
+        <a class="mini-btn" href="#">Talk →</a>
+      </div>
+      <div class="orders"><span class="s">§</span>Read, never infer. Confidence routes review — sort lowest first. A field under 95% always gets a human eye. Recompute must match the return before baseline unlocks.</div>
+      <div class="dial"><span>observe</span><span>propose</span><span class="set">act w/ review · fields</span><span>act in bounds</span></div>
+      <div class="stats">
+        <div><b>11</b><span>returns / wk</span></div>
+        <div><b>99.2%</b><span>field accuracy</span></div>
+        <div><b>38s</b><span>avg import</span></div>
+        <div><b>1</b><span>awaiting your eye</span></div>
+      </div>
+      <div class="decision">↳ flagged Hartman 5b at 88% — handwriting over print, region attached<span class="t">16:12</span></div>
+    </section>
+
+    <!-- ===================================================== bookrunner === -->
+    <section class="panel agentcard rise d3">
+      <div class="top">
+        <span class="aavatar" style="--ahue:#a39a4e">B<span class="st idle"></span></span>
+        <div class="who" style="flex:1">
+          <b>The Bookrunner</b>
+          <span>scan-book · ranks by FULL recompute · watches constants drift</span>
+        </div>
+        <a class="mini-btn" href="#">Talk →</a>
+      </div>
+      <div class="orders"><span class="s">§</span>Re-rank nightly and after any law/constants change. Surface movers with the reason. Never rank by tax owed — rank by what we can still recover.</div>
+      <div class="dial"><span>observe</span><span>propose</span><span>act w/ review</span><span class="set">act in bounds · scans</span></div>
+      <div class="stats">
+        <div><b>6/6</b><span>book ranked</span></div>
+        <div><b>2</b><span>movers today</span></div>
+        <div><b>$1.88M</b><span>identified open</span></div>
+        <div><b>nightly</b><span>cadence</span></div>
+      </div>
+      <div class="decision">↳ re-ranked after 2026 IRMAA update — Cho +$2,140, reason attached<span class="t">17:31</span></div>
+    </section>
+
+    <!-- ===================================================== liaison ====== -->
+    <section class="panel agentcard rise d4">
+      <div class="top">
+        <span class="aavatar" style="--ahue:var(--seal)">L<span class="st idle"></span></span>
+        <div class="who" style="flex:1">
+          <b>The AO Liaison</b>
+          <span>Accounting-Ops P&amp;L · KC mint → Brigade RFC-8693 → AO · read-only</span>
+        </div>
+        <a class="mini-btn" href="#">Talk →</a>
+      </div>
+      <div class="orders"><span class="s">§</span>Pull on monthly close + on demand. Propose entity updates, never write them. Stamp every figure with its as-of date. HIPAA workspaces are off-limits by policy.</div>
+      <div class="dial"><span>observe</span><span class="set">propose · applies</span><span>act w/ review</span><span>act in bounds</span></div>
+      <div class="stats">
+        <div><b>2</b><span>entities linked</span></div>
+        <div><b>17:02</b><span>last pull</span></div>
+        <div><b>300s</b><span>token ttl</span></div>
+        <div><b>viewer</b><span>AO role cap</span></div>
+      </div>
+      <div class="decision">↳ pulled Alvarez Studio YTD $31,440 — 12% under plan pace → proposed re-projection<span class="t">17:02</span></div>
+    </section>
+  </div>
+
+  <!-- ======================================================== doors ======= -->
+  <section class="panel rise d5" style="margin-top:22px">
+    <div class="panel-head">
+      <span class="microlabel">The doors · humans, agents, and services enter the same engine through the same gate</span>
+      <span class="chip" style="margin-left:auto">audit chain ✓ verified 17:40</span>
+    </div>
+    <div class="doors">
+      <div class="door">
+        <b>Console — you</b>
+        <div class="n">4</div>
+        <div class="d">awaiting sign-off · every client-facing artifact passes here</div>
+      </div>
+      <div class="door hot">
+        <b>MCP — agents &amp; Claude</b>
+        <div class="n">182<span style="font-size:12px; color:var(--g-ink-3)"> calls today</span></div>
+        <div class="d">21 tools · top: scan_book, strategist, analysis · Brigade-discoverable</div>
+      </div>
+      <div class="door">
+        <b>API — services</b>
+        <div class="n">37</div>
+        <div class="d">AO federation reads · PDF renders · service tokens, scope-capped</div>
+      </div>
+    </div>
+    <div class="traffic">
+      <div class="row"><b>strategist</b><span>MCP</span><span>GET …/tax-years/8f21/strategist</span><span class="ok">200 · memo drafted</span><span style="margin-left:auto">17:18:09</span></div>
+      <div class="row"><b>tax-planning-ops → AO</b><span>API</span><span>GET /reports/pl?ws=7775…</span><span class="ok">200 · net_income</span><span style="margin-left:auto">17:02:44</span></div>
+      <div class="row"><b>d.reyes</b><span>console</span><span>POST /plans/…/finalize</span><span class="ok">sealed · hash stamped</span><span style="margin-left:auto">16:48:02</span></div>
+      <div class="row"><b>unknown client</b><span>API</span><span>GET /clients (no workspace)</span><span class="deny">403 · RLS</span><span style="margin-left:auto">15:11:37</span></div>
+    </div>
+  </section>
+
+  <!-- house rules -->
+  <div class="rules rise d6">
+    <div class="rule"><span class="no">HR-01</span><b>Engines compute, AI narrates</b><p>The model cannot invent a figure. Every dollar resolves to an engine trace.</p></div>
+    <div class="rule"><span class="no">HR-02</span><b>Propose, never publish</b><p>Nothing reaches a client without an advisor’s signature. Gold = signed.</p></div>
+    <div class="rule"><span class="no">HR-03</span><b>Pause and ask</b><p>Ambiguity becomes a priced question, never a silent assumption.</p></div>
+    <div class="rule"><span class="no">HR-04</span><b>Sign the work</b><p>Every artifact embeds actor, engines, inputs, hashes — exports included.</p></div>
+    <div class="rule"><span class="no">HR-05</span><b>Autonomy is per action</b><p>Four tiers, set by you, enforced at the gate, changes logged.</p></div>
+  </div>
+
+  <div style="display:flex; gap:14px; margin-top:22px; flex-wrap:wrap">
+    <span class="spec-note" style="flex:1">SPEC · cards read from the agent registry + audit journal; standing orders are editable text re-read each run; dial states enforce at the API layer (server-side, logged). Ops recommendations surface here (“2 clients missing goals briefs — analyses weaker for them → request intake”).</span>
+  </div>
+
+  <footer style="padding:26px 0 0; display:flex; gap:14px; flex-wrap:wrap">
+    <span class="spec-note">№ 10 — THE STAFF · the agent-first contract made visible: presence, orders, autonomy, doors, and house rules on the record.</span>
+  </footer>
+</main>
+
+</body>
+</html>

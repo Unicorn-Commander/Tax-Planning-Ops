@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tax-Planning-Ops — The Book</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/system.css" />
+<style>
+  .page { padding: 26px 0 70px; }
+  .head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .head h1 { margin: 0; font-weight: 750; font-size: 30px; letter-spacing: -0.02em; }
+  .views { margin-left: auto; display: inline-flex; border: 1px solid var(--g-hairline); border-radius: 10px; overflow: hidden; font-size: 12px; font-weight: 600; }
+  .views a { padding: 7px 14px; color: var(--g-ink-3); text-decoration: none; }
+  .views a.on { background: rgba(238,240,244,0.09); color: var(--g-ink); }
+
+  .filters { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; align-items: center; }
+  .nlq { flex: 1; min-width: 280px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--g-hairline); border-radius: 10px; padding: 8px 13px; font-size: 13px; color: var(--g-ink-3); }
+  .nlq b { color: var(--g-ink-2); font-weight: 500; }
+
+  /* roster: Linear-dense — one client, one row, everything on it */
+  .roster { margin-top: 18px; }
+  .roster .ledger th { position: sticky; top: 58px; background: var(--g-surface); z-index: 5; }
+  .cl { display: flex; align-items: center; gap: 10px; }
+  .cl .cavatar { width: 30px; height: 30px; font-size: 11px; }
+  .cl b { font-size: 13.5px; display: block; letter-spacing: -0.01em; }
+  .cl span { font-size: 10.5px; color: var(--g-ink-3); font-family: var(--font-mono); }
+  .yoy { font-family: var(--font-mono); font-size: 11.5px; }
+  .yoy small { color: var(--g-ink-3); }
+  .ml { display: inline-flex; gap: 5px; flex-wrap: wrap; }
+  .ml .chip { font-size: 10px; padding: 2.5px 8px; }
+  .opp-chip { display: inline-flex; align-items: center; gap: 6px; border-radius: 8px; padding: 4px 9px; font-size: 11px; font-weight: 600; border: 1px solid var(--g-hairline); }
+  .opp-chip.big { color: var(--save); border-color: rgba(76,195,138,0.4); background: rgba(76,195,138,0.06); }
+  .opp-chip.sealed { color: var(--seal); border-color: rgba(211,178,119,0.4); background: rgba(211,178,119,0.06); }
+
+  /* matrix: clients × strategies, every cell an engine recompute */
+  .matrix td, .matrix th { text-align: right; font-family: var(--font-mono); font-size: 11.5px; }
+  .matrix td:first-child, .matrix th:first-child { text-align: left; font-family: var(--font-ui); }
+  .matrix td.hit { color: var(--save); }
+  .matrix td.hot { background: rgba(76,195,138,0.08); color: var(--save); font-weight: 600; }
+  .matrix td.zero { color: var(--g-ink-3); }
+  .matrix td.run { color: var(--agent); }
+  .matrix tfoot td { border-top: 1px solid var(--g-hairline); color: var(--g-ink); font-weight: 600; padding-top: 10px; }
+
+  .rollup { margin-top: 22px; display: flex; align-items: center; gap: 22px; padding: 16px 22px; }
+  .rollup .n b { display: block; font-size: 22px; font-weight: 750; letter-spacing: -0.02em; }
+  .rollup .n span { font-family: var(--font-mono); font-size: 9.5px; color: var(--g-ink-3); letter-spacing: 0.08em; text-transform: uppercase; }
+</style>
+</head>
+<body class="grain">
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="wordmark" href="index.html"><span class="mk"></span><b>Tax-Planning-Ops</b></a>
+    <nav class="nav">
+      <a href="01-desk.html">Desk</a>
+      <a class="on" href="02-book.html">Book</a>
+      <a href="11-season.html">Season</a>
+      <a href="10-staff.html">Staff</a>
+      <a href="12-playbook.html">Playbook</a>
+    </nav>
+    <div class="topbar-right">
+      <span class="workspace-chip"><span class="sw"></span> Northstar Tax Advisory ▾</span>
+      <span class="kbd">⌘K</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap page">
+
+  <section class="head rise">
+    <h1>The Book</h1>
+    <span class="annotation">six files, re-ranked nightly by what the engines can still recover</span>
+    <a class="btn btn-ink" style="margin-left:14px" href="04-return.html">＋ New client · drop a 1040</a>
+    <div class="views"><a class="on" href="#">Roster</a><a href="#matrix">Matrix</a><a href="#">Pipeline</a></div>
+  </section>
+
+  <div class="filters rise d1">
+    <span class="chip" style="background:rgba(238,240,244,0.08); color:var(--g-ink)">All · 6</span>
+    <span class="chip">business owners · 2</span>
+    <span class="chip cliff">within $25k of a cliff · 2</span>
+    <span class="chip cost">Q2 unpaid · 2</span>
+    <span class="chip">missing goals · 2</span>
+    <span class="nlq">⌕ <b>“clients with QSBS exposure over $1M”</b> — filters compile to engine queries</span>
+  </div>
+
+  <!-- =========================================================== roster === -->
+  <section class="panel roster rise d2">
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th>Client</th><th>Stage</th><th>Position</th><th class="r">AGI ’25 → ’26</th>
+          <th class="r">True marginal</th><th>Top opportunity — engine-recomputed</th><th class="r">Total opp.</th><th>Milestones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr onclick="location='06-memo.html'" style="cursor:pointer">
+          <td><span class="cl"><span class="cavatar" style="--chue:#5b86a8">MW</span><span><b>Marcus Webb</b><span>single · CA</span></span></span></td>
+          <td><span class="stage on">memo → sign</span></td>
+          <td><div class="inst-micro"><i style="background:var(--s10);flex:6"></i><i style="background:var(--s12);flex:13"></i><i style="background:var(--s22);flex:20"></i><i style="background:var(--s24);flex:23"></i><i style="background:var(--s32);flex:16;opacity:.2"></i><i style="background:var(--s35);flex:17;opacity:.2"></i><i style="background:var(--s37);flex:5;opacity:.2"></i></div></td>
+          <td class="r yoy">198.4k → <b>216.2k</b> <small>▲9%</small></td>
+          <td class="r fig">33.3%</td>
+          <td><span class="opp-chip big">QSBS + TX residency · $1,825,078 on the ’27 exit</span></td>
+          <td class="r fig" style="color:var(--save)">1,846,290</td>
+          <td><span class="ml"><span class="chip">exit 2027</span><span class="chip">last CA year for DAF</span></span></td>
+        </tr>
+        <tr onclick="location='05-lab.html'" style="cursor:pointer">
+          <td><span class="cl"><span class="cavatar" style="--chue:#b65f72">EC</span><span><b>Evelyn &amp; Sam Cho</b><span>mfj · WA</span></span></span></td>
+          <td><span class="stage on">analysis</span></td>
+          <td><div class="inst-micro"><i style="background:var(--s10);flex:6"></i><i style="background:var(--s12);flex:13"></i><i style="background:var(--s22);flex:20"></i><i style="background:var(--s24);flex:23"></i><i style="background:var(--s32);flex:16;opacity:.25"></i><i style="background:var(--s35);flex:17;opacity:.2"></i><i style="background:var(--s37);flex:5;opacity:.2"></i><span class="pin" style="left:60%"></span></div></td>
+          <td class="r yoy">365.0k → <b>391.6k</b> <small>▲7%</small></td>
+          <td class="r fig" title="24% nominal — IRMAA shadow prices the next dollar">24% <span style="color:var(--cliff)">⚠</span></td>
+          <td><span class="opp-chip big">Roth ladder, cliff-capped · $112,400 lifetime</span></td>
+          <td class="r fig" style="color:var(--save)">11,240<span style="color:var(--g-ink-3)">/yr</span></td>
+          <td><span class="ml"><span class="chip cliff">$18.4k to IRMAA t4</span><span class="chip">both on Medicare ’28</span></span></td>
+        </tr>
+        <tr onclick="location='03-casefile.html'" style="cursor:pointer">
+          <td><span class="cl"><span class="cavatar" style="--chue:#56a3a0">JA</span><span><b>Jordan Alvarez</b><span>single · FL</span></span></span></td>
+          <td><span class="stage sealed">implementing 2/5</span></td>
+          <td><div class="inst-micro"><i style="background:var(--s10);flex:6"></i><i style="background:var(--s12);flex:13"></i><i style="background:var(--s22);flex:20"></i><i style="background:var(--s24);flex:23;opacity:.5"></i><i style="background:var(--s32);flex:16;opacity:.2"></i><i style="background:var(--s35);flex:17;opacity:.2"></i><i style="background:var(--s37);flex:5;opacity:.2"></i></div></td>
+          <td class="r yoy">196.0k → <b>216.2k</b> <small>▲10%</small></td>
+          <td class="r fig">32.9%</td>
+          <td><span class="opp-chip sealed">⛁ S-corp split signed · realized tracking on</span></td>
+          <td class="r fig" style="color:var(--seal)">9,170<span style="color:var(--g-ink-3)">/yr</span></td>
+          <td><span class="ml"><span class="chip">books live ●</span><span class="chip">home 2028</span></span></td>
+        </tr>
+        <tr onclick="location='07-plan.html'" style="cursor:pointer">
+          <td><span class="cl"><span class="cavatar" style="--chue:#5f9e6e">TB</span><span><b>Tom &amp; Lisa Becker</b><span>mfj · IL</span></span></span></td>
+          <td><span class="stage on">plan → seal</span></td>
+          <td><div class="inst-micro"><i style="background:var(--s10);flex:6"></i><i style="background:var(--s12);flex:13"></i><i style="background:var(--s22);flex:20"></i><i style="background:var(--s24);flex:23;opacity:.6"></i><i style="background:var(--s32);flex:16;opacity:.2"></i><i style="background:var(--s35);flex:17;opacity:.2"></i><i style="background:var(--s37);flex:5;opacity:.2"></i><span class="pin" style="left:55%;background:var(--cost)"></span></div></td>
+          <td class="r yoy">238.1k → <b>252.4k</b> <small>▲6%</small></td>
+          <td class="r fig">28.9%</td>
+          <td><span class="opp-chip big">QBI aggregation + bunching · $7,820/yr</span></td>
+          <td class="r fig" style="color:var(--save)">7,820<span style="color:var(--g-ink-3)">/yr</span></td>
+          <td><span class="ml"><span class="chip cost">Q2 due $4,310</span><span class="chip">$48k to QBI phase-in</span></span></td>
+        </tr>
+        <tr>
+          <td><span class="cl"><span class="cavatar" style="--chue:#9a6fb8">PN</span><span><b>Priya &amp; Raj Nair</b><span>mfj · NY</span></span></span></td>
+          <td><span class="stage on">analysis</span></td>
+          <td><div class="shimmer" style="height:8px;border-radius:99px;width:120px"></div></td>
+          <td class="r yoy">472.0k → <b>493.0k</b> <small>▲4%</small></td>
+          <td class="r fig">43.1%</td>
+          <td><span class="opp-chip" style="color:var(--agent); border-color:rgba(86,196,189,0.4)">strategist running · run #221 · 41s</span></td>
+          <td class="r fig run">…</td>
+          <td><span class="ml"><span class="chip">RSU vests Aug</span><span class="chip cliff">NIIT deep</span></span></td>
+        </tr>
+        <tr onclick="location='04-return.html'" style="cursor:pointer">
+          <td><span class="cl"><span class="cavatar" style="--chue:#c2884f">DH</span><span><b>Dolores Hartman</b><span>hoh · TX</span></span></span></td>
+          <td><span class="stage on">intake</span></td>
+          <td><span style="font-family:var(--font-mono); font-size:10px; color:var(--cost)">1 field needs you</span></td>
+          <td class="r yoy">— → <b>107.0k</b></td>
+          <td class="r fig">22%</td>
+          <td><span class="opp-chip">over-withheld $3,482 — W-4 fix on confirm</span></td>
+          <td class="r fig" style="color:var(--g-ink-3)">—</td>
+          <td><span class="ml"><span class="chip">QCD eligible 2029</span></span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- =========================================================== matrix === -->
+  <section class="panel rise d3" id="matrix" style="margin-top:22px">
+    <div class="panel-head">
+      <span class="microlabel">The matrix · clients × strategies — every cell is a full recompute, not a lookup</span>
+      <span class="chip" style="margin-left:auto">save column sets as the house template</span>
+    </div>
+    <table class="ledger matrix">
+      <thead><tr><th>—</th><th class="r">Retirement (Roth·401k·HSA)</th><th class="r">Entity (S-corp·QBI agg)</th><th class="r">Bunch/DAF</th><th class="r">TLH</th><th class="r">QSBS</th><th class="r">Relocation</th><th class="r">Σ</th></tr></thead>
+      <tbody>
+        <tr><td>Marcus Webb</td><td class="hit">9,400</td><td class="zero">n/a</td><td class="hit">8,212</td><td class="hit">3,600</td><td class="hot">1,190,000</td><td class="hot">635,078</td><td class="hit"><b>1,846,290</b></td></tr>
+        <tr><td>Evelyn &amp; Sam Cho</td><td class="hot">11,240/yr</td><td class="zero">n/a</td><td class="hit">2,140</td><td class="hit">1,860</td><td class="zero">—</td><td class="zero">—</td><td class="hit"><b>15,240</b></td></tr>
+        <tr><td>Jordan Alvarez ⛁</td><td class="hot">6,610 ⛁</td><td class="hit">1,330 ⛁</td><td class="hit">2028</td><td class="hit">1,230 ⛁</td><td class="zero">—</td><td class="zero">FL ✓</td><td class="hit"><b>9,170 ⛁</b></td></tr>
+        <tr><td>Tom &amp; Lisa Becker</td><td class="zero">—</td><td class="hit">3,580</td><td class="hit">3,260</td><td class="hit">980</td><td class="zero">—</td><td class="zero">—</td><td class="hit"><b>7,820</b></td></tr>
+        <tr><td>Priya &amp; Raj Nair</td><td class="run">…</td><td class="run">…</td><td class="run">…</td><td class="run">…</td><td class="run">…</td><td class="run">…</td><td class="run">running</td></tr>
+        <tr><td>Dolores Hartman</td><td class="zero" colspan="6" style="text-align:left; color:var(--g-ink-3)">awaiting baseline confirm — 1 OCR field</td><td class="zero">—</td></tr>
+      </tbody>
+      <tfoot><tr><td>Across the book</td><td class="r">27,250</td><td class="r">4,910</td><td class="r">13,612</td><td class="r">7,670</td><td class="r">1,190,000</td><td class="r">635,078</td><td class="r" style="color:var(--save)">1,878,520</td></tr></tfoot>
+    </table>
+    <div class="spec-note" style="margin:14px 18px 16px">SPEC · cell click → the engine delta for that client × strategy; ⛁ = signed/realized-tracking. The Nair row fills live as run #221 streams. Columns are the firm’s saved analysis template.</div>
+  </section>
+
+  <!-- rollup band -->
+  <section class="panel rollup rise d4">
+    <div class="n"><b class="money tone-save">$1,878,520</b><span>identified · engine-verified</span></div>
+    <div class="n"><b class="money tone-seal">$9,170/yr</b><span>signed · tracking to realized</span></div>
+    <div class="n"><b class="money">2</b><span>memos awaiting signature</span></div>
+    <div class="n"><b class="money">4/6</b><span>2025 returns refreshed post-filing</span></div>
+    <span style="margin-left:auto" class="annotation">next spring this row gains the number that renews every retainer: <b style="color:var(--g-ink)">realized</b>.</span>
+    <a class="btn btn-agent" href="01-desk.html">Re-scan the book</a>
+  </section>
+
+  <footer style="padding:26px 0 0; display:flex; gap:14px; flex-wrap:wrap">
+    <span class="spec-note">№ 02 — THE BOOK · the roster is an instrument: position, true rate, top lever, and milestones on one row; the matrix is the firm’s opportunity map.</span>
+  </footer>
+</main>
+
+</body>
+</html>
