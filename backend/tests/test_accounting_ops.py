@@ -14,6 +14,14 @@ from app.integrations.accounting_ops import (
 )
 
 
+def test_extract_ao_contract_top_level_dollar_string() -> None:
+    # AO's confirmed contract: top-level `net_income`, a dollar Decimal string.
+    assert extract_net_income_cents({"net_income": "1234.56"}) == 123_456
+    assert extract_net_income_cents({"net_income": "80000.00"}) == 8_000_000
+    # A loss flows through with sign.
+    assert extract_net_income_cents({"net_income": "-5000.00"}) == -500_000
+
+
 def test_extract_prefers_cents_field_as_is() -> None:
     assert extract_net_income_cents({"net_income_cents": 1_234_500}) == 1_234_500
 

@@ -334,11 +334,11 @@ export default function BusinessTab() {
             <Checkbox checked={isQbi} onChange={setIsQbi} label="This rental rises to a §199A trade/business" />
           ) : null}
 
-          <Field label="Accounting-Ops workspace ID (optional)">
+          <Field label="Accounting-Ops workspace UUID (optional)">
             <input
               value={aoWorkspaceId}
               onChange={(e) => setAoWorkspaceId(e.target.value)}
-              placeholder="Link to pull net income from the books"
+              placeholder="Paste the AO workspace UUID to pull net income from the books"
               className={selectClass}
             />
           </Field>

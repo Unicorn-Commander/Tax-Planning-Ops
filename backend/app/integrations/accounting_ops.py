@@ -19,6 +19,7 @@ pure and unit-tested.
 from __future__ import annotations
 
 import time
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 import httpx
@@ -57,19 +58,19 @@ _token_cache: dict[str, Any] = {}
 def _cents_from(value: Any) -> int | None:
     """Coerce a P&L money value to integer cents.
 
-    Integers are assumed to already be cents (suite convention). Floats/strings
-    that look like dollars are scaled. Returns None if not numeric."""
+    Integers are assumed to already be cents (suite convention). Floats and
+    strings are dollar amounts and are scaled exactly via Decimal — AO returns
+    net income as a dollar Decimal string (e.g. "1234.56"). Returns None if not
+    numeric."""
     if isinstance(value, bool):
         return None
     if isinstance(value, int):
         return value
-    if isinstance(value, float):
-        return round(value * 100)
-    if isinstance(value, str):
-        cleaned = value.replace(",", "").replace("$", "").strip()
+    if isinstance(value, (float, str)):
+        text = str(value).replace(",", "").replace("$", "").strip()
         try:
-            return round(float(cleaned) * 100)
-        except ValueError:
+            return int((Decimal(text) * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        except (InvalidOperation, ValueError):
             return None
     return None
 
