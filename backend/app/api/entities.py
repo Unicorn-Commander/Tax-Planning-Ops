@@ -12,6 +12,7 @@ from app.integrations.accounting_ops import (
     AccountingOpsAuthError,
     AccountingOpsDisabledError,
     AccountingOpsUnavailableError,
+    AccountingOpsWorkspaceNotFoundError,
 )
 from app.models.entity import BusinessEntity
 from app.schemas.auth import AuthContext
@@ -91,6 +92,8 @@ async def sync_entity_accounting_ops(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except AccountingOpsWorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except AccountingOpsDisabledError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)

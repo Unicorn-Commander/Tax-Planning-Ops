@@ -49,6 +49,10 @@ class AccountingOpsUnavailableError(AccountingOpsError):
     """AO unreachable / returned a server error / malformed response."""
 
 
+class AccountingOpsWorkspaceNotFoundError(AccountingOpsError):
+    """AO has no such workspace (or it's inactive) — usually a bad link."""
+
+
 class PLSummary(BaseModel):
     accounting_ops_workspace_id: str
     net_income_cents: int
@@ -234,8 +238,8 @@ async def fetch_pl(accounting_ops_workspace_id: str, settings: Settings) -> PLSu
             "Tax-Planning-Ops is not yet authorized on the Accounting-Ops side."
         )
     if resp.status_code == 404:
-        raise AccountingOpsUnavailableError(
-            f"Accounting-Ops workspace '{accounting_ops_workspace_id}' or its P&L was not found"
+        raise AccountingOpsWorkspaceNotFoundError(
+            f"Accounting-Ops workspace '{accounting_ops_workspace_id}' not found or not active"
         )
     if resp.status_code >= 400:
         raise AccountingOpsUnavailableError(f"Accounting-Ops returned {resp.status_code}")
