@@ -17,6 +17,7 @@ function Header({ clientId }: { clientId: string }) {
   const base = `/clients/${clientId}`;
   const tabs = [
     { href: base, label: "Overview" },
+    { href: `${base}/profile`, label: "Goals" },
     { href: `${base}/returns`, label: "Return" },
     { href: `${base}/strategies`, label: "Strategies" },
     { href: `${base}/business`, label: "Business" },

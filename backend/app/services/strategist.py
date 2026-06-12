@@ -17,18 +17,28 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.engines.charitable import charitable_config_for
 from app.engines.comprehensive import ComprehensiveInput, calculate_comprehensive
 from app.engines.form1040 import Form1040Inputs
 from app.engines.irmaa import IRMAAInput, calculate_irmaa
 from app.engines.opportunity import find_opportunities
 from app.engines.optimizers import optimize_roth_conversion, optimize_scorp_salary
+from app.engines.state_tax import StateTaxInput, calculate_state_tax
 from app.integrations.llm import chat, llm_enabled, strip_think
 from app.models.client import Client
 from app.models.tax_year import ClientTaxYear, TaxSituationSnapshot
-from app.services.entities import business_for_comprehensive, list_entities
+from app.services.entities import (
+    aggregate_for_comprehensive,
+    business_for_comprehensive,
+    list_entities,
+)
+from app.services.profile import get_profile
+from app.services.strategist_context import build_trajectory, goal_aware_findings
 from app.services.tax_config import resolve_bracket_set, to_engine_config
+from app.state_configs import get_state_config
 from app.year_configs import (
     amt_config_for,
+    corporate_config_for,
     ctc_config_for,
     irmaa_config_for,
     qbi_config_for,
@@ -74,7 +84,14 @@ def _finding(
 
 
 async def _author_memo(
-    client_name: str, situation: str, findings: list[dict[str, Any]], settings: Any
+    client_name: str,
+    situation: str,
+    findings: list[dict[str, Any]],
+    settings: Any,
+    *,
+    objectives_block: str,
+    trajectory_summary: str | None,
+    return_block: str,
 ) -> str | None:
     if not llm_enabled(settings) or not findings:
         return None
@@ -85,21 +102,103 @@ async def _author_memo(
             f"Impact: {_d(f['estimated_impact_cents'])} ({f['impact_kind']}). "
             f"Cite: {f['citation']}. Caveat: {f['caveat']}"
         )
+    context_sections = [
+        f"Client situation: {situation}", "", "CURRENT-YEAR RETURN:", return_block,
+    ]
+    if objectives_block:
+        context_sections += [
+            "", "CLIENT OBJECTIVES (what they're trying to accomplish):", objectives_block,
+        ]
+    if trajectory_summary:
+        context_sections += ["", "INCOME TRAJECTORY:", trajectory_summary]
     prompt = (
         f"You are a tax-planning advisor writing a concise working memo for {client_name}.\n"
-        f"Client situation: {situation}\n\n"
+        + "\n".join(context_sections)
+        + "\n\n"
         "Below are findings already computed by the firm's tax engine. Use ONLY these "
         "dollar figures — never invent, round differently, or alter a number. Write a "
-        "prioritized memo (3-6 short sections): lead with the highest-impact moves, "
-        "explain the WHY in plain language specific to this client, state the caveat for "
-        "each, and end with a short 'Next steps' list. Do not promise outcomes.\n\n"
+        "prioritized memo (3-6 short sections) that is SPECIFIC to this client: explicitly "
+        "tie each recommendation to the client's stated objectives and to where their income "
+        "is heading (the trajectory). Lead with the highest-impact moves, explain the WHY in "
+        "plain language for THIS client, state the caveat for each, and end with a short "
+        "'Next steps' list. If an objective has no matching finding, say what's needed to act "
+        "on it. Do not promise outcomes.\n\n"
         "COMPUTED FINDINGS (authoritative):\n" + "\n".join(lines) + "\n\nWrite the memo now."
     )
     reply = await chat(
         settings, [{"role": "user", "content": prompt}],
-        model=settings.LLM_TEXT_MODEL, max_tokens=1100, no_think=True,
+        model=settings.LLM_TEXT_MODEL, max_tokens=1400, no_think=True,
     )
     return strip_think(reply)
+
+
+_OBJECTIVE_LABELS = {
+    "minimize_current_tax": "minimize current-year tax",
+    "minimize_lifetime_tax": "minimize lifetime tax",
+    "maximize_retirement": "maximize retirement readiness",
+    "wealth_transfer": "transfer wealth to heirs",
+    "charitable_legacy": "build a charitable legacy",
+}
+
+
+def _objectives_block(profile: Any) -> str:
+    if profile is None:
+        return ""
+    parts: list[str] = []
+    if profile.primary_objective in _OBJECTIVE_LABELS:
+        parts.append(f"Primary objective: {_OBJECTIVE_LABELS[profile.primary_objective]}.")
+    if profile.retirement_target_year:
+        parts.append(f"Targets retirement in {profile.retirement_target_year}.")
+    if profile.liquidity_event != "none":
+        ev = profile.liquidity_event.replace("_", " ")
+        yr = f" in {profile.liquidity_event_year}" if profile.liquidity_event_year else ""
+        amt = (
+            f" (~{_d(profile.liquidity_event_amount_cents)})"
+            if profile.liquidity_event_amount_cents
+            else ""
+        )
+        parts.append(f"Expects a {ev} liquidity event{yr}{amt}.")
+    if profile.charitable_intent != "none":
+        giving = f" (~{_d(profile.annual_giving_cents)}/yr)" if profile.annual_giving_cents else ""
+        parts.append(f"Charitable intent: {profile.charitable_intent}{giving}.")
+    if profile.estate_priority != "none":
+        parts.append(f"Estate/wealth-transfer priority: {profile.estate_priority}.")
+    if profile.planned_relocation_state:
+        yr = f" in {profile.relocation_year}" if profile.relocation_year else ""
+        parts.append(f"Planning to relocate to {profile.planned_relocation_state}{yr}.")
+    if profile.roth_preference not in {"no_preference", "advisor_optimize"}:
+        parts.append(f"Roth preference: {profile.roth_preference.replace('_', ' ')}.")
+    parts.append(
+        f"Risk tolerance: {profile.risk_tolerance}; cash-flow sensitivity: "
+        f"{profile.cash_flow_sensitivity}."
+    )
+    if profile.education_funding:
+        parts.append("Funding education for dependents.")
+    if profile.business_succession != "none":
+        parts.append(f"Business succession: {profile.business_succession.replace('_', ' ')}.")
+    if profile.notes:
+        parts.append(f"Advisor notes: {profile.notes}")
+    return " ".join(parts)
+
+
+def _return_block(comp: Any, agg_corporate_tax_cents: int, state_tax_cents: int | None) -> str:
+    parts = [
+        f"AGI {_d(comp.federal.agi_cents)}, "
+        f"taxable income {_d(comp.federal.taxable_income_cents)}.",
+        f"Federal total tax {_d(comp.total_tax_cents)} at a "
+        f"{comp.federal.marginal_rate:.0%} marginal rate.",
+    ]
+    if comp.se_tax_cents:
+        parts.append(f"Self-employment tax {_d(comp.se_tax_cents)}.")
+    if comp.qbi and comp.qbi.allowed_qbi_deduction_cents:
+        parts.append(f"§199A QBI deduction {_d(comp.qbi.allowed_qbi_deduction_cents)}.")
+    if comp.amt and comp.amt.amt_applies:
+        parts.append(f"AMT applies (+{_d(comp.amt_cents)}).")
+    if agg_corporate_tax_cents:
+        parts.append(f"C-corp tax {_d(agg_corporate_tax_cents)} on top (double tax).")
+    if state_tax_cents:
+        parts.append(f"State income tax {_d(state_tax_cents)}.")
+    return " ".join(parts)
 
 
 async def generate_strategist_memo(
@@ -113,6 +212,7 @@ async def generate_strategist_memo(
         raise LookupError("no tax situation snapshot for this year")
     client = await db.get(Client, tax_year.client_id)
     client_name = client.display_name if client else "the client"
+    profile = await get_profile(db, client_id=tax_year.client_id) if client else None
 
     bracket_set = await resolve_bracket_set(
         db, tax_year=tax_year.tax_year, filing_status=tax_year.filing_status
@@ -233,9 +333,50 @@ async def generate_strategist_memo(
             details={"distance_cents": irmaa.distance_to_next_cliff_cents},
         ))
 
-    # Rank: savings first (by size desc), then costs/warnings.
+    # Goal-aware findings — the client's stated objectives turned into concrete,
+    # engine-computed levers (charitable bunching/QCD, §1202 QSBS on a liquidity
+    # event, relocation timing, the retirement Roth window, 529 superfunding).
+    state_for_block: int | None = None
+    if client and client.primary_state:
+        st_cfg = get_state_config(client.primary_state.upper(), tax_year.tax_year)
+        if st_cfg is not None:
+            state_for_block = calculate_state_tax(
+                StateTaxInput(
+                    filing_status=tax_year.filing_status,
+                    federal_agi_cents=comp.federal.agi_cents,
+                    federal_taxable_income_cents=comp.federal.taxable_income_cents,
+                ),
+                st_cfg,
+            ).total_state_tax_cents
+
+    corp_tax = aggregate_for_comprehensive(entities).corporate_tax_cents if entities else 0
+    findings.extend(
+        goal_aware_findings(
+            profile=profile,
+            tax_year=tax_year.tax_year,
+            marginal_rate=marginal,
+            agi_cents=comp.federal.agi_cents,
+            itemized_deduction_cents=inputs.itemized_deduction_cents,
+            standard_deduction_cents=config.standard_deduction_cents,
+            ira_taxable_cents=inputs.ira_taxable_cents,
+            primary_state=client.primary_state if client else None,
+            charitable_config=charitable_config_for(tax_year.tax_year),
+            corporate_config=corporate_config_for(tax_year.tax_year),
+        )
+    )
+
+    # Rank: savings first (by size desc), then costs/warnings, then info.
+    _order = {"savings": 0, "cost": 1, "info": 2}
     findings.sort(
-        key=lambda f: (0 if f["impact_kind"] == "savings" else 1, -f["estimated_impact_cents"])
+        key=lambda f: (_order.get(f["impact_kind"], 1), -f["estimated_impact_cents"])
+    )
+
+    # Prior-year income trajectory for situation-aware advice.
+    trajectory = await build_trajectory(
+        db,
+        client_id=tax_year.client_id,
+        irmaa_config=irmaa_config_for(tax_year.tax_year),
+        irmaa_status=_irmaa_status(tax_year.filing_status),
     )
 
     situation = (
@@ -243,7 +384,14 @@ async def generate_strategist_memo(
         f"{_d(comp.total_tax_cents)} at a {marginal:.0%} marginal rate; "
         f"{'has business entities' if entities else 'wage/investment income'}."
     )
-    memo = await _author_memo(client_name, situation, findings, settings)
+    objectives_block = _objectives_block(profile)
+    return_block = _return_block(comp, corp_tax, state_for_block)
+    memo = await _author_memo(
+        client_name, situation, findings, settings,
+        objectives_block=objectives_block,
+        trajectory_summary=trajectory.get("summary") if trajectory.get("available") else None,
+        return_block=return_block,
+    )
 
     return {
         "client_tax_year_id": str(tax_year_id),
@@ -257,5 +405,8 @@ async def generate_strategist_memo(
         ),
         "memo": memo,
         "memo_available": memo is not None,
+        "has_profile": profile is not None,
+        "objectives_summary": objectives_block or None,
+        "trajectory": trajectory,
         "disclaimer": _DISCLAIMER,
     }

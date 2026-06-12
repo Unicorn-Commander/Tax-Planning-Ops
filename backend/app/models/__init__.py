@@ -2,6 +2,7 @@ from app.db.base import Base
 from app.models.branding import WorkspaceBranding
 from app.models.client import Client
 from app.models.entity import BusinessEntity
+from app.models.profile import ClientPlanningProfile
 from app.models.strategy import ClientStrategy, StrategyLibrary
 from app.models.tax_config import TaxBracketRow, TaxBracketSet
 from app.models.tax_year import (
@@ -21,6 +22,7 @@ __all__ = [
     "Base",
     "BusinessEntity",
     "Client",
+    "ClientPlanningProfile",
     "ClientStrategy",
     "ClientTaxYear",
     "Document",

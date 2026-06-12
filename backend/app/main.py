@@ -16,6 +16,7 @@ from app.api.lifecycle import router as lifecycle_router
 from app.api.me import router as me_router
 from app.api.pdf import router as pdf_router
 from app.api.plans import router as plans_router
+from app.api.profile import router as profile_router
 from app.api.quarterly import router as quarterly_router
 from app.api.returns import router as returns_router
 from app.api.strategies import router as strategies_router
@@ -58,6 +59,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(me_router, prefix="/api/v1")
     app.include_router(clients_router, prefix="/api/v1")
+    app.include_router(profile_router, prefix="/api/v1")
     app.include_router(entities_router, prefix="/api/v1")
     app.include_router(returns_router, prefix="/api/v1")
     app.include_router(plans_router, prefix="/api/v1")

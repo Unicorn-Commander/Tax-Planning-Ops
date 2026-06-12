@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Activity, Brain, Briefcase, Building2, Calculator, FileText, HeartPulse, Landmark, LineChart, Lightbulb, Receipt, Sparkles } from "lucide-react";
+import { Activity, Brain, Briefcase, Building2, Calculator, FileText, HeartPulse, Landmark, LineChart, Lightbulb, Receipt, Sparkles, Target } from "lucide-react";
 import api from "@/lib/api";
 import { centsToUSD, percent } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
@@ -113,6 +113,20 @@ interface StrategistFinding {
   citation: string;
   caveat: string;
 }
+interface TrajectoryPoint {
+  tax_year: number;
+  total_income_cents: number;
+  taxable_income_cents: number;
+  total_tax_cents: number;
+  marginal_rate: string;
+}
+interface Trajectory {
+  available: boolean;
+  points: TrajectoryPoint[];
+  summary?: string;
+  income_direction?: string;
+  irmaa_crossing?: boolean;
+}
 interface Strategist {
   client_name: string;
   tax_year: number;
@@ -122,6 +136,9 @@ interface Strategist {
   total_savings_identified_cents: number;
   memo: string | null;
   memo_available: boolean;
+  has_profile: boolean;
+  objectives_summary: string | null;
+  trajectory: Trajectory;
   disclaimer: string;
 }
 
@@ -343,6 +360,49 @@ export default function AnalysisTab() {
                 strategist.current_total_tax_cents,
               )} · ${percent(strategist.marginal_rate)} marginal`}
             />
+
+            {/* Objectives + trajectory — the context the memo reasons over */}
+            {strategist.has_profile || strategist.trajectory.available ? (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="rounded-[var(--radius-md)] border border-line-2 bg-surface-2/40 px-4 py-3">
+                  <div className="mb-1.5 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wide text-muted">
+                    <Target className="h-3.5 w-3.5" /> Client objectives
+                  </div>
+                  {strategist.objectives_summary ? (
+                    <p className="text-[13px] leading-relaxed text-ink-2">{strategist.objectives_summary}</p>
+                  ) : (
+                    <p className="text-[13px] text-muted">
+                      No objectives captured yet —{" "}
+                      <Link href={`/clients/${overview?.client.id}/profile`} className="text-primary hover:underline">
+                        set the client&apos;s goals
+                      </Link>{" "}
+                      to sharpen the analysis.
+                    </p>
+                  )}
+                </div>
+                <div className="rounded-[var(--radius-md)] border border-line-2 bg-surface-2/40 px-4 py-3">
+                  <div className="mb-1.5 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wide text-muted">
+                    <LineChart className="h-3.5 w-3.5" /> Income trajectory
+                  </div>
+                  {strategist.trajectory.available ? (
+                    <>
+                      <p className="text-[13px] leading-relaxed text-ink-2">{strategist.trajectory.summary}</p>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {strategist.trajectory.points.map((pt) => (
+                          <Badge key={pt.tax_year} tone="neutral">
+                            {pt.tax_year}: {centsToUSD(pt.total_income_cents)}
+                          </Badge>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-[13px] text-muted">
+                      Need two or more years on file to chart a trajectory.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : null}
 
             {/* CPA-style memo */}
             <div className="rounded-[var(--radius-md)] border border-line-2 bg-surface-2/50 px-4 py-4">
