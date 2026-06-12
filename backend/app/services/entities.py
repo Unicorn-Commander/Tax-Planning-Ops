@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import Settings
 from app.engine_configs import ty2025_corporate_config, ty2025_qbi_config, ty2025_se_tax_config
 from app.engines.corporate import CorporateTaxInput, calculate_corporate_tax
 from app.engines.passthrough import (
@@ -28,6 +29,7 @@ from app.engines.passthrough import (
 )
 from app.engines.qbi import QBIBusiness, calculate_qbi_aggregate
 from app.engines.se_tax import SETaxInput, calculate_se_tax
+from app.integrations.accounting_ops import fetch_pl
 from app.models.entity import BusinessEntity
 from app.schemas.entity import BusinessEntityIn
 from app.services.audit import append_audit_event
@@ -92,6 +94,50 @@ async def delete_entity(
         aggregate_id=entity_id,
         payload={},
     )
+
+
+async def sync_entity_from_accounting_ops(
+    db: AsyncSession,
+    *,
+    workspace_id: UUID,
+    actor_uc_uid: str,
+    entity_id: UUID,
+    settings: Settings,
+) -> dict[str, Any]:
+    """Pull the linked Accounting-Ops workspace's P&L net income into the
+    entity's `amount_cents`. Raises LookupError if the entity is missing,
+    ValueError if it isn't linked, and AccountingOps* errors on the AO call."""
+    entity = await db.get(BusinessEntity, entity_id)
+    if entity is None:
+        raise LookupError("business entity not found")
+    if not entity.accounting_ops_workspace_id:
+        raise ValueError("entity is not linked to an Accounting-Ops workspace")
+
+    summary = await fetch_pl(entity.accounting_ops_workspace_id, settings)
+    previous = entity.amount_cents
+    entity.amount_cents = summary.net_income_cents
+    await db.flush()
+    await append_audit_event(
+        db,
+        workspace_id=workspace_id,
+        actor_uc_uid=actor_uc_uid,
+        event_type="business_entity_synced_accounting_ops",
+        aggregate_type="business_entity",
+        aggregate_id=entity.id,
+        payload={
+            "accounting_ops_workspace_id": entity.accounting_ops_workspace_id,
+            "previous_amount_cents": previous,
+            "amount_cents": summary.net_income_cents,
+            "period": summary.period,
+        },
+    )
+    return {
+        "entity_id": str(entity.id),
+        "accounting_ops_workspace_id": entity.accounting_ops_workspace_id,
+        "previous_amount_cents": previous,
+        "amount_cents": summary.net_income_cents,
+        "period": summary.period,
+    }
 
 
 def _to_passthrough_input(entities: list[BusinessEntity]) -> PassthroughInput:

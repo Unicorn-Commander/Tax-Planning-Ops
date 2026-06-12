@@ -43,3 +43,6 @@ class BusinessEntity(IdMixin, WorkspaceScopedMixin, TimestampMixin, Base):
     # the 1040) and the corporation's available NOL carryforward.
     dividends_cents: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     nol_available_cents: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    # Optional link to an Accounting-Ops workspace whose P&L net income feeds
+    # this entity's `amount_cents` on a "Pull from Accounting-Ops" sync.
+    accounting_ops_workspace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)

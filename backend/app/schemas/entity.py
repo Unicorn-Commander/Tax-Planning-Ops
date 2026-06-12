@@ -22,6 +22,7 @@ class BusinessEntityIn(BaseModel):
     is_qbi: bool = False  # rental only — whether it rises to a §199A trade/business
     dividends_cents: int = 0  # C-corp only — distributed to owner (qualified dividends)
     nol_available_cents: int = 0  # C-corp only — NOL carryforward available
+    accounting_ops_workspace_id: str | None = None  # link to AO workspace P&L
 
 
 class BusinessEntityOut(BusinessEntityIn):

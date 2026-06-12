@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Briefcase, Plus, Trash2 } from "lucide-react";
+import { Briefcase, Plus, RefreshCw, Trash2 } from "lucide-react";
 import api from "@/lib/api";
 import { centsToUSD } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
@@ -25,6 +25,7 @@ interface BusinessEntity {
   is_general_partner: boolean;
   is_sstb: boolean;
   is_qbi: boolean;
+  accounting_ops_workspace_id: string | null;
 }
 
 const KIND_LABEL: Record<EntityKind, string> = {
@@ -95,6 +96,7 @@ export default function BusinessTab() {
   const [isGeneralPartner, setIsGeneralPartner] = useState(false);
   const [isSstb, setIsSstb] = useState(false);
   const [isQbi, setIsQbi] = useState(true);
+  const [aoWorkspaceId, setAoWorkspaceId] = useState("");
 
   const reloadEntities = useCallback(() => {
     if (!taxYearId) {
@@ -124,6 +126,7 @@ export default function BusinessTab() {
     setIsGeneralPartner(false);
     setIsSstb(false);
     setIsQbi(true);
+    setAoWorkspaceId("");
   };
 
   const showQbiInputs = kind === "schedule_c" || kind === "partnership_k1" || kind === "s_corp_k1";
@@ -145,6 +148,7 @@ export default function BusinessTab() {
       is_general_partner: kind === "partnership_k1" ? isGeneralPartner : false,
       is_sstb: showSstb ? isSstb : false,
       is_qbi: kind === "schedule_e" ? isQbi : true,
+      accounting_ops_workspace_id: aoWorkspaceId.trim() || null,
     });
     resetForm();
     reloadEntities();
@@ -153,6 +157,12 @@ export default function BusinessTab() {
   const remove = useAction(async (id: string) => {
     if (!taxYearId) return;
     await api.delete(`/clients/tax-years/${taxYearId}/business-entities/${id}`);
+    reloadEntities();
+  });
+
+  const syncAo = useAction(async (id: string) => {
+    if (!taxYearId) return;
+    await api.post(`/clients/tax-years/${taxYearId}/business-entities/${id}/sync-accounting-ops`);
     reloadEntities();
   });
 
@@ -191,6 +201,7 @@ export default function BusinessTab() {
                       {e.kind !== "schedule_e" && e.is_sstb ? <Badge tone="warning">SSTB</Badge> : null}
                       {e.kind === "partnership_k1" && e.is_general_partner ? <Badge tone="neutral">General partner</Badge> : null}
                       {e.kind === "schedule_e" ? <Badge tone={e.is_qbi ? "positive" : "neutral"}>{e.is_qbi ? "§199A QBI" : "Not QBI"}</Badge> : null}
+                      {e.accounting_ops_workspace_id ? <Badge tone="primary">Accounting-Ops linked</Badge> : null}
                     </div>
                     <p className="mt-1.5 text-[12.5px] text-muted tabular">
                       {e.kind === "schedule_e" ? "Net rental income" : amountLabel(e.kind)} {centsToUSD(e.amount_cents)}
@@ -216,17 +227,36 @@ export default function BusinessTab() {
                   </div>
                   <div className="shrink-0 text-right">
                     <div className="text-[15px] font-semibold text-ink tabular">{centsToUSD(e.amount_cents)}</div>
-                    <Button
-                      variant="ghost"
-                      icon={<Trash2 className="h-4 w-4" />}
-                      loading={remove.pending}
-                      className="mt-1.5 h-8 px-2 text-negative"
-                      onClick={() => void remove.run(e.id)}
-                    >
-                      Remove
-                    </Button>
+                    <div className="mt-1.5 flex items-center justify-end gap-1">
+                      {e.accounting_ops_workspace_id ? (
+                        <Button
+                          variant="ghost"
+                          icon={<RefreshCw className="h-4 w-4" />}
+                          loading={syncAo.pending}
+                          className="h-8 px-2 text-primary"
+                          onClick={() => void syncAo.run(e.id)}
+                        >
+                          Pull from AO
+                        </Button>
+                      ) : null}
+                      <Button
+                        variant="ghost"
+                        icon={<Trash2 className="h-4 w-4" />}
+                        loading={remove.pending}
+                        className="h-8 px-2 text-negative"
+                        onClick={() => void remove.run(e.id)}
+                      >
+                        Remove
+                      </Button>
+                    </div>
                   </div>
                 </div>
+                {e.accounting_ops_workspace_id ? (
+                  <p className="mt-1 text-[11.5px] text-muted">
+                    AO workspace {e.accounting_ops_workspace_id}
+                    {syncAo.error ? <span className="text-negative"> · {syncAo.error}</span> : null}
+                  </p>
+                ) : null}
               </div>
             ))
           )}
@@ -303,6 +333,15 @@ export default function BusinessTab() {
           {kind === "schedule_e" ? (
             <Checkbox checked={isQbi} onChange={setIsQbi} label="This rental rises to a §199A trade/business" />
           ) : null}
+
+          <Field label="Accounting-Ops workspace ID (optional)">
+            <input
+              value={aoWorkspaceId}
+              onChange={(e) => setAoWorkspaceId(e.target.value)}
+              placeholder="Link to pull net income from the books"
+              className={selectClass}
+            />
+          </Field>
 
           <Button
             className="w-full"

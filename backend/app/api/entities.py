@@ -6,11 +6,22 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import require_scopes
+from app.core.config import Settings, get_settings
 from app.db.session import get_tenant_db
+from app.integrations.accounting_ops import (
+    AccountingOpsAuthError,
+    AccountingOpsDisabledError,
+    AccountingOpsUnavailableError,
+)
 from app.models.entity import BusinessEntity
 from app.schemas.auth import AuthContext
 from app.schemas.entity import BusinessEntityIn, BusinessEntityOut
-from app.services.entities import create_entity, delete_entity, list_entities
+from app.services.entities import (
+    create_entity,
+    delete_entity,
+    list_entities,
+    sync_entity_from_accounting_ops,
+)
 
 router = APIRouter(prefix="/clients/tax-years", tags=["business-entities"])
 
@@ -55,3 +66,34 @@ async def remove_entity(
         )
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post("/{tax_year_id}/business-entities/{entity_id}/sync-accounting-ops")
+async def sync_entity_accounting_ops(
+    tax_year_id: UUID,
+    entity_id: UUID,
+    ctx: AuthContext = Depends(require_scopes(("taxplan:advisor",))),
+    db: AsyncSession = Depends(get_tenant_db),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, object]:
+    """Pull the linked Accounting-Ops workspace's P&L net income into this
+    entity. Gated: 503 if the integration is off, 502 if AO is unreachable or
+    hasn't yet authorized the Tax-Planning-Ops federation actor."""
+    try:
+        return await sync_entity_from_accounting_ops(
+            db,
+            workspace_id=ctx.workspace_id,
+            actor_uc_uid=ctx.uc_uid,
+            entity_id=entity_id,
+            settings=settings,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except AccountingOpsDisabledError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
+    except (AccountingOpsAuthError, AccountingOpsUnavailableError) as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc

@@ -66,7 +66,18 @@ class Settings(BaseSettings):
     OCR_QWENVL_URL: str = ""
     OCR_QWENVL_ENABLED: bool = False
     PDF_SERVICE_URL: str = ""
+    # Accounting-Ops federation read (AO P&L → business-entity net income).
+    # AO is live on centerdeep exposing GET /api/workspaces/{ws}/reports/pl. The
+    # token is a client-credentials grant from TPO's own KC confidential client;
+    # AO must trust that service account (the broker-trust step). Disabled until
+    # both ends are wired — when off, the sync endpoint returns 503 cleanly.
     ACCOUNTING_OPS_URL: str = ""
+    ACCOUNTING_OPS_ENABLED: bool = False
+    # Token audience/resource AO expects (its KC client id); empty → no audience.
+    ACCOUNTING_OPS_AUDIENCE: str = ""
+    # Static bearer override for testing / when client-credentials isn't used.
+    ACCOUNTING_OPS_SERVICE_TOKEN: str = ""
+    ACCOUNTING_OPS_TIMEOUT_SECONDS: float = 10.0
 
     # LLM gateway (LiteLLM, OpenAI-compatible). Drives OCR field-structuring +
     # the planning agents. On the dev box: http://unicorn-litellm:4000/v1.
