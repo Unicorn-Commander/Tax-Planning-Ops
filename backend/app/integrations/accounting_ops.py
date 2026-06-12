@@ -56,8 +56,9 @@ class PLSummary(BaseModel):
     available_keys: list[str] = []
 
 
-# Cached service token: {"value": str, "expires_at": float}.
-_token_cache: dict[str, Any] = {}
+# Cached federation tokens keyed by AO workspace id (the Brigade-exchanged token
+# is workspace-scoped): {workspace_id: {"value": str, "expires_at": float}}.
+_token_cache: dict[str, dict[str, Any]] = {}
 
 
 def _cents_from(value: Any) -> int | None:
@@ -142,22 +143,30 @@ async def _mint_kc_token(settings: Settings) -> str:
     return str(token)
 
 
-async def _exchange_at_brigade(subject_token: str, settings: Settings) -> tuple[str, int]:
+async def _exchange_at_brigade(
+    subject_token: str, workspace_id: str, settings: Settings
+) -> tuple[str, int]:
     """RFC-8693 token exchange at Brigade: swap TPO's KC token for a Brigade-
     issued token carrying the Accounting-Ops audience (the suite-canonical broker
-    pattern AO trusts). Returns (token, expires_in)."""
+    pattern AO trusts). The broker derives the actor from subject_token.azp, so
+    no actor_token is sent; the AO workspace UUID is passed explicitly because
+    the client-credentials token carries no workspace claim. Returns
+    (token, expires_in)."""
     form: dict[str, str] = {
         "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
         "subject_token": subject_token,
         "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
         "requested_token_type": "urn:ietf:params:oauth:token-type:access_token",
-        "client_id": settings.BRIGADE_CLIENT_ID or settings.KEYCLOAK_CLIENT_ID,
+        "workspace_id": workspace_id,
     }
-    secret = settings.BRIGADE_CLIENT_SECRET or settings.KEYCLOAK_CLIENT_SECRET
-    if secret:
-        form["client_secret"] = secret
     if settings.ACCOUNTING_OPS_AUDIENCE:
         form["audience"] = settings.ACCOUNTING_OPS_AUDIENCE
+    # Client auth is only sent if explicitly configured for the broker — the
+    # broker reads the actor from the subject token, so by default we send none.
+    if settings.BRIGADE_CLIENT_ID:
+        form["client_id"] = settings.BRIGADE_CLIENT_ID
+    if settings.BRIGADE_CLIENT_SECRET:
+        form["client_secret"] = settings.BRIGADE_CLIENT_SECRET
     try:
         async with httpx.AsyncClient(timeout=settings.ACCOUNTING_OPS_TIMEOUT_SECONDS) as client:
             resp = await client.post(settings.BRIGADE_TOKEN_URL, data=form)
@@ -171,32 +180,35 @@ async def _exchange_at_brigade(subject_token: str, settings: Settings) -> tuple[
     if resp.status_code >= 400:
         raise AccountingOpsUnavailableError(f"Brigade exchange error ({resp.status_code})")
     body = resp.json()
-    token = body.get("access_token")
+    token = body.get("access_token") or body.get("token")
     if not token:
         raise AccountingOpsUnavailableError("Brigade exchange returned no access_token")
     return str(token), int(body.get("expires_in", 60))
 
 
-async def _get_federation_token(settings: Settings) -> str:
-    """The token TPO presents to Accounting-Ops.
+async def _get_federation_token(settings: Settings, workspace_id: str) -> str:
+    """The token TPO presents to Accounting-Ops, for a specific AO workspace.
 
     Canonical path: mint TPO's KC token, then exchange it at Brigade for an
-    AO-audience token (set BRIGADE_TOKEN_URL). Without a Brigade URL it falls
-    back to the raw KC token (legacy/testing). A static override short-circuits
-    both."""
+    AO-audience token scoped to `workspace_id` (set BRIGADE_TOKEN_URL). Without a
+    Brigade URL it falls back to the raw KC token (legacy/testing). A static
+    override short-circuits both. The Brigade token is workspace-scoped, so the
+    cache is keyed by workspace."""
     if settings.ACCOUNTING_OPS_SERVICE_TOKEN:
         return settings.ACCOUNTING_OPS_SERVICE_TOKEN
-    cached = _token_cache.get("value")
-    if cached and time.time() < _token_cache.get("expires_at", 0.0):
-        return str(cached)
+    entry = _token_cache.get(workspace_id)
+    if entry and time.time() < entry.get("expires_at", 0.0):
+        return str(entry["value"])
 
     kc_token = await _mint_kc_token(settings)
     if settings.BRIGADE_TOKEN_URL:
-        token, expires_in = await _exchange_at_brigade(kc_token, settings)
+        token, expires_in = await _exchange_at_brigade(kc_token, workspace_id, settings)
     else:
         token, expires_in = kc_token, 60
-    _token_cache["value"] = token
-    _token_cache["expires_at"] = time.time() + max(0, expires_in - 15)
+    _token_cache[workspace_id] = {
+        "value": token,
+        "expires_at": time.time() + max(0, expires_in - 15),
+    }
     return token
 
 
@@ -205,7 +217,7 @@ async def fetch_pl(accounting_ops_workspace_id: str, settings: Settings) -> PLSu
     if not settings.ACCOUNTING_OPS_ENABLED or not settings.ACCOUNTING_OPS_URL:
         raise AccountingOpsDisabledError("Accounting-Ops integration is not enabled")
 
-    token = await _get_federation_token(settings)
+    token = await _get_federation_token(settings, accounting_ops_workspace_id)
     url = (
         f"{settings.ACCOUNTING_OPS_URL.rstrip('/')}"
         f"/api/workspaces/{accounting_ops_workspace_id}/reports/pl"

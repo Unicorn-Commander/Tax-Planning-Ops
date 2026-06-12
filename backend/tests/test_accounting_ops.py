@@ -71,4 +71,4 @@ async def test_static_service_token_short_circuits_mint_and_exchange() -> None:
         ACCOUNTING_OPS_SERVICE_TOKEN="static-token",  # noqa: S106 - test fixture
         BRIGADE_TOKEN_URL="https://brigade.example/exchange",  # noqa: S106 - test fixture
     )
-    assert await _get_federation_token(settings) == "static-token"
+    assert await _get_federation_token(settings, "ws-uuid") == "static-token"
