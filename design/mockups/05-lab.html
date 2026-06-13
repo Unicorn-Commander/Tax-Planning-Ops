@@ -20,17 +20,17 @@
   .roth .p-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 48px; flex-wrap: wrap; }
   .inst-track.hero { height: 62px; }
   /* the conversion fill: the agent's recommended amount, draggable */
-  .conv-fill { position: absolute; top: 0; bottom: 0; z-index: 2; background: repeating-linear-gradient(135deg, rgba(76,195,138,0.34) 0 7px, rgba(76,195,138,0.12) 7px 14px); border-left: 2px solid var(--save); border-right: 0; }
+  .conv-fill { position: absolute; top: 0; bottom: 0; z-index: 2; background: repeating-linear-gradient(135deg, rgba(29,138,91,0.34) 0 7px, rgba(29,138,91,0.12) 7px 14px); border-left: 2px solid var(--save); border-right: 0; }
   .handle { position: absolute; top: -12px; bottom: -12px; width: 0; z-index: 5; border-right: 2.5px solid var(--save); cursor: ew-resize; }
-  .handle .grip { position: absolute; right: -11px; top: 50%; transform: translateY(-50%); width: 20px; height: 30px; border-radius: 7px; background: linear-gradient(180deg, #5fd49b, #2f9e69); box-shadow: 0 3px 12px rgba(76,195,138,0.5); display: grid; place-items: center; color: #06281a; font-size: 9px; letter-spacing: 1px; }
-  .handle .amt { position: absolute; right: -54px; top: -30px; font-family: var(--font-mono); font-size: 11.5px; color: var(--save); background: rgba(76,195,138,0.1); border: 1px solid rgba(76,195,138,0.4); padding: 3px 9px; border-radius: 7px; white-space: nowrap; }
+  .handle .grip { position: absolute; right: -11px; top: 50%; transform: translateY(-50%); width: 20px; height: 30px; border-radius: 7px; background: linear-gradient(180deg, #3fb985, #1d8a5b); box-shadow: 0 3px 12px rgba(29,138,91,0.5); display: grid; place-items: center; color: #eafff5; font-size: 9px; letter-spacing: 1px; }
+  .handle .amt { position: absolute; right: -54px; top: -30px; font-family: var(--font-mono); font-size: 11.5px; color: var(--save); background: rgba(29,138,91,0.1); border: 1px solid rgba(29,138,91,0.4); padding: 3px 9px; border-radius: 7px; white-space: nowrap; }
 
   /* live recompute readouts under the instrument */
   .readout { display: flex; gap: 10px; margin-top: 34px; flex-wrap: wrap; }
-  .ro { border: 1px solid var(--g-hairline); border-radius: 10px; padding: 9px 14px; background: rgba(255,255,255,0.02); }
+  .ro { border: 1px solid var(--g-hairline); border-radius: 10px; padding: 9px 14px; background: rgba(31,28,23,0.02); }
   .ro .k { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; color: var(--g-ink-3); text-transform: uppercase; }
   .ro .v { font-size: 15px; font-weight: 700; margin-top: 3px; }
-  .ro.bind { border-color: rgba(226,93,109,0.5); background: rgba(226,93,109,0.06); }
+  .ro.bind { border-color: rgba(194,58,82,0.5); background: rgba(194,58,82,0.06); }
 
   /* --------------------------------------------------- the EMR terrain ---- */
   .terrain svg { display: block; width: 100%; height: 230px; }
@@ -40,7 +40,7 @@
   .ledger th.base { color: var(--g-ink-2); }
   .ledger th.rec { color: var(--save); }
   .ledger td.dim { color: var(--g-ink-3); }
-  .ledger .dcol { background: rgba(76,195,138,0.045); }
+  .ledger .dcol { background: rgba(29,138,91,0.045); }
   .ledger td .neg { color: var(--cliff); }
   .ledger td .pos { color: var(--save); }
   .rowlab { font-size: 12px; color: var(--g-ink-2); }
@@ -149,29 +149,29 @@
     <div style="padding: 18px 22px 8px">
       <svg viewBox="0 0 1000 230" preserveAspectRatio="none" aria-label="Effective marginal rate terrain">
         <!-- gridlines -->
-        <g stroke="rgba(238,240,244,0.07)" stroke-width="1">
+        <g stroke="rgba(31,28,23,0.07)" stroke-width="1">
           <line x1="0" y1="38"  x2="1000" y2="38"/><line x1="0" y1="88" x2="1000" y2="88"/>
           <line x1="0" y1="138" x2="1000" y2="138"/><line x1="0" y1="188" x2="1000" y2="188"/>
         </g>
-        <g font-family="IBM Plex Mono" font-size="10" fill="rgba(238,240,244,0.4)">
+        <g font-family="IBM Plex Mono" font-size="10" fill="rgba(31,28,23,0.4)">
           <text x="6" y="34">60%</text><text x="6" y="84">40%</text><text x="6" y="134">24%</text><text x="6" y="184">10%</text>
         </g>
         <!-- statutory steps (dim) -->
-        <path d="M0,138 L735,138 L735,98 L1000,98" fill="none" stroke="rgba(238,240,244,0.28)" stroke-width="1.5" stroke-dasharray="5 4"/>
+        <path d="M0,138 L735,138 L735,98 L1000,98" fill="none" stroke="rgba(31,28,23,0.28)" stroke-width="1.5" stroke-dasharray="5 4"/>
         <!-- TRUE EMR: 24% base, SS-taxability ripple, the IRMAA spike at +18.4k, 32% step at +73.5k -->
         <path d="M0,138 L60,138 L74,126 L96,126 L110,138 L184,138 L184,12 L192,12 L192,138 L735,138 L735,98 L1000,98"
               fill="none" stroke="#e8b54a" stroke-width="2.5" stroke-linejoin="round"/>
         <path d="M0,138 L60,138 L74,126 L96,126 L110,138 L184,138 L184,12 L192,12 L192,138 L735,138 L735,98 L1000,98 L1000,230 L0,230 Z"
               fill="rgba(232,181,74,0.07)" stroke="none"/>
         <!-- recommended fill zone -->
-        <rect x="0" y="0" width="184" height="230" fill="rgba(76,195,138,0.08)"/>
+        <rect x="0" y="0" width="184" height="230" fill="rgba(29,138,91,0.08)"/>
         <line x1="184" y1="0" x2="184" y2="230" stroke="#4cc38a" stroke-width="2"/>
         <!-- annotations -->
         <g font-family="IBM Plex Mono" font-size="10.5">
           <text x="30" y="216" fill="#4cc38a">convert here · 24–25.4% true</text>
           <text x="200" y="26" fill="#e25d6d">IRMAA t4 cliff · spike ≈ ∞/dollar · $3,472/yr</text>
-          <text x="748" y="92" fill="rgba(238,240,244,0.55)">32% statutory</text>
-          <text x="64" y="118" fill="rgba(238,240,244,0.45)">SS phase-in ripple</text>
+          <text x="748" y="92" fill="rgba(31,28,23,0.55)">32% statutory</text>
+          <text x="64" y="118" fill="rgba(31,28,23,0.45)">SS phase-in ripple</text>
         </g>
       </svg>
       <div class="axis-l"><span>+$0</span><span>+$18,400</span><span>+$50k</span><span>+$73,550</span><span>+$100k</span></div>
@@ -217,14 +217,14 @@
       </div>
       <div style="padding: 16px 18px 0">
         <svg viewBox="0 0 1000 200" preserveAspectRatio="none">
-          <g stroke="rgba(238,240,244,0.07)" stroke-width="1">
+          <g stroke="rgba(31,28,23,0.07)" stroke-width="1">
             <line x1="0" y1="50" x2="1000" y2="50"/><line x1="0" y1="100" x2="1000" y2="100"/><line x1="0" y1="150" x2="1000" y2="150"/>
           </g>
           <!-- do nothing -->
-          <path d="M0,196 C200,168 380,140 520,112 C700,76 880,38 1000,16" fill="none" stroke="rgba(238,240,244,0.45)" stroke-width="2.5"/>
+          <path d="M0,196 C200,168 380,140 520,112 C700,76 880,38 1000,16" fill="none" stroke="rgba(31,28,23,0.45)" stroke-width="2.5"/>
           <!-- ladder: higher early (conversions), flattens after -->
           <path d="M0,196 C150,150 300,122 460,104 C640,84 840,68 1000,58" fill="none" stroke="#4cc38a" stroke-width="2.5"/>
-          <circle cx="445" cy="106" r="4" fill="#0b0d11" stroke="#4cc38a" stroke-width="2"/>
+          <circle cx="445" cy="106" r="4" fill="#fdfcf9" stroke="#4cc38a" stroke-width="2"/>
           <g font-family="IBM Plex Mono" font-size="10.5">
             <text x="455" y="96" fill="#4cc38a">crossover · 2031</text>
             <text x="845" y="120" fill="#4cc38a">gap at 2040 = $112,400</text>
@@ -233,7 +233,7 @@
         </svg>
         <div class="axis-l" style="display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:9.5px; color:var(--g-ink-3); padding:8px 4px 14px"><span>2026</span><span>2031</span><span>2035</span><span>2040</span></div>
       </div>
-      <div class="legend"><span><i style="background:rgba(238,240,244,0.45)"></i>do nothing</span><span><i style="background:#4cc38a"></i>conversion ladder</span><span style="margin-left:auto">RMDs begin 2034 — the do-nothing line steepens</span></div>
+      <div class="legend"><span><i style="background:rgba(31,28,23,0.45)"></i>do nothing</span><span><i style="background:#4cc38a"></i>conversion ladder</span><span style="margin-left:auto">RMDs begin 2034 — the do-nothing line steepens</span></div>
     </section>
 
     <!-- the ladder schedule: concrete, year by year, each capped by its own cliff -->
@@ -245,7 +245,7 @@
       <div class="sched-row"><span class="yr">2026</span><span>while Evelyn still earns<br/><span class="why">cap: IRMAA tier 4 at $410k MAGI</span></span><b class="fig">$18,400</b></div>
       <div class="sched-row"><span class="yr">2027</span><span>Evelyn retires in June<br/><span class="why">cap: IRMAA tier 3 — lower MAGI base</span></span><b class="fig">$52,000</b></div>
       <div class="sched-row"><span class="yr">2028</span><span>first full valley year<br/><span class="why">cap: top of 24% — IRMAA clear</span></span><b class="fig">$74,000</b></div>
-      <div class="sched-row" style="background:rgba(76,195,138,0.04)"><span class="yr">Σ</span><span><b>$144,400 converted</b> before RMDs begin<br/><span class="why">every cap engine-priced · re-runs when books or law change</span></span><b class="fig tone-save">−$112,400 lifetime</b></div>
+      <div class="sched-row" style="background:rgba(29,138,91,0.04)"><span class="yr">Σ</span><span><b>$144,400 converted</b> before RMDs begin<br/><span class="why">every cap engine-priced · re-runs when books or law change</span></span><b class="fig tone-save">−$112,400 lifetime</b></div>
     </section>
   </div>
 

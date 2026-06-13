@@ -16,7 +16,7 @@
   .theater { display: grid; grid-template-columns: 1.05fr 1fr; gap: 0; overflow: hidden; }
 
   /* the scan: an off-white page in the dark room, bboxes glowing */
-  .scanwrap { padding: 26px; border-right: 1px solid var(--g-hairline-soft); background: rgba(0,0,0,0.18); display: grid; place-items: center; }
+  .scanwrap { padding: 26px; border-right: 1px solid var(--g-hairline-soft); background: var(--g-bg); display: grid; place-items: center; }
   .scan { width: 100%; max-width: 470px; aspect-ratio: 8.5/11; background: linear-gradient(180deg, #ece9df, #e4e0d2); border-radius: 3px; box-shadow: var(--shadow-sheet); position: relative; padding: 26px 30px; color: #4a463c; transform: rotate(-0.4deg); }
   .scan .f-head { display: flex; justify-content: space-between; border-bottom: 2.5px solid #3d3a32; padding-bottom: 6px; font-family: var(--font-ui); }
   .scan .f-head b { font-size: 16px; letter-spacing: 0.02em; }
@@ -25,31 +25,31 @@
   .f-line .no { font-family: var(--font-mono); font-size: 7.5px; width: 18px; color: #6b675c; }
   .f-line .lbl { flex: 1; font-size: 8px; border-bottom: 1px dotted #b7b2a4; padding-bottom: 2px; }
   .f-line .val { font-family: var(--font-mono); font-size: 9px; width: 78px; text-align: right; border: 1px solid #c6c1b2; padding: 2.5px 5px; background: #f2efe6; }
-  .bbox { position: absolute; border: 2px solid rgba(86,196,189,0.9); border-radius: 3px; box-shadow: 0 0 0 3px rgba(86,196,189,0.18); }
-  .bbox.warn { border-color: var(--cost); box-shadow: 0 0 0 3px rgba(224,164,88,0.22); }
-  .bbox .tag { position: absolute; top: -17px; left: -2px; font-family: var(--font-mono); font-size: 8.5px; background: #0d1014; color: var(--agent); padding: 1.5px 6px; border-radius: 4px; white-space: nowrap; }
+  .bbox { position: absolute; border: 2px solid rgba(17,130,123,0.9); border-radius: 3px; box-shadow: 0 0 0 3px rgba(17,130,123,0.18); }
+  .bbox.warn { border-color: var(--cost); box-shadow: 0 0 0 3px rgba(170,106,28,0.22); }
+  .bbox .tag { position: absolute; top: -17px; left: -2px; font-family: var(--font-mono); font-size: 8.5px; background: #221d15; color: var(--agent); padding: 1.5px 6px; border-radius: 4px; white-space: nowrap; }
   .bbox.warn .tag { color: var(--cost); }
 
   /* extraction rail */
   .extract { padding: 20px 24px; display: flex; flex-direction: column; }
   .stages { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
   .stg { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 10px; color: var(--g-ink-3); border: 1px solid var(--g-hairline-soft); border-radius: 99px; padding: 4px 11px; }
-  .stg.done { color: var(--save); border-color: rgba(76,195,138,0.35); }
+  .stg.done { color: var(--save); border-color: rgba(29,138,91,0.35); }
   .field { display: grid; grid-template-columns: 1fr auto 92px; gap: 12px; align-items: center; padding: 8px 4px; border-top: 1px solid var(--g-hairline-soft); font-size: 12.5px; }
   .field:first-of-type { border-top: 0; }
   .field code { font-family: var(--font-mono); font-size: 11.5px; color: var(--g-ink); }
   .conf { display: flex; align-items: center; gap: 7px; }
-  .conf .bar { width: 52px; height: 4px; border-radius: 99px; background: rgba(238,240,244,0.09); overflow: hidden; }
+  .conf .bar { width: 52px; height: 4px; border-radius: 99px; background: rgba(31,28,23,0.09); overflow: hidden; }
   .conf .bar i { display: block; height: 100%; background: var(--save); border-radius: 99px; }
   .conf small { font-family: var(--font-mono); font-size: 9px; color: var(--g-ink-3); width: 34px; text-align: right; }
 
   /* the flagged field, expanded — confidence ROUTES attention */
-  .flagged { border: 1px solid rgba(224,164,88,0.4); background: rgba(224,164,88,0.06); border-radius: 12px; padding: 14px 16px; margin: 12px 0; }
-  .flagged .crop { margin: 10px 0; background: #ece9df; border-radius: 6px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; color: #4a463c; font-size: 10px; border: 1px solid rgba(224,164,88,0.5); }
+  .flagged { border: 1px solid rgba(170,106,28,0.4); background: rgba(170,106,28,0.06); border-radius: 12px; padding: 14px 16px; margin: 12px 0; }
+  .flagged .crop { margin: 10px 0; background: #ece9df; border-radius: 6px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; color: #4a463c; font-size: 10px; border: 1px solid rgba(170,106,28,0.5); }
   .flagged .crop b { font-family: var(--font-mono); font-size: 15px; letter-spacing: 1px; }
 
   /* the verification gate */
-  .gate { display: flex; align-items: center; gap: 18px; padding: 16px 22px; border-top: 1px solid var(--g-hairline-soft); background: linear-gradient(90deg, rgba(76,195,138,0.07), transparent 65%); }
+  .gate { display: flex; align-items: center; gap: 18px; padding: 16px 22px; border-top: 1px solid var(--g-hairline-soft); background: linear-gradient(90deg, rgba(29,138,91,0.07), transparent 65%); }
   .gate .txt b { font-size: 14.5px; }
   .gate .txt p { margin: 3px 0 0; font-size: 12.5px; color: var(--g-ink-2); }
 
@@ -63,7 +63,7 @@
   .wf-row .lane { position: relative; height: 22px; }
   .wf-row .bar { position: absolute; top: 0; bottom: 0; border-radius: 4px; }
   .wf-row .val { font-family: var(--font-mono); font-size: 11.5px; text-align: right; }
-  .wf-con { height: 10px; border-left: 1.5px dashed rgba(238,240,244,0.18); margin-left: calc(168px + 14px + 2px); }
+  .wf-con { height: 10px; border-left: 1.5px dashed rgba(31,28,23,0.18); margin-left: calc(168px + 14px + 2px); }
   .lineledger td .src { display: inline-block; width: 7px; height: 7px; border-radius: 2.5px; margin-right: 9px; vertical-align: 0; }
   .src.doc { background: #5b86a8; } .src.eng { background: var(--agent); } .src.adv { background: var(--seal); }
   .keyrow { display: flex; gap: 14px; padding: 12px 20px; border-top: 1px solid var(--g-hairline-soft); font-size: 11px; color: var(--g-ink-3); }
@@ -133,7 +133,7 @@
           <span class="stg done">✓ 11 fields read</span>
           <span class="stg done">✓ engine recompute</span>
           <span class="stg done">✓ cross-check vs return</span>
-          <span class="stg" style="color:var(--cost); border-color:rgba(224,164,88,0.4)">● 1 field needs you</span>
+          <span class="stg" style="color:var(--cost); border-color:rgba(170,106,28,0.4)">● 1 field needs you</span>
         </div>
 
         <!-- lowest confidence FIRST: confidence routes attention, never decorates -->
@@ -194,7 +194,7 @@
           <span class="lbl" style="color:var(--save)">− Standard deduction<small>HoH · Rev. Proc. 2024-40</small></span>
           <span class="lane">
             <span class="bar" style="left:0; width:77.9%; background:#8a93a8; opacity:0.45"></span>
-            <span class="bar" style="left:77.9%; width:22.1%; background:repeating-linear-gradient(135deg, rgba(76,195,138,0.55) 0 5px, rgba(76,195,138,0.2) 5px 10px)"></span>
+            <span class="bar" style="left:77.9%; width:22.1%; background:repeating-linear-gradient(135deg, rgba(29,138,91,0.55) 0 5px, rgba(29,138,91,0.2) 5px 10px)"></span>
           </span>
           <span class="val" style="color:var(--save)">($23,625)</span>
         </div>
@@ -223,7 +223,7 @@
         <div class="wf-row">
           <span class="lbl" style="color:var(--seal)">Withheld → refund</span>
           <span class="lane">
-            <span class="bar" style="left:0; width:77%; background:rgba(238,240,244,0.18)" title="withholding $15,000"></span>
+            <span class="bar" style="left:0; width:77%; background:rgba(31,28,23,0.18)" title="withholding $15,000"></span>
             <span class="bar" style="left:59%; width:18%; background:var(--seal); opacity:0.9" title="refund $3,482"></span>
           </span>
           <span class="val" style="color:var(--seal)">$3,482</span>
@@ -248,7 +248,7 @@
           <tr><td class="fig" style="color:var(--g-ink-3)">15</td><td><span class="src eng"></span>Taxable income</td><td class="r fig">83,375</td></tr>
           <tr><td class="fig" style="color:var(--g-ink-3)">16</td><td><span class="src eng"></span>Tax — bracket walk, HoH</td><td class="r fig">11,518</td></tr>
           <tr><td class="fig" style="color:var(--g-ink-3)">25</td><td><span class="src doc"></span>Withholding</td><td class="r fig">15,000</td></tr>
-          <tr style="background:rgba(211,178,119,0.05)"><td class="fig" style="color:var(--g-ink-3)">34</td><td><span class="src eng"></span><b>Refund</b></td><td class="r fig"><b>3,482</b></td></tr>
+          <tr style="background:rgba(153,122,49,0.05)"><td class="fig" style="color:var(--g-ink-3)">34</td><td><span class="src eng"></span><b>Refund</b></td><td class="r fig"><b>3,482</b></td></tr>
         </tbody>
       </table>
       <div style="padding:12px 20px; font-size:12px; color:var(--g-ink-3); border-top:1px solid var(--g-hairline-soft)">

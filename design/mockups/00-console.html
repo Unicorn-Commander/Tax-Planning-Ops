@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tax-Planning-Ops — The Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/system.css" />
+<style>
+  .page { padding: 22px 0 60px; }
+  /* two panes: conversation/command (left) · the artifact it produces (right) */
+  .stage { display: grid; grid-template-columns: 460px 1fr; gap: 22px; align-items: start; }
+
+  .console { min-height: calc(100vh - 130px); }
+  .console-head .who b { font-size: 14.5px; display: block; letter-spacing: -0.01em; }
+  .console-head .who span { font-size: 11px; color: var(--g-ink-3); }
+  .msgs { flex: 1; overflow-y: auto; }
+  .msg .hx { font-family: var(--font-mono); font-size: 12px; color: var(--agent); }
+  .msg .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3.5px; vertical-align: -1.5px; box-shadow: inset 0 0 0 1px rgba(31,28,23,0.18); }
+
+  /* the run, inline: plan -> tool calls -> result, the same tools the GUI buttons call */
+  .runcard { margin-top: 10px; border: 1px solid var(--g-hairline); border-radius: 10px; overflow: hidden; }
+  .runcard .rh { padding: 8px 13px; background: var(--agent-soft); font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--agent); display: flex; justify-content: space-between; }
+  .runcard .call { font-size: 11.5px; padding: 8px 13px; }
+  .runcard .call code { font-size: 11px; }
+
+  /* an artifact the agent produced, opened inline, with a door to the full GUI surface */
+  .artifact { margin-top: 10px; border: 1px solid var(--g-hairline); border-radius: 12px; overflow: hidden; background: var(--g-surface); box-shadow: var(--shadow-panel); }
+  .artifact .ah { display: flex; align-items: center; gap: 9px; padding: 10px 14px; border-bottom: 1px solid var(--g-hairline-soft); font-size: 12px; }
+  .artifact .ah .open { margin-left: auto; }
+  .artifact .ab { padding: 13px 16px; }
+
+  .quick { display: flex; gap: 7px; flex-wrap: wrap; padding: 0 16px 12px; }
+
+  /* the doors banner: the same engine, three entrances, equal */
+  .doors { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--g-hairline); border-radius: var(--radius); overflow: hidden; background: var(--g-surface); box-shadow: var(--shadow-panel); }
+  .door { padding: 16px 18px; border-left: 1px solid var(--g-hairline-soft); }
+  .door:first-child { border-left: 0; }
+  .door .dn { display: flex; align-items: center; gap: 8px; }
+  .door b { font-size: 13.5px; }
+  .door.on { background: var(--agent-soft); }
+  .door p { margin: 7px 0 0; font-size: 11.5px; color: var(--g-ink-3); line-height: 1.5; }
+  .door code { font-family: var(--font-mono); font-size: 10.5px; color: var(--g-ink-2); }
+
+  /* right pane: the workspace canvas the conversation is acting on */
+  .canvas-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+  .canvas-head h1 { margin: 0; font-weight: 750; font-size: 26px; letter-spacing: -0.02em; }
+  .surf { margin-bottom: 18px; }
+  .surf .sh { display: flex; align-items: center; gap: 10px; padding: 13px 18px; border-bottom: 1px solid var(--g-hairline-soft); }
+  .surf .handoff { margin-left: auto; }
+  .mini-strata { display: flex; height: 30px; border-radius: 6px; overflow: hidden; gap: 2px; position: relative; }
+  .mini-strata i { opacity: 0.8; }
+  .mini-strata .now { position: absolute; top: -4px; bottom: -4px; border-left: 2px solid var(--g-ink); }
+
+  .twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+  .twocol > div { padding: 16px 18px; }
+  .twocol > div:first-child { border-right: 1px solid var(--g-hairline-soft); }
+  .kpi .v { font-size: 23px; font-weight: 750; letter-spacing: -0.02em; }
+  .kpi .l { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--g-ink-3); }
+  .finding { display: flex; gap: 10px; padding: 9px 0; border-top: 1px solid var(--g-hairline-soft); font-size: 12.5px; align-items: baseline; }
+  .finding:first-of-type { border-top: 0; }
+  .finding b { margin-left: auto; color: var(--save); }
+</style>
+</head>
+<body class="grain">
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="wordmark" href="index.html"><span class="mk"></span><b>Tax-Planning-Ops</b></a>
+    <nav class="nav">
+      <a class="on" href="00-console.html">Console</a>
+      <a href="01-desk.html">Desk</a>
+      <a href="02-book.html">Book</a>
+      <a href="11-season.html">Season</a>
+      <a href="10-staff.html">Staff</a>
+    </nav>
+    <div class="topbar-right">
+      <span class="workspace-chip"><span class="sw"></span> Northstar Tax Advisory ▾</span>
+      <span class="kbd">⌘K</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap page">
+
+  <section class="head rise" style="margin-bottom:16px">
+    <div class="microlabel">The console · door two</div>
+    <h1 style="margin:8px 0 4px; font-weight:750; font-size:30px; letter-spacing:-0.02em">Tell it what you want. Watch it work. Sign.</h1>
+    <p class="annotation">The same engine your buttons call — reachable by language. Not a chatbot over the app; a co-equal way to drive it.</p>
+  </section>
+
+  <!-- the three doors, equal -->
+  <section class="doors rise d1" style="margin-bottom:22px">
+    <div class="door">
+      <div class="dn"><span style="font-size:15px">▦</span><b>GUI — you, by hand</b></div>
+      <p>Every surface fully drivable without typing. Buttons call the same tools.</p>
+    </div>
+    <div class="door on">
+      <div class="dn"><span class="dot dot-live"></span><b>Console — you, by language</b></div>
+      <p>This. Conversation + commands; produces live artifacts you can open in full.</p>
+      <code>strategist · clerk · bookrunner · liaison</code>
+    </div>
+    <div class="door">
+      <div class="dn"><span style="font-size:15px">⌗</span><b>MCP / API — agents &amp; services</b></div>
+      <p>Claude Code, the suite, your scripts. 21 tools, Brigade-discoverable, scope-gated.</p>
+      <code>POST /agents/…/strategist</code>
+    </div>
+  </section>
+
+  <div class="stage">
+    <!-- =============================================== the conversation === -->
+    <section class="console rise d2">
+      <div class="console-head">
+        <span class="aavatar" style="--ahue:var(--agent)">S<span class="st"></span></span>
+        <div class="who"><b>The Strategist</b><span>working in <b style="color:var(--agent)">Marcus Webb</b> · engines as tools · figures it cannot invent</span></div>
+        <span class="doors-mini" style="margin-left:auto"><span>gui</span><span class="on">console</span><span>mcp</span></span>
+      </div>
+
+      <div class="msgs">
+        <div class="msg you">Marcus is selling the company in 2027 and moving to Texas. What’s the play, and draft the memo.</div>
+
+        <div class="msg them">
+          <span class="aavatar" style="--ahue:var(--agent); width:30px; height:30px; font-size:12px">S</span>
+          <div class="bubble-c">
+            Before I run — here’s the plan. Hold if you want to change scope.
+            <div class="runcard">
+              <div class="rh"><span>plan · approve to run</span><span>auto in 30s</span></div>
+              <div class="call"><span class="glyph">✓</span><code>read 2025 1040 · goals brief · live books</code><span class="ok" style="margin-left:auto">done</span></div>
+              <div class="call"><span class="glyph">∑</span><code>qsbs.exclusion · state.delta(CA→TX) · charitable · roth.window</code><span class="res save">running</span></div>
+              <div class="call"><span class="glyph">✍</span><code>memo.compose(goals-aware)</code><span class="res" style="margin-left:auto;color:var(--g-ink-3)">queued</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="msg them">
+          <span class="aavatar" style="--ahue:var(--agent); width:30px; height:30px; font-size:12px">S</span>
+          <div class="bubble-c">
+            Sequencing is everything. Done in the right order, current law makes most of the sale tax-free; in the wrong order it costs seven figures. I found <b class="tone-save">$1,846,290</b>, engine-verified. I opened the memo on the right — five exhibits, ready for your edits and signature.
+            <div style="margin-top:8px; display:flex; gap:8px">
+              <span class="chip save">QSBS · $1,190,000</span>
+              <span class="chip save">TX before close · $635,078</span>
+              <span class="chip">+ 3 more</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="msg them">
+          <span class="aavatar" style="--ahue:var(--agent); width:30px; height:30px; font-size:12px">S</span>
+          <div class="bubble-c">
+            One thing I won’t assume —
+            <div class="artifact" style="margin-top:8px; border-color:color-mix(in srgb,var(--cost) 40%,transparent)">
+              <div class="ah" style="background:var(--cost-soft)"><span style="color:var(--cost)">⚠ Question · worth certainty on $1.19M</span></div>
+              <div class="ab" style="font-size:12.5px; color:var(--g-ink-2)">Confirm the founder-stock basis ($500,000?). The §1202 cap is the greater of $15M or 10× basis — a correction moves the ceiling.
+                <div style="display:flex; gap:8px; margin-top:9px"><a class="mini-btn go" href="#">Confirm $500k</a><a class="mini-btn" href="#">Correct…</a></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="quick">
+        <span class="chip">↳ make it client-friendly</span>
+        <span class="chip">↳ what if he stays in CA?</span>
+        <span class="chip">↳ size the Roth ladder</span>
+        <span class="chip">↳ open present mode</span>
+      </div>
+
+      <div class="composer">
+        <div class="box">Ask, or type a command — <span style="color:var(--g-ink-2)">/scan-book, /draft-memo, /compare</span><span class="caret"></span><span class="send">Send</span></div>
+        <div style="display:flex; gap:8px; margin-top:9px; align-items:center">
+          <span class="chip">@ Marcus Webb</span>
+          <span class="chip agent">propose · you sign</span>
+          <span style="margin-left:auto; font-family:var(--font-mono); font-size:9.5px; color:var(--g-ink-3)">$0.00 local inference · 14 calls</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================== the canvas it's acting on === -->
+    <section class="rise d3">
+      <div class="canvas-head">
+        <span class="cavatar" style="--chue:#5b86a8">MW</span>
+        <h1>Marcus Webb</h1>
+        <span class="chip">single · CA → TX</span>
+        <span style="margin-left:auto; font-size:12px; color:var(--g-ink-3)">the conversation drives this — and you can drive it by hand</span>
+      </div>
+
+      <!-- artifact: the position, produced/updated by the run -->
+      <div class="panel surf">
+        <div class="sh">
+          <span class="microlabel">Position · 2026</span>
+          <span class="handoff"><a class="chip agent" href="03-casefile.html">open case file →</a></span>
+        </div>
+        <div style="padding:18px 18px 8px">
+          <div class="mini-strata">
+            <i style="background:var(--s10);flex:6"></i><i style="background:var(--s12);flex:13"></i><i style="background:var(--s22);flex:20"></i><i style="background:var(--s24);flex:24"></i><i style="background:var(--s32);flex:16;opacity:.25"></i><i style="background:var(--s35);flex:16;opacity:.2"></i><i style="background:var(--s37);flex:5;opacity:.2"></i>
+            <span class="now" style="left:59%"></span>
+          </div>
+          <div style="display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:9.5px; color:var(--g-ink-3); margin-top:8px"><span>$0</span><span>taxable $216,200 · 24% · CA top rate bites in ’27</span><span>$700k</span></div>
+        </div>
+      </div>
+
+      <!-- artifact: the memo, opened inline, openable in full -->
+      <div class="panel surf">
+        <div class="sh">
+          <span class="microlabel" style="color:var(--seal)">Memo M-2026-014 · draft, just produced</span>
+          <span class="stamp stamp-draft" style="transform:none; font-size:9px">draft v1</span>
+          <span class="handoff"><a class="chip seal" href="06-memo.html">open &amp; sign →</a></span>
+        </div>
+        <div class="twocol">
+          <div class="kpi">
+            <div class="l">identified · engine-verified</div>
+            <div class="v tone-save">$1,846,290</div>
+            <div style="font-size:11px; color:var(--g-ink-3); margin-top:6px">net of $15k fee: $1,831,290 stays with Marcus · 123:1</div>
+          </div>
+          <div>
+            <div class="finding">QSBS §1202 exclusion <b>$1,190,000</b></div>
+            <div class="finding">Residency before close <b>$635,078</b></div>
+            <div class="finding">DAF bunch (last CA year) <b>$8,212</b></div>
+            <div class="finding">Roth window 2028–30 <b>$9,400/yr</b></div>
+            <div class="finding">Tax-loss harvest <b>$3,600</b></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="spec-note">SPEC · The console is door two of three over ONE engine: a chat message, a GUI button, and an MCP call resolve to the SAME tool (scan_book / strategist / recompute_scenario / optimize_*). Artifacts the agent produces (position, memo, scenario) render inline AND as full surfaces — "open in full" routes to the GUI page; edits made there flow back into the conversation context (edit-aware). The strategist is scoped to the active workspace + file; @-switch retargets it. Autonomy chip = the per-action dial from Staff; client-facing output always stops at your signature. This same console is the omnibar on every other surface, expanded.</div>
+    </section>
+  </div>
+
+  <footer style="padding:26px 0 0; display:flex; gap:14px; flex-wrap:wrap">
+    <span class="spec-note">№ 00 — THE CONSOLE · the co-equal agent door. No wrappers: language and GUI are equal entrances to the same tools, and the agent shows its work, asks before assuming, and stops at your signature.</span>
+  </footer>
+</main>
+
+</body>
+</html>

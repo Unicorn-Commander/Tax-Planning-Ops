@@ -20,8 +20,8 @@
   /* the season strip: deadlines are weather — always on the glass */
   .season-strip {
     margin-top: 20px; display: flex; align-items: center; gap: 16px;
-    border: 1px solid rgba(224,164,88,0.35); border-radius: 12px;
-    background: linear-gradient(90deg, rgba(224,164,88,0.1), rgba(224,164,88,0.02) 60%);
+    border: 1px solid rgba(170,106,28,0.35); border-radius: 12px;
+    background: linear-gradient(90deg, rgba(170,106,28,0.1), rgba(170,106,28,0.02) 60%);
     padding: 12px 18px;
   }
   .season-strip .dnum { font-family: var(--font-mono); font-weight: 600; font-size: 26px; color: var(--cost); letter-spacing: -0.04em; }
@@ -33,7 +33,7 @@
   .omnibar {
     margin-top: 18px; position: relative;
     display: flex; align-items: center; gap: 14px;
-    background: rgba(255,255,255,0.035);
+    background: rgba(31,28,23,0.035);
     border: 1px solid var(--g-hairline); border-radius: 16px;
     padding: 15px 18px; box-shadow: var(--shadow-panel);
   }
@@ -45,9 +45,9 @@
   }
   .omnibar .orb {
     width: 34px; height: 34px; border-radius: 10px; flex: none; display: grid; place-items: center;
-    font-weight: 800; font-size: 13px; color: #0c1413;
+    font-weight: 800; font-size: 13px; color: #fffdf6;
     background: radial-gradient(circle at 30% 28%, #9fe8e2, var(--agent) 58%, #1d5b56);
-    box-shadow: 0 0 22px rgba(86,196,189,0.4);
+    box-shadow: 0 0 22px rgba(17,130,123,0.4);
   }
   .omnibar .ph { flex: 1; font-size: 14.5px; color: var(--g-ink-3); }
   .omnibar .ph b { color: var(--g-ink-2); font-weight: 500; }
@@ -66,14 +66,14 @@
   /* sign-off queue: the human is the gate */
   .q-count { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--seal); }
   .q-ic { width: 34px; height: 34px; border-radius: 9px; flex: none; display: grid; place-items: center; font-size: 14px; }
-  .q-ic.memo { background: rgba(211,178,119,0.12); color: var(--seal); border: 1px solid rgba(211,178,119,0.3); }
+  .q-ic.memo { background: rgba(153,122,49,0.12); color: var(--seal); border: 1px solid rgba(153,122,49,0.3); }
   .q-ic.ocr { background: rgba(91,134,168,0.14); color: #7fa6c4; border: 1px solid rgba(91,134,168,0.3); }
-  .q-ic.ao { background: rgba(86,196,189,0.12); color: var(--agent); border: 1px solid rgba(86,196,189,0.3); }
-  .q-ic.plan { background: rgba(76,195,138,0.1); color: var(--save); border: 1px solid rgba(76,195,138,0.3); }
+  .q-ic.ao { background: rgba(17,130,123,0.12); color: var(--agent); border: 1px solid rgba(17,130,123,0.3); }
+  .q-ic.plan { background: rgba(29,138,91,0.1); color: var(--save); border: 1px solid rgba(29,138,91,0.3); }
 
   /* book pulse rows */
   .book-row { display: grid; grid-template-columns: auto 1.25fr auto 1fr auto; gap: 16px; align-items: center; padding: 14px 18px; border-top: 1px solid var(--g-hairline-soft); text-decoration: none; color: inherit; transition: background 0.15s; }
-  .book-row:hover { background: rgba(255,255,255,0.025); }
+  .book-row:hover { background: rgba(31,28,23,0.025); }
   .book-row .nm { font-size: 14px; font-weight: 650; letter-spacing: -0.01em; }
   .book-row .meta { font-size: 11px; color: var(--g-ink-3); margin-top: 2px; font-family: var(--font-mono); }
   .book-row .stages { display: flex; gap: 12px; }
@@ -98,7 +98,7 @@
   .yearline .node:first-child::before { display: none; }
   .yearline .node i { width: 11px; height: 11px; border-radius: 99px; background: var(--g-surface-2); border: 1.5px solid var(--g-ink-3); z-index: 1; }
   .yearline .node.done i { background: var(--save); border-color: var(--save); }
-  .yearline .node.due i { background: var(--cost); border-color: var(--cost); box-shadow: 0 0 0 4px rgba(224,164,88,0.18); }
+  .yearline .node.due i { background: var(--cost); border-color: var(--cost); box-shadow: 0 0 0 4px rgba(170,106,28,0.18); }
   .yearline .node small { font-family: var(--font-mono); font-size: 9px; color: var(--g-ink-3); }
   .yearline .node.due small { color: var(--cost); font-weight: 600; }
   .qpay { display: flex; justify-content: space-between; padding: 9px 18px; font-size: 12.5px; border-top: 1px solid var(--g-hairline-soft); }

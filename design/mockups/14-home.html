@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Alvarez Design Studio — Your Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/system.css" />
+<style>
+  body { --chue: #56a3a0; }
+  .page { padding: 28px 0 60px; }
+  .head h1 { font-weight: 750; font-size: 34px; letter-spacing: -0.025em; margin: 8px 0 6px; }
+  .head .statline { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 12px; font-size: 12.5px; color: var(--g-ink-3); }
+  .head .statline b { color: var(--g-ink); }
+
+  /* the posture banner: this is the SAME app as the firm cockpit, solo shell */
+  .posture { display: flex; align-items: center; gap: 12px; border: 1px dashed var(--g-hairline); border-radius: 12px; padding: 11px 16px; margin-top: 18px; font-size: 12.5px; color: var(--g-ink-2); background: var(--g-bg-2); }
+  .posture b { color: var(--g-ink); }
+
+  .omnibar { margin-top: 18px; position: relative; display: flex; align-items: center; gap: 14px; background: var(--g-surface); border: 1px solid var(--g-hairline); border-radius: 16px; padding: 15px 18px; box-shadow: var(--shadow-panel); }
+  .omnibar::before { content: ""; position: absolute; inset: -1px; border-radius: 17px; padding: 1px; background: var(--strata); opacity: 0.3; -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none; }
+  .omnibar .orb { width: 34px; height: 34px; border-radius: 10px; flex: none; display: grid; place-items: center; font-weight: 800; font-size: 13px; color: #fffdf6; background: radial-gradient(circle at 30% 28%, #4fb3ac, var(--agent) 60%, #0a5450); }
+  .omnibar .ph { flex: 1; font-size: 14.5px; color: var(--g-ink-3); }
+  .omnibar .ph b { color: var(--g-ink-2); font-weight: 500; }
+  .omnibar .caret { display: inline-block; width: 1.5px; height: 17px; background: var(--g-ink-2); vertical-align: -3px; margin-left: 2px; animation: blink 1.1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .quickrow { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+
+  .grid { display: grid; grid-template-columns: 1.55fr 1fr; gap: 22px; margin-top: 24px; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 22px; }
+
+  /* your plan hero -- the file, identical to the firm's case file */
+  .hero { padding: 24px 26px 58px; position: relative; }
+  .hero .p-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 42px; }
+  .hero .delta { margin-left: auto; text-align: right; }
+  .hero .delta b { font-size: 22px; color: var(--save); }
+  .hero .delta span { display: block; font-family: var(--font-mono); font-size: 9.5px; color: var(--g-ink-3); }
+
+  /* your decisions (the sign-off queue, reframed: it's YOUR call, no client) */
+  .q-ic { width: 32px; height: 32px; border-radius: 8px; flex: none; display: grid; place-items: center; font-size: 13px; }
+  .q-ic.memo { background: var(--seal-soft); color: var(--seal); border: 1px solid color-mix(in srgb,var(--seal) 30%,transparent); }
+  .q-ic.ao { background: var(--agent-soft); color: var(--agent); border: 1px solid color-mix(in srgb,var(--agent) 30%,transparent); }
+  .q-ic.task { background: var(--cost-soft); color: var(--cost); border: 1px solid color-mix(in srgb,var(--cost) 30%,transparent); }
+
+  .ent-mini { display: flex; gap: 12px; padding: 12px 18px; border-top: 1px solid var(--g-hairline-soft); align-items: center; }
+  .ent-mini:first-of-type { border-top: 0; }
+  .ent-ic { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; font-family: var(--font-mono); font-size: 10px; flex: none; background: var(--agent-soft); color: var(--agent); border: 1px solid color-mix(in srgb,var(--agent) 25%,transparent); }
+
+  .qline { display: flex; justify-content: space-between; padding: 8px 18px; font-size: 12.5px; border-top: 1px solid var(--g-hairline-soft); }
+  .qline .st { font-family: var(--font-mono); font-size: 10.5px; }
+</style>
+</head>
+<body class="grain">
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="wordmark" href="index.html"><span class="mk"></span><b>Tax-Planning-Ops</b></a>
+    <nav class="nav">
+      <a href="00-console.html">Ask</a>
+      <a class="on" href="14-home.html">My plan</a>
+      <a href="08-entities.html">Entities</a>
+      <a href="05-lab.html">Lab</a>
+      <a href="11-season.html">Estimates</a>
+    </nav>
+    <div class="topbar-right">
+      <span class="workspace-chip"><span class="sw" style="background:linear-gradient(135deg,#56a3a0,#3f8f80)"></span> Alvarez Design Studio ▾</span>
+      <span class="kbd">⌘K</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap page">
+
+  <section class="head rise">
+    <div class="microlabel">Self-hosted · your books, your machine, your plan</div>
+    <h1>Good morning, Jordan.<br/>Your 2026 plan is on pace — one thing needs you.</h1>
+    <div class="statline">
+      <span>your 2026 tax (plan) <b class="money prov">$38,258</b></span>
+      <span>you’re saving <b class="money tone-save">$9,170</b>/yr vs no plan</span>
+      <span>realized so far <b class="money tone-seal">$1,610</b></span>
+      <span>Q2 estimate <b class="tone-save">paid ✓</b></span>
+    </div>
+  </section>
+
+  <!-- the architecture point, made explicit -->
+  <div class="posture rise d1">
+    <span style="font-size:15px">▦</span>
+    <span>Same engine a CPA firm runs across a book of clients — here it’s just <b>you and your entities</b>. No clients, no roster, nothing leaves this box. A firm sees a book; you see your file. <b>The file is identical.</b></span>
+    <a class="chip" style="margin-left:auto" href="01-desk.html">see the firm posture →</a>
+  </div>
+
+  <!-- ask it anything -->
+  <div class="omnibar rise d1">
+    <span class="orb">S</span>
+    <span class="ph">Ask your strategist — <b>“should I do a Roth conversion this year, and how much before it costs me</b><span class="caret"></span>”</span>
+  </div>
+  <div class="quickrow rise d2">
+    <a class="chip agent" href="00-console.html">● open the console</a>
+    <a class="chip" href="#">what’s my best move this year?</a>
+    <a class="chip" href="08-entities.html">is the S-corp still worth it?</a>
+    <a class="chip" href="#">am I safe on estimates?</a>
+  </div>
+
+  <div class="grid">
+    <div class="col">
+      <!-- your plan: the same Current-vs-Plan file surface -->
+      <section class="panel hero rise d2">
+        <div class="p-head">
+          <span class="microlabel">Your position · taxable income on the 2026 strata</span>
+          <span class="delta"><b class="money">−$9,170</b><span>YOUR PLAN VS NO PLAN</span></span>
+        </div>
+        <div class="instrument">
+          <div class="inst-track" style="height:56px">
+            <div class="inst-seg filled" style="flex:3.1"><i style="--seg:var(--s10)"></i><span class="rt">10%</span></div>
+            <div class="inst-seg filled" style="flex:9.4"><i style="--seg:var(--s12)"></i><span class="rt">12%</span></div>
+            <div class="inst-seg filled" style="flex:13.9"><i style="--seg:var(--s22)"></i><span class="rt">22%</span></div>
+            <div class="inst-seg partial" style="flex:24; --fillpct:90%"><i style="--seg:var(--s24)"></i><span class="rt">24%</span></div>
+            <div class="inst-seg" style="flex:13.5"><i style="--seg:var(--s32)"></i><span class="rt">32%</span></div>
+            <div class="inst-seg" style="flex:30.3"><i style="--seg:var(--s35)"></i><span class="rt">35%</span></div>
+            <div class="inst-seg" style="flex:5.7"><i style="--seg:var(--s37)"></i><span class="rt">37%</span></div>
+            <div class="inst-now" style="left:49.4%"><span class="tag">you · $191,980</span></div>
+            <div class="inst-headroom" style="left:49.6%; width:2.2%"><span class="tag">$7,150 room</span></div>
+            <div class="inst-pin" style="left:52.6%"><span class="tag">NIIT $200k</span></div>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-top:24px; font-family:var(--font-mono); font-size:9.5px; color:var(--g-ink-3)"><span>$0</span><span>your taxable income →</span><span>$700k</span></div>
+        </div>
+      </section>
+
+      <!-- your decisions: same queue, reframed as your own calls -->
+      <section class="panel rise d3">
+        <div class="panel-head">
+          <span class="microlabel" style="color:var(--seal)">Needs you</span>
+          <span class="annotation" style="font-size:13px">your strategist proposes — you decide</span>
+        </div>
+        <div class="queue-item">
+          <span class="q-ic ao">⇄</span>
+          <div><div class="ttl">Your studio is tracking 12% under plan</div><div class="sub">Books say YTD <b class="fig">$31,440</b> — if H2 holds, your 401(k) deferral can rise <b class="fig tone-save">+$340/mo</b> without hitting the 32% edge</div></div>
+          <div class="acts"><a class="mini-btn" href="05-lab.html">Show me</a><a class="mini-btn go" href="05-lab.html">Re-project</a></div>
+        </div>
+        <div class="queue-item">
+          <span class="q-ic task">◷</span>
+          <div><div class="ttl">Open your solo-401(k) before Dec 31</div><div class="sub">Worth <b class="fig tone-save">$5,400/yr</b> · the deferral deadline is hard — the strategist drafted the custodian checklist</div></div>
+          <div class="acts"><a class="mini-btn go" href="07-plan.html">Do it</a></div>
+        </div>
+        <div class="queue-item">
+          <span class="q-ic memo">✍</span>
+          <div><div class="ttl">Your 2026 plan — review &amp; keep</div><div class="sub">5 strategies · this is for <b>you</b>, no client letterhead · export a copy for your records or your accountant</div></div>
+          <div class="acts"><a class="mini-btn seal" href="06-memo.html">Review</a></div>
+        </div>
+      </section>
+    </div>
+
+    <div class="col">
+      <!-- your entities -->
+      <section class="panel rise d3">
+        <div class="panel-head"><span class="microlabel">Your entities</span><a class="chip agent" style="margin-left:auto" href="08-entities.html">structure map →</a></div>
+        <div class="ent-mini">
+          <span class="ent-ic">S</span>
+          <div style="flex:1"><b style="font-size:13px">Alvarez Design Studio</b><div style="font-size:11px;color:var(--g-ink-3)">S-corp · <span style="color:var(--agent)">● books live</span> · QBI $6,311</div></div>
+          <b class="fig" style="font-size:12px">$80,000</b>
+        </div>
+        <div class="ent-mini">
+          <span class="ent-ic" style="background:rgba(86,128,166,0.14);color:#5680a6;border-color:rgba(86,128,166,0.3)">E</span>
+          <div style="flex:1"><b style="font-size:13px">Duplex on 5th Ave</b><div style="font-size:11px;color:var(--g-ink-3)">Schedule E rental · passive</div></div>
+          <b class="fig" style="font-size:12px">$12,000</b>
+        </div>
+      </section>
+
+      <!-- your estimates: just YOUR four quarters, no cross-client season -->
+      <section class="panel rise d4">
+        <div class="panel-head"><span class="microlabel">Your estimates · 2026</span><span class="chip save" style="margin-left:auto">on track ✓</span></div>
+        <div class="qline" style="border-top:0"><span>Q1 · Apr 15</span><span class="st" style="color:var(--save)">PAID $3,470</span></div>
+        <div class="qline"><span>Q2 · Jun 15</span><span class="st" style="color:var(--save)">PAID $3,470</span></div>
+        <div class="qline"><span>Q3 · Sep 15</span><span class="st">$3,470 est</span></div>
+        <div class="qline"><span>Q4 · Jan 15</span><span class="st">$3,470 est</span></div>
+        <div style="padding:11px 18px; border-top:1px solid var(--g-hairline-soft); font-size:11.5px; color:var(--g-ink-3)">Payroll withholding covers 61% — your strategist watches for under/over-payment as the books update.</div>
+      </section>
+
+      <div class="spec-note rise d5">SPEC · This is the SAME build as the firm cockpit, single-tenant posture. file-as-protagonist: the case/lab/memo/entities surfaces are byte-identical; the firm shell (roster, book pulse, season-across-clients, white-label-to-others, seats) simply isn’t mounted when there’s one file + no practice identity. An individual = this, minus the entities. A company/family office = this, entity-heavy. Switching postures = the workspace switcher in the topbar (you · your company · a firm you belong to). Deliverables drop the “prepared for client” letterhead and read “for your records.”</div>
+    </div>
+  </div>
+
+  <footer style="padding:26px 0 0; display:flex; gap:14px; flex-wrap:wrap">
+    <span class="spec-note">№ 14 — YOUR PLAN (solo / company posture) · proves co-equal users: individual, business owner, or company self-hosting get a native home over the same engine — no “client #1 of your own firm” feeling.</span>
+  </footer>
+</main>
+
+</body>
+</html>

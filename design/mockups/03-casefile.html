@@ -45,10 +45,10 @@
   .cliff-row .nm span { font-family: var(--font-mono); font-size: 9.5px; color: var(--g-ink-3); }
   /* distance bar with a SHEER STEP EDGE — cliffs are step functions, never gauges */
   .dist { position: relative; height: 26px; }
-  .dist .lane { position: absolute; left: 0; right: 0; top: 10px; height: 6px; border-radius: 99px 0 0 99px; background: rgba(238,240,244,0.07); }
+  .dist .lane { position: absolute; left: 0; right: 0; top: 10px; height: 6px; border-radius: 99px 0 0 99px; background: rgba(31,28,23,0.07); }
   .dist .filled { position: absolute; left: 0; top: 10px; height: 6px; border-radius: 99px 0 0 99px; background: color-mix(in srgb, var(--chue) 75%, #fff0); }
   .dist .edge { position: absolute; top: 0; bottom: 0; width: 2.5px; background: var(--cliff); }
-  .dist .edge::after { content: ""; position: absolute; left: 2.5px; top: 0; bottom: 0; width: 26px; background: repeating-linear-gradient(135deg, rgba(226,93,109,0.22) 0 4px, transparent 4px 8px); }
+  .dist .edge::after { content: ""; position: absolute; left: 2.5px; top: 0; bottom: 0; width: 26px; background: repeating-linear-gradient(135deg, rgba(194,58,82,0.22) 0 4px, transparent 4px 8px); }
   .dist .you { position: absolute; top: 6px; width: 2px; height: 14px; background: var(--g-ink); }
   .dist .you::after { content: ""; position: absolute; top: -4px; left: -2.5px; width: 7px; height: 7px; border-radius: 99px; background: var(--g-ink); }
   .cliff-row .out { text-align: right; }
@@ -63,7 +63,7 @@
   .vs .sub { font-size: 12px; color: var(--g-ink-3); margin-top: 8px; }
   /* IBCS fills: filed = solid · plan = outline */
   .vs .yr.plan .big { color: var(--g-ink); -webkit-text-stroke: 0; }
-  .vs .delta { align-self: center; text-align: center; padding: 12px 18px; border-radius: 12px; background: rgba(76,195,138,0.09); border: 1px solid rgba(76,195,138,0.3); }
+  .vs .delta { align-self: center; text-align: center; padding: 12px 18px; border-radius: 12px; background: rgba(29,138,91,0.09); border: 1px solid rgba(29,138,91,0.3); }
   .vs .delta b { display: block; font-size: 19px; color: var(--save); }
   .vs .delta span { font-size: 10px; font-family: var(--font-mono); color: var(--g-ink-3); letter-spacing: 0.08em; }
   .ibcs { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
@@ -75,18 +75,18 @@
   .col { display: flex; flex-direction: column; gap: 22px; }
   .ent-mini { display: flex; gap: 12px; padding: 13px 18px; border-top: 1px solid var(--g-hairline-soft); align-items: center; }
   .ent-mini:first-of-type { border-top: 0; }
-  .ent-ic { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; font-family: var(--font-mono); font-size: 10px; flex: none; background: rgba(86,196,189,0.1); color: var(--agent); border: 1px solid rgba(86,196,189,0.25); }
+  .ent-ic { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; font-family: var(--font-mono); font-size: 10px; flex: none; background: rgba(17,130,123,0.1); color: var(--agent); border: 1px solid rgba(17,130,123,0.25); }
   .goal-chips { padding: 14px 18px; display: flex; flex-wrap: wrap; gap: 8px; }
 
   .task { display: flex; align-items: center; gap: 12px; padding: 11px 18px; border-top: 1px solid var(--g-hairline-soft); font-size: 13px; }
   .task:first-of-type { border-top: 0; }
   .task .tick { width: 18px; height: 18px; border-radius: 6px; border: 1.5px solid var(--g-hairline); display: grid; place-items: center; font-size: 11px; flex: none; }
-  .task.done .tick { background: rgba(76,195,138,0.14); border-color: var(--save); color: var(--save); }
+  .task.done .tick { background: rgba(29,138,91,0.14); border-color: var(--save); color: var(--save); }
   .task.done span { color: var(--g-ink-3); text-decoration: line-through; }
   .task .due { margin-left: auto; font-family: var(--font-mono); font-size: 10px; color: var(--g-ink-3); }
   .task .due.hot { color: var(--cost); }
-  .impl-bar { height: 6px; border-radius: 99px; background: rgba(238,240,244,0.08); overflow: hidden; margin: 4px 18px 14px; }
-  .impl-bar i { display: block; height: 100%; width: 40%; background: linear-gradient(90deg, var(--save), #6fd8a8); border-radius: 99px; }
+  .impl-bar { height: 6px; border-radius: 99px; background: rgba(31,28,23,0.08); overflow: hidden; margin: 4px 18px 14px; }
+  .impl-bar i { display: block; height: 100%; width: 40%; background: linear-gradient(90deg, var(--save), #3fb985); border-radius: 99px; }
 
   /* the provenance card, shown once as the teaching artifact */
   .prov-anchor { position: relative; }
@@ -246,7 +246,7 @@
           <div class="dist"><span class="lane"></span><span class="filled" style="width:71%"></span><span class="edge" style="left:69%"></span><span class="you" style="left:71%"></span></div>
           <div class="out"><b class="money tone-cliff">$2,980 over</b><span>0.9% on excess = $27/yr · S-corp split shrinks this</span></div>
         </div>
-        <div class="cliff-row" style="background:rgba(76,195,138,0.03)">
+        <div class="cliff-row" style="background:rgba(29,138,91,0.03)">
           <div class="nm"><b>QBI phase-in</b><span>§199A · $201,750 TI</span></div>
           <div class="dist"><span class="lane"></span><span class="filled" style="width:80%"></span><span class="edge" style="left:81%; background:var(--cost)"></span><span class="you" style="left:80%"></span></div>
           <div class="out"><b class="money">$9,770 below</b><span>full 20% deduction holds · watched by strategist</span></div>
