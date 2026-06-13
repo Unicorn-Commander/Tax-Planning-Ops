@@ -1,56 +1,214 @@
 @import "tailwindcss";
 
-/* ---- Design tokens (Tailwind v4 @theme → utility classes) ---- */
+/* ===========================================================================
+   Tax-Planning-Ops — design system v3 "DAYLIGHT & PAPER"
+   ---------------------------------------------------------------------------
+   Phase 0 foundation. Two parts:
+
+   1. @theme — Tailwind v4 utility tokens. The names the existing components
+      already use (--color-bg, --color-ink, --color-primary, ...) are KEPT but
+      remapped to the Daylight palette, so the live app restyles without
+      touching a component. New design tokens (strata, semantics, paper) are
+      added here too so utilities like `text-save` / `bg-surface-2` exist.
+
+   2. :root design tokens (--g-*, --p-*, --save, --strata, ...) — the SAME
+      names as design/mockups/assets/system.css, so mockups port to components
+      with minimal translation. `html[data-theme="dark"]` overrides the
+      workbench; documents (--p-*) stay cream paper in both themes.
+
+   Light is the default. See design/mockups/DESIGN-SPEC.md §1–2.
+   =========================================================================== */
+
 @theme {
-  --color-bg: #f4f5f8;
-  --color-surface: #ffffff;
-  --color-surface-2: #f7f8fb;
-  --color-ink: #0d1220;
-  --color-ink-2: #3b4254;
-  --color-muted: #717a8c;
-  --color-line: #e7e9f0;
-  --color-line-2: #eef0f5;
+  /* surfaces / ink (remapped to the warm-paper workbench) */
+  --color-bg: #ece9e1;
+  --color-surface: #fdfcf9;
+  --color-surface-2: #f4f1ea;
+  --color-ink: #1f1c17;
+  --color-ink-2: #5a554c;
+  --color-muted: #837d72;
+  --color-line: #e4dfd3;
+  --color-line-2: #ece8dd;
 
-  --color-primary: #4f46e5;
-  --color-primary-strong: #4338ca;
-  --color-primary-soft: #eef0fe;
-  --color-accent: #7c5cff;
+  /* "primary" = the interactive accent (agent teal). Existing primary buttons,
+     links, active-nav become teal — the new system's one accent. */
+  --color-primary: #11827b;
+  --color-primary-strong: #0d6b65;
+  --color-primary-soft: #e2efed;
+  --color-accent: #11827b;
 
-  --color-positive: #067a57;
-  --color-positive-soft: #e9f8f1;
-  --color-negative: #c1322b;
-  --color-negative-soft: #fdeeed;
-  --color-warning: #b45309;
-  --color-warning-soft: #fdf6ec;
+  /* semantic (deepened for white) */
+  --color-positive: #1d8a5b;
+  --color-positive-soft: #e7f3ec;
+  --color-negative: #c23a52;
+  --color-negative-soft: #f8e7ea;
+  --color-warning: #aa6a1c;
+  --color-warning-soft: #f6ecdd;
 
-  --radius-card: 16px;
-  --radius-lg: 14px;
+  /* new design semantics — utilities: text-save / bg-cliff-soft / etc. */
+  --color-save: #1d8a5b;
+  --color-save-soft: #e7f3ec;
+  --color-cost: #aa6a1c;
+  --color-cost-soft: #f6ecdd;
+  --color-cliff: #c23a52;
+  --color-cliff-soft: #f8e7ea;
+  --color-agent: #11827b;
+  --color-agent-soft: #e2efed;
+  --color-seal: #997a31;
+  --color-seal-soft: #f2ecdd;
+
+  /* the strata (marginal-rate spectrum) — utilities text-s24 / bg-s37 / ... */
+  --color-s10: #3f8f80;
+  --color-s12: #5a9a55;
+  --color-s22: #9a9038;
+  --color-s24: #c08236;
+  --color-s32: #c66a35;
+  --color-s35: #c4503f;
+  --color-s37: #b53a4c;
+
+  /* paper (document surfaces — utilities bg-paper / text-paper-ink) */
+  --color-paper: #f6f3ea;
+  --color-paper-2: #ece7d9;
+  --color-paper-ink: #221d15;
+
+  --radius-card: 14px;
+  --radius-lg: 12px;
   --radius-md: 10px;
   --radius-sm: 8px;
 
-  --shadow-soft: 0 1px 2px rgba(13, 18, 32, 0.04), 0 4px 16px rgba(13, 18, 32, 0.04);
-  --shadow-card: 0 1px 3px rgba(13, 18, 32, 0.05), 0 10px 30px rgba(13, 18, 32, 0.05);
-  --shadow-pop: 0 12px 40px rgba(13, 18, 32, 0.16);
+  --shadow-soft: 0 1px 2px rgba(31, 28, 23, 0.05), 0 4px 14px rgba(31, 28, 23, 0.05);
+  --shadow-card: 0 1px 2px rgba(31, 28, 23, 0.05), 0 10px 30px -14px rgba(31, 28, 23, 0.18);
+  --shadow-pop: 0 2px 6px rgba(31, 28, 23, 0.07), 0 22px 60px -22px rgba(31, 28, 23, 0.26);
 
-  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-sans: var(--font-ui);
+  --font-serif: var(--font-doc);
+  --font-mono: var(--font-mono-stack);
 }
 
-/* ---- Legacy var names used by existing pages (kept in sync) ---- */
+/* ---------------------------------------------------------------------------
+   :root — the design tokens (mockup-compatible names). Light default.
+   --------------------------------------------------------------------------- */
 :root {
-  --background: #f4f5f8;
-  --foreground: #0d1220;
-  --ink: #0d1220;
-  --muted: #717a8c;
-  --panel: #ffffff;
-  --line: #e7e9f0;
-  --accent: #4f46e5;
-  --accent-strong: #4338ca;
-  --warning: #b45309;
+  /* workbench */
+  --g-bg: #ece9e1;
+  --g-bg-2: #f2efe8;
+  --g-surface: #fdfcf9;
+  --g-surface-2: #f4f1ea;
+  --g-ink: #1f1c17;
+  --g-ink-2: rgba(31, 28, 23, 0.66);
+  --g-ink-3: rgba(31, 28, 23, 0.44);
+  --g-hairline: rgba(31, 28, 23, 0.14);
+  --g-hairline-soft: rgba(31, 28, 23, 0.08);
+  --wash: rgba(31, 28, 23, 0.04);
+  --wash-2: rgba(31, 28, 23, 0.06);
+
+  /* fonts — wired to next/font in layout.tsx (fallbacks keep it working now) */
+  --font-ui: var(--font-franklin), "Libre Franklin", "Inter", system-ui, sans-serif;
+  --font-doc: var(--font-source-serif), "Source Serif 4", Georgia, serif;
+  --font-mono-stack: var(--font-plex-mono), "IBM Plex Mono", ui-monospace, monospace;
+
+  /* semantics */
+  --save: #1d8a5b;
+  --cost: #aa6a1c;
+  --cliff: #c23a52;
+  --agent: #11827b;
+  --seal: #997a31;
+  --info: #6b7280;
+  --save-soft: rgba(29, 138, 91, 0.10);
+  --cost-soft: rgba(170, 106, 28, 0.11);
+  --cliff-soft: rgba(194, 58, 82, 0.10);
+  --agent-soft: rgba(17, 130, 123, 0.10);
+  --seal-soft: rgba(153, 122, 49, 0.12);
+
+  /* the strata + LTCG ladder */
+  --s10: #3f8f80;
+  --s12: #5a9a55;
+  --s22: #9a9038;
+  --s24: #c08236;
+  --s32: #c66a35;
+  --s35: #c4503f;
+  --s37: #b53a4c;
+  --cg0: #5680a6;
+  --cg15: #3f63a0;
+  --cg20: #355797;
+  --strata: linear-gradient(90deg,
+    var(--s10) 0%, var(--s10) 6%, var(--s12) 6%, var(--s12) 19%,
+    var(--s22) 19%, var(--s22) 39%, var(--s24) 39%, var(--s24) 62%,
+    var(--s32) 62%, var(--s32) 78%, var(--s35) 78%, var(--s35) 95%,
+    var(--s37) 95%, var(--s37) 100%);
+
+  /* document (paper) — NOT overridden in dark */
+  --p-bg: #f6f3ea;
+  --p-bg-2: #ece7d9;
+  --p-ink: #221d15;
+  --p-ink-2: rgba(34, 29, 21, 0.68);
+  --p-ink-3: rgba(34, 29, 21, 0.46);
+  --p-hairline: rgba(34, 29, 21, 0.16);
+  --p-save: #1a6e49;
+  --p-cliff: #a3304a;
+  --p-seal: #8a6b2f;
+
+  --radius: 14px;
+  --radius-sm: 9px;
+  --shadow-panel: 0 1px 2px rgba(31, 28, 23, 0.05), 0 10px 30px -14px rgba(31, 28, 23, 0.18);
+  --shadow-deep: 0 2px 6px rgba(31, 28, 23, 0.07), 0 22px 60px -22px rgba(31, 28, 23, 0.26);
+  --shadow-sheet: 0 1px 0 rgba(255, 253, 246, 0.7), 0 2px 10px rgba(31, 28, 23, 0.07),
+                  0 26px 60px -22px rgba(31, 28, 23, 0.30), 0 50px 120px -50px rgba(153, 122, 49, 0.10);
+
+  /* legacy var names still referenced by un-migrated components */
+  --background: #ece9e1;
+  --foreground: #1f1c17;
+  --ink: #1f1c17;
+  --muted: #837d72;
+  --panel: #fdfcf9;
+  --line: #e4dfd3;
+  --accent: #11827b;
+  --accent-strong: #0d6b65;
+  --warning: #aa6a1c;
 }
 
-* {
-  border-color: var(--color-line);
+/* ---------------------------------------------------------------------------
+   DARK MODE — comfortable dark workbench. Documents (--p-*) stay paper.
+   --------------------------------------------------------------------------- */
+html[data-theme="dark"] {
+  --g-bg: #101319;
+  --g-bg-2: #151922;
+  --g-surface: #171c26;
+  --g-surface-2: #1d2330;
+  --g-ink: #eef1f5;
+  --g-ink-2: rgba(238, 241, 245, 0.64);
+  --g-ink-3: rgba(238, 241, 245, 0.40);
+  --g-hairline: rgba(238, 241, 245, 0.13);
+  --g-hairline-soft: rgba(238, 241, 245, 0.07);
+  --wash: rgba(255, 255, 255, 0.04);
+  --wash-2: rgba(255, 255, 255, 0.06);
+
+  --save: #4cc38a; --cost: #e0a458; --cliff: #e25d6d; --agent: #56c4bd; --seal: #d3b277; --info: #8a93a8;
+  --save-soft: rgba(76, 195, 138, 0.12); --cost-soft: rgba(224, 164, 88, 0.12);
+  --cliff-soft: rgba(226, 93, 109, 0.12); --agent-soft: rgba(86, 196, 189, 0.12); --seal-soft: rgba(211, 178, 119, 0.13);
+
+  --s10: #4e9a8e; --s12: #63a06a; --s22: #a39a4e; --s24: #bd8a45; --s32: #c97243; --s35: #c75a4b; --s37: #b94556;
+  --cg0: #5b86a8; --cg15: #4a6fa6; --cg20: #415e9c;
+
+  --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.5), 0 16px 42px -18px rgba(0, 0, 0, 0.72);
+  --shadow-deep: 0 2px 6px rgba(0, 0, 0, 0.5), 0 26px 72px -24px rgba(0, 0, 0, 0.78);
+
+  /* remap the Tailwind @theme color tokens so existing utilities go dark too */
+  --color-bg: #101319; --color-surface: #171c26; --color-surface-2: #1d2330;
+  --color-ink: #eef1f5; --color-ink-2: rgba(238, 241, 245, 0.64); --color-muted: rgba(238, 241, 245, 0.40);
+  --color-line: rgba(238, 241, 245, 0.13); --color-line-2: rgba(238, 241, 245, 0.07);
+  --color-primary: #56c4bd; --color-primary-strong: #7ad3cd; --color-primary-soft: rgba(86, 196, 189, 0.14); --color-accent: #56c4bd;
+  --color-positive: #4cc38a; --color-positive-soft: rgba(76, 195, 138, 0.14);
+  --color-negative: #e25d6d; --color-negative-soft: rgba(226, 93, 109, 0.14);
+  --color-warning: #e0a458; --color-warning-soft: rgba(224, 164, 88, 0.14);
+
+  --background: #101319; --foreground: #eef1f5; --ink: #eef1f5;
+  --muted: rgba(238, 241, 245, 0.40); --panel: #171c26; --line: rgba(238, 241, 245, 0.13);
+  --accent: #56c4bd; --accent-strong: #7ad3cd; --warning: #e0a458;
 }
+
+/* ---------------------------------------------------------------- base ---- */
+* { border-color: var(--g-hairline-soft); }
 
 html {
   -webkit-font-smoothing: antialiased;
@@ -60,42 +218,53 @@ html {
 
 body {
   background:
-    radial-gradient(1200px 600px at 100% -10%, #ece9ff 0%, transparent 55%),
-    radial-gradient(900px 500px at -10% 0%, #e6f3ff 0%, transparent 50%),
-    var(--color-bg);
+    radial-gradient(1100px 640px at 12% -10%, rgba(17, 130, 123, 0.04), transparent 60%),
+    radial-gradient(960px 700px at 100% -6%, rgba(86, 128, 166, 0.04), transparent 58%),
+    var(--g-bg);
   background-attachment: fixed;
-  color: var(--color-ink);
-  font-family: var(--font-sans);
-  letter-spacing: -0.011em;
+  color: var(--g-ink);
+  font-family: var(--font-ui);
+  letter-spacing: -0.006em;
+}
+html[data-theme="dark"] body {
+  background:
+    radial-gradient(1100px 640px at 12% -10%, rgba(86, 196, 189, 0.05), transparent 60%),
+    radial-gradient(960px 700px at 100% -6%, rgba(91, 134, 168, 0.05), transparent 58%),
+    var(--g-bg);
 }
 
-button, input, select, textarea {
-  font: inherit;
-  letter-spacing: inherit;
-}
+button, input, select, textarea { font: inherit; letter-spacing: inherit; }
+::selection { background: color-mix(in srgb, var(--agent) 22%, transparent); }
 
-::selection {
-  background: color-mix(in srgb, var(--color-primary) 22%, transparent);
-}
+.tabular { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+.fig { font-family: var(--font-mono-stack); font-variant-numeric: tabular-nums; }
 
-.tabular {
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" 1;
+/* film grain — faint paper texture; multiply on light, overlay in dark */
+.grain::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 1;
+  opacity: 0.025; mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
 }
+html[data-theme="dark"] .grain::before { opacity: 0.055; mix-blend-mode: overlay; }
 
-/* Hide the Next.js dev indicator that floats over the UI */
 nextjs-portal { display: none !important; }
 
+/* keyframes the surfaces use */
 @keyframes shimmer { 100% { transform: translateX(100%); } }
-.skeleton { position: relative; overflow: hidden; background: var(--color-line-2); }
+.skeleton { position: relative; overflow: hidden; background: var(--g-surface-2); border-radius: var(--radius-md); }
 .skeleton::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.65), transparent);
+  content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--g-surface) 70%, transparent), transparent);
   animation: shimmer 1.4s infinite;
 }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.animate-in, .rise { animation: fadeUp 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.d1 { animation-delay: 0.05s; } .d2 { animation-delay: 0.12s; } .d3 { animation-delay: 0.19s; }
+.d4 { animation-delay: 0.26s; } .d5 { animation-delay: 0.33s; } .d6 { animation-delay: 0.4s; }
 
-@keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-.animate-in { animation: fadeUp 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
+/* the strata as a usable background */
+.bg-strata { background: var(--strata); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
