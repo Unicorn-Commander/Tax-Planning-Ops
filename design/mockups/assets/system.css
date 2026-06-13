@@ -516,8 +516,72 @@ a.chip:hover { background: var(--g-bg-2); color: var(--g-ink); }
 .sheet .spec-note { color: var(--p-ink-3); border-color: var(--p-hairline); background: rgba(255,255,255,0.4); }
 
 /* ===========================================================================
-   THEATER tokens -- the ONE place dark survives: present mode + marketing.
-   Opt in with class="theater" on <body>. Working surfaces never use these.
+   DARK MODE -- a switchable, comfortable dark WORKBENCH.
+   Opt in with <html data-theme="dark"> (theme.js persists + respects the OS
+   preference + a ?theme= URL param). Light is the default.
+
+   Principle: dark mode darkens the WORKBENCH (--g-*) only. DOCUMENTS stay
+   paper (--p-* unchanged) -- a memo is a cream sheet in both themes, the way
+   present mode already works. Hue-shifted neutrals, never #000/flat-grey.
+   =========================================================================== */
+html[data-theme="dark"] {
+  --g-bg: #101319; --g-bg-2: #151922; --g-surface: #171c26; --g-surface-2: #1d2330;
+  --g-ink: #eef1f5; --g-ink-2: rgba(238, 241, 245, 0.64); --g-ink-3: rgba(238, 241, 245, 0.40);
+  --g-hairline: rgba(238, 241, 245, 0.13); --g-hairline-soft: rgba(238, 241, 245, 0.07);
+  --wash: rgba(255, 255, 255, 0.04); --wash-2: rgba(255, 255, 255, 0.06);
+
+  /* semantics brightened to read on dark */
+  --save: #4cc38a; --cost: #e0a458; --cliff: #e25d6d; --agent: #56c4bd; --seal: #d3b277; --info: #8a93a8;
+  --save-soft: rgba(76, 195, 138, 0.12); --cost-soft: rgba(224, 164, 88, 0.12);
+  --cliff-soft: rgba(226, 93, 109, 0.12); --agent-soft: rgba(86, 196, 189, 0.12); --seal-soft: rgba(211, 178, 119, 0.13);
+
+  /* strata + LTCG ladder re-tuned for the dark field */
+  --s10: #4e9a8e; --s12: #63a06a; --s22: #a39a4e; --s24: #bd8a45; --s32: #c97243; --s35: #c75a4b; --s37: #b94556;
+  --cg0: #5b86a8; --cg15: #4a6fa6; --cg20: #415e9c;
+
+  --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.5), 0 16px 42px -18px rgba(0, 0, 0, 0.72);
+  --shadow-deep: 0 2px 6px rgba(0, 0, 0, 0.5), 0 26px 72px -24px rgba(0, 0, 0, 0.78);
+  /* --p-* (paper) deliberately NOT overridden: documents stay cream */
+}
+html[data-theme="dark"] body {
+  background:
+    radial-gradient(1100px 640px at 12% -10%, rgba(86, 196, 189, 0.05), transparent 60%),
+    radial-gradient(960px 700px at 100% -6%, rgba(91, 134, 168, 0.05), transparent 58%),
+    var(--g-bg);
+}
+/* re-fix the handful of components that hardcode light for the bright theme */
+html[data-theme="dark"] .btn-ink { background: var(--g-ink); color: #0e1116; }
+html[data-theme="dark"] .mini-btn.go { color: #0e1116; }
+html[data-theme="dark"] .keep-bar .tax { color: #0e1116; }
+html[data-theme="dark"] .wordmark .mk { background: linear-gradient(160deg, #1a2030, #0d1016); }
+html[data-theme="dark"] .wordmark .mk::before { background: rgba(238, 241, 245, 0.5); }
+html[data-theme="dark"] .grain::before { mix-blend-mode: overlay; opacity: 0.055; }
+html[data-theme="dark"] .aavatar {
+  background: linear-gradient(160deg, color-mix(in srgb, var(--ahue, var(--agent)) 30%, #10141c), #0e1117);
+  color: var(--ahue, var(--agent));
+}
+html[data-theme="dark"] .cavatar {
+  background: linear-gradient(160deg, color-mix(in srgb, var(--chue, #8a93a8) 34%, #141821), #0e1117);
+  color: color-mix(in srgb, var(--chue, #8a93a8) 85%, #fff);
+}
+html[data-theme="dark"] .inst-seg i { box-shadow: none; }
+html[data-theme="dark"] .inst-seg.filled i { box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.18); }
+html[data-theme="dark"] * { scrollbar-color: #2a3038 transparent; }
+html[data-theme="dark"] *::-webkit-scrollbar-thumb { background-color: #2a3038; }
+/* the theme toggle injected by theme.js */
+.theme-toggle {
+  position: fixed; right: 18px; bottom: 18px; z-index: 200;
+  width: 42px; height: 42px; border-radius: 999px;
+  border: 1px solid var(--g-hairline); background: var(--g-surface); color: var(--g-ink);
+  box-shadow: var(--shadow-panel); cursor: pointer; font-size: 17px; line-height: 1;
+  display: grid; place-items: center; transition: transform 0.12s;
+}
+.theme-toggle:hover { transform: translateY(-2px); }
+body.theater .theme-toggle { display: none; }
+
+/* ===========================================================================
+   THEATER tokens -- the ONE place dark is ALWAYS on: present mode + marketing.
+   Opt in with class="theater" on <body>. Independent of the dark-mode toggle.
    =========================================================================== */
 body.theater {
   --g-bg: #0c0a09; --g-bg-2: #131110; --g-surface: #16130f;
