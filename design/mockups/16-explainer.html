@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Your 2025 taxes, in plain English</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/system.css" />
+<style>
+  /* The payoff after import: the newcomer understands their own return and
+     sees their opportunity — with ZERO jargon required. Plain language is the
+     default; every expert term is available on demand ("what's this?").
+     Progressive disclosure: the dense instrument surfaces are one tap away. */
+  .read { max-width: 720px; margin: 0 auto; padding: 34px 24px 80px; }
+
+  .topline { display: flex; align-items: center; gap: 12px; margin-bottom: 26px; }
+  .topline .reg { margin-left: auto; display: inline-flex; border: 1px solid var(--g-hairline); border-radius: 9px; overflow: hidden; font-size: 11.5px; font-weight: 600; }
+  .topline .reg a { padding: 6px 12px; color: var(--g-ink-3); text-decoration: none; }
+  .topline .reg a.on { background: var(--agent-soft); color: var(--agent); }
+
+  h1 { font-weight: 750; font-size: 34px; letter-spacing: -0.025em; line-height: 1.12; margin: 0 0 6px; }
+  .sub { font-size: 15px; color: var(--g-ink-2); }
+
+  /* the one calm summary up top */
+  .summary { margin: 26px 0; padding: 24px 26px; border: 1px solid var(--g-hairline); border-radius: 16px; background: var(--g-surface); box-shadow: var(--shadow-panel); }
+  .summary p { margin: 0; font-size: 19px; line-height: 1.6; color: var(--g-ink); font-weight: 500; letter-spacing: -0.01em; }
+  .summary p b { color: var(--g-ink); }
+  .summary .rate-bar { margin-top: 18px; }
+  .summary .rate-bar .lab { display: flex; justify-content: space-between; font-size: 12px; color: var(--g-ink-3); margin-bottom: 7px; }
+  .keep-bar { display: flex; height: 30px; border-radius: 8px; overflow: hidden; }
+  .keep-bar .keep { background: color-mix(in srgb, var(--save) 22%, var(--g-surface)); display: grid; place-items: center; font-size: 12px; font-weight: 600; color: var(--save); }
+  .keep-bar .tax { background: color-mix(in srgb, var(--g-ink) 80%, transparent); display: grid; place-items: center; font-size: 12px; font-weight: 600; color: #fbfaf6; }
+
+  /* the plain chapters */
+  .chapter { display: flex; gap: 18px; padding: 22px 0; border-top: 1px solid var(--g-hairline-soft); }
+  .chapter .n { flex: none; width: 30px; height: 30px; border-radius: 99px; display: grid; place-items: center; font-family: var(--font-mono); font-size: 12px; color: var(--g-ink-2); background: var(--g-surface); border: 1px solid var(--g-hairline); margin-top: 2px; }
+  .chapter .body { flex: 1; }
+  .chapter h3 { margin: 2px 0 6px; font-size: 13px; font-weight: 650; color: var(--g-ink-3); text-transform: uppercase; letter-spacing: 0.06em; }
+  .chapter p { margin: 0; font-size: 16.5px; line-height: 1.62; color: var(--g-ink); }
+  .chapter p b { font-weight: 700; }
+  .whatis { font-size: 12.5px; color: var(--agent); font-weight: 600; cursor: help; text-decoration: underline dotted; text-underline-offset: 3px; white-space: nowrap; }
+  /* an expanded "what's this?" — shown once as the pattern */
+  .gloss { margin-top: 10px; border-left: 2px solid color-mix(in srgb, var(--agent) 45%, transparent); padding: 4px 0 4px 14px; font-size: 13.5px; color: var(--g-ink-2); line-height: 1.55; background: var(--agent-soft); border-radius: 0 8px 8px 0; }
+  .gloss b { color: var(--g-ink); }
+
+  /* a gentle, plain version of the strata — the SAME concept the Lab shows densely */
+  .plainbar { margin-top: 12px; }
+  .plainbar .bar { display: flex; height: 26px; border-radius: 7px; overflow: hidden; gap: 2px; position: relative; }
+  .plainbar .bar i { opacity: 0.8; }
+  .plainbar .you { position: absolute; top: -5px; bottom: -5px; border-left: 2px solid var(--g-ink); }
+  .plainbar .cap { display: flex; justify-content: space-between; font-size: 11px; color: var(--g-ink-3); margin-top: 7px; }
+
+  /* the opportunity — the reason they're here */
+  .opp { margin: 28px 0 0; border: 1px solid color-mix(in srgb, var(--save) 35%, transparent); border-radius: 16px; overflow: hidden; box-shadow: var(--shadow-panel); }
+  .opp .h { padding: 16px 24px; background: color-mix(in srgb, var(--save) 9%, var(--g-surface)); display: flex; align-items: baseline; gap: 12px; }
+  .opp .h b { font-size: 16px; }
+  .opp .h .amt { margin-left: auto; font-size: 22px; font-weight: 750; color: var(--save); letter-spacing: -0.02em; }
+  .opp .body { padding: 18px 24px; }
+  .opp .body p { margin: 0 0 12px; font-size: 15.5px; line-height: 1.6; color: var(--g-ink); }
+  .opp .more { font-size: 13px; color: var(--g-ink-3); }
+
+  /* progressive disclosure + next steps */
+  .deeper { margin-top: 30px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .deeper a { display: flex; gap: 12px; align-items: center; padding: 15px 18px; border: 1px solid var(--g-hairline); border-radius: 13px; background: var(--g-surface); text-decoration: none; color: inherit; box-shadow: var(--shadow-panel); transition: transform 0.15s; }
+  .deeper a:hover { transform: translateY(-2px); }
+  .deeper .di { width: 34px; height: 34px; border-radius: 9px; flex: none; display: grid; place-items: center; font-size: 15px; }
+  .deeper b { font-size: 13.5px; display: block; }
+  .deeper span { font-size: 11.5px; color: var(--g-ink-3); }
+
+  .cta { margin-top: 24px; text-align: center; }
+  .foot { margin-top: 30px; font-size: 12px; color: var(--g-ink-3); text-align: center; line-height: 1.6; }
+</style>
+</head>
+<body class="grain">
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="wordmark" href="15-start.html"><span class="mk"></span><b>‹ Start over</b></a>
+    <span class="client-crumb"><span class="cavatar" style="--chue:#56a3a0; width:28px; height:28px; font-size:11px">JA</span><span><b>Jordan Alvarez</b></span></span>
+    <div class="topbar-right">
+      <span class="chip"><span class="dot" style="background:var(--save)"></span> return verified</span>
+      <span class="kbd">⌘K</span>
+    </div>
+  </div>
+</header>
+
+<main class="read">
+
+  <div class="topline rise">
+    <span class="stamp stamp-verified" style="transform:none">✓ Read &amp; checked</span>
+    <span style="font-size:12.5px; color:var(--g-ink-3)">your 2025 return · the math matches what you filed, to the dollar</span>
+    <span class="reg"><a class="on" href="#">Plain English</a><a href="03-casefile.html">The detail</a></span>
+  </div>
+
+  <section class="rise d1">
+    <h1>Here’s your 2025 taxes,<br/>in plain English.</h1>
+    <p class="sub">No tax background needed. Tap <span class="whatis">what’s this?</span> on anything you want explained.</p>
+  </section>
+
+  <!-- the calm summary -->
+  <section class="summary rise d2">
+    <p>You brought in <b>$216,200</b> last year. After everything, <b>$47,428</b> went to taxes — about <b>22 cents</b> of every dollar. That’s normal for what you earn. <span style="color:var(--save)">The good news: you’re leaving about $9,170 a year on the table, and it’s fixable.</span></p>
+    <div class="rate-bar">
+      <div class="lab"><span>what you kept</span><span>what went to tax</span></div>
+      <div class="keep-bar">
+        <div class="keep" style="flex:78">$168,772 kept</div>
+        <div class="tax" style="flex:22">$47,428</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- the plain chapters -->
+  <section class="rise d3">
+    <div class="chapter">
+      <span class="n">1</span>
+      <div class="body">
+        <h3>What you brought in</h3>
+        <p>Your <b>$216,200</b> came from three places: your day job, your design studio, and the rental duplex. We pulled the studio’s number straight from your live books.</p>
+      </div>
+    </div>
+
+    <div class="chapter">
+      <span class="n">2</span>
+      <div class="body">
+        <h3>What you got to subtract</h3>
+        <p>Before tax is figured, you subtract some things — the standard deduction, plus a special <span class="whatis">20% business deduction</span> for your studio income. That brought the taxed amount down to <b>$191,980</b>.</p>
+      </div>
+    </div>
+
+    <div class="chapter">
+      <span class="n">3</span>
+      <div class="body">
+        <h3>How your income gets taxed — in layers</h3>
+        <p>Your income isn’t all taxed at one rate. It fills up <i>layers</i>: the first chunk at 10%, the next at 12%, and so on. Most of yours sits at <b>22% or less</b>. Only your last dollars reach 24%.</p>
+        <div class="plainbar">
+          <div class="bar">
+            <i style="background:var(--s10);flex:6"></i><i style="background:var(--s12);flex:13"></i><i style="background:var(--s22);flex:20"></i><i style="background:var(--s24);flex:24"></i><i style="background:var(--s32);flex:16;opacity:.2"></i><i style="background:var(--s35);flex:16;opacity:.18"></i><i style="background:var(--s37);flex:5;opacity:.18"></i>
+            <span class="you" style="left:49%"></span>
+          </div>
+          <div class="cap"><span>10%</span><span>↑ your income reaches about here</span><span>37%</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chapter">
+      <span class="n">4</span>
+      <div class="body">
+        <h3>The part most people miss</h3>
+        <p>The rate that matters for <i>planning</i> isn’t your average — it’s the tax on your <b>next</b> dollar. For you that’s really <b>about 33%</b>, not 24%, once a couple of extra charges are counted. <span class="whatis">what’s this?</span></p>
+        <div class="gloss">
+          <b>Your “next-dollar” rate.</b> If you earned one more dollar, about 33 cents would go to tax — your 24% bracket, plus a 2.9% Medicare piece on your business income, plus a 3.8% charge that kicks in over $200,000 of income. Knowing this is what makes good planning possible: it tells us exactly how much room you have before the next jump.
+        </div>
+      </div>
+    </div>
+
+    <div class="chapter">
+      <span class="n">5</span>
+      <div class="body">
+        <h3>The lines to watch</h3>
+        <p>A few invisible thresholds add tax the moment you cross them. You’re <b>$10,400 over</b> the first one (it adds a small investment charge), and you have <b>$7,150 of room</b> before your next bracket. We watch all of these for you.</p>
+      </div>
+    </div>
+
+    <div class="chapter">
+      <span class="n">6</span>
+      <div class="body">
+        <h3>Where you could do better</h3>
+        <p>You’re paying more than you need to in two ordinary ways — how your studio pays you, and an unopened retirement account. Both are fixable this year.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- the opportunity, plain -->
+  <section class="opp rise d3">
+    <div class="h">
+      <b>Your biggest opportunity</b>
+      <span class="amt">$9,170<span style="font-size:13px; color:var(--g-ink-3)">/year</span></span>
+    </div>
+    <div class="body">
+      <p><b>Open a retirement plan and pay yourself the right way.</b> Your studio is an S-corp, but you haven’t set up the retirement account that comes with it, and your salary is set a little high. Fixing both keeps about <b>$9,170</b> in your pocket every year — money you’re currently sending to the IRS for no reason.</p>
+      <p class="more">There are three smaller moves too (a health savings account, harvesting investment losses, and charitable timing). Your strategist laid them all out, biggest first — nothing here is exotic or risky.</p>
+    </div>
+  </section>
+
+  <!-- progressive disclosure: the dense surfaces are one tap away -->
+  <div class="deeper rise d4">
+    <a href="00-console.html">
+      <span class="di" style="background:var(--agent-soft); color:var(--agent)">✦</span>
+      <span><b>Ask about any of this</b><span>“why is my next-dollar rate 33%?”</span></span>
+    </a>
+    <a href="05-lab.html">
+      <span class="di" style="background:var(--wash-2); color:var(--g-ink-2)">▦</span>
+      <span><b>See the full analysis</b><span>the detailed numbers, brackets, and charts</span></span>
+    </a>
+  </div>
+
+  <div class="cta rise d4">
+    <a class="btn btn-seal" href="07-plan.html" style="padding:11px 22px; font-size:14px">Turn this into my plan →</a>
+  </div>
+
+  <div class="foot rise d5">
+    Every figure here was computed by a tax engine from your actual return — never estimated, never guessed.<br/>
+    This is planning, not a filed return.
+  </div>
+
+  <div class="spec-note rise d5" style="margin-top:30px">SPEC · The first-value payoff after import (15 → here). PLAIN LANGUAGE IS THE DEFAULT; every expert term carries a <span class="whatis">what’s this?</span> that expands a one-paragraph gloss in plain words (chapter 4 shows the pattern expanded). The “Plain English ⟷ The detail” toggle (top-right) is the progressive-disclosure spine: the SAME data renders here calmly and on the case file / lab densely — low floor, high ceiling, same room. The layer-bar is a plain restatement of the Position instrument (no rate labels shouted, no cliff pins — those live in the detailed view). Generated from the engines + an LLM that narrates in plain language but cannot change a number. Doubles as the firm’s client-facing education artifact (“Prepared for [client]”). Every chapter maps to a real engine section: 1 income · 2 deductions/QBI · 3 bracket walk · 4 true marginal (NIIT + add’l-Medicare) · 5 cliff radar · 6 opportunities/strategist.</div>
+
+</main>
+
+</body>
+</html>
