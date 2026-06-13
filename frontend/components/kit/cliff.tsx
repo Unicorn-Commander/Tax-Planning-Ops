@@ -10,19 +10,14 @@ import { Money } from "./primitives";
 import { Term } from "./term";
 
 /** The sheer-edge glyph: flat, then a vertical drop — the cliff, not a ramp. */
-function StepEdge({ proximity }: { proximity: number }) {
+function StepEdge({ proximity, soft }: { proximity: number; soft?: boolean }) {
   // proximity 0..1 = how close to the edge (1 = at it). Edge sits proximity-near the right.
   const x = 18 + Math.max(0, Math.min(1, proximity)) * 86;
+  const color = soft ? "var(--cost)" : "var(--cliff)";
   return (
     <svg width="120" height="26" viewBox="0 0 120 26" aria-hidden className="flex-none">
-      <path
-        d={`M2 7 H${x} V22 H118`}
-        fill="none"
-        stroke="var(--cliff)"
-        strokeWidth="1.5"
-        strokeLinejoin="miter"
-      />
-      <circle cx={x} cy="7" r="2.5" fill="var(--cliff)" />
+      <path d={`M2 7 H${x} V22 H118`} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="miter" />
+      <circle cx={x} cy="7" r="2.5" fill={color} />
     </svg>
   );
 }
@@ -33,6 +28,8 @@ export function CliffRow({
   thresholdCents,
   distanceCents,
   costOfCrossingCents,
+  costNote,
+  soft,
   mapping,
   binding = "below",
   className,
@@ -41,17 +38,23 @@ export function CliffRow({
   /** optional gloss key so the label carries a "what's this?" */
   glossKey?: Parameters<typeof Term>[0]["k"];
   thresholdCents: number;
-  /** how far below the line (positive) the client sits */
+  /** how far the client sits from the line (positive = below / room) */
   distanceCents: number;
-  /** the annual tax/premium hit if crossed */
-  costOfCrossingCents: number;
+  /** the annual tax/premium hit if crossed (a hard lump cliff) */
+  costOfCrossingCents?: number;
+  /** OR a marginal note, for a SOFT edge ("next $1 +8¢") instead of a lump */
+  costNote?: ReactNode;
+  /** soft edge (a bracket boundary / phase-in) vs a hard cliff */
+  soft?: boolean;
   /** IRMAA-style income-year → premium-year note */
   mapping?: string;
   /** which side is the binding constraint (underlined) */
   binding?: "below" | "cost";
   className?: string;
 }) {
-  const proximity = thresholdCents > 0 ? 1 - Math.min(1, distanceCents / thresholdCents) : 0.5;
+  const over = distanceCents < 0;
+  const proximity = thresholdCents > 0 ? 1 - Math.min(1, Math.abs(distanceCents) / thresholdCents) : 0.5;
+  const edgeTone = soft ? "tone-cost" : "tone-cliff";
   return (
     <div className={cn("flex items-center gap-4 border-t border-[var(--g-hairline-soft)] py-3 first:border-t-0", className)}>
       <div className="min-w-0 flex-1">
@@ -60,18 +63,18 @@ export function CliffRow({
         </div>
         {mapping ? <div className="mt-0.5 font-mono text-[10.5px] text-[var(--g-ink-3)]">{mapping}</div> : null}
       </div>
-      <StepEdge proximity={proximity} />
+      <StepEdge proximity={proximity} soft={soft} />
       <div className="flex flex-none items-baseline gap-5 text-right">
         <div>
-          <div className="microlabel">below</div>
-          <div className={cn("text-[13px]", binding === "below" && "underline decoration-[var(--cliff)] underline-offset-4")}>
-            <Money cents={distanceCents} />
+          <div className="microlabel">{over ? "over" : "below"}</div>
+          <div className={cn("text-[13px]", over && "tone-cliff", binding === "below" && "underline decoration-[var(--cliff)] underline-offset-4")}>
+            <Money cents={Math.abs(distanceCents)} />
           </div>
         </div>
         <div>
-          <div className="microlabel">crossing costs</div>
-          <div className={cn("text-[13px] tone-cliff", binding === "cost" && "underline decoration-[var(--cliff)] underline-offset-4")}>
-            <Money cents={costOfCrossingCents} />/yr
+          <div className="microlabel">{costNote ? "next dollar" : "crossing costs"}</div>
+          <div className={cn("text-[13px]", edgeTone, binding === "cost" && "underline decoration-[var(--cliff)] underline-offset-4")}>
+            {costNote ?? (costOfCrossingCents !== undefined ? <><Money cents={costOfCrossingCents} />/yr</> : "—")}
           </div>
         </div>
       </div>
