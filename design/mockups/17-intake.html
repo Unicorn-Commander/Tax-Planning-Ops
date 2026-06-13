@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tax-Planning-Ops — A few quick questions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/system.css" />
+<style>
+  /* The no-return on-ramp: a short, adaptive bootstrap. Plain language, one
+     thing at a time, only the questions an engine needs, each saying WHY it
+     matters. Ends in a rough starting picture + the nudge to add the real
+     return when ready. The opposite of a tax questionnaire wall.            */
+  .intake { max-width: 660px; margin: 0 auto; padding: 32px 24px 80px; }
+
+  /* progress: the engine fills in as you answer — questions left adapt */
+  .progress { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .progress .bar { flex: 1; height: 5px; border-radius: 99px; background: var(--wash-2); overflow: hidden; }
+  .progress .bar i { display: block; height: 100%; width: 66%; background: linear-gradient(90deg, var(--agent), #3fb985); border-radius: 99px; }
+  .progress .lab { font-family: var(--font-mono); font-size: 10.5px; color: var(--g-ink-3); }
+
+  .qcol { display: flex; flex-direction: column; gap: 14px; }
+
+  /* answered questions collapse to a quiet, editable line */
+  .done-q { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border: 1px solid var(--g-hairline-soft); border-radius: 12px; background: var(--g-surface); font-size: 13.5px; }
+  .done-q .tick { width: 20px; height: 20px; border-radius: 99px; background: var(--save-soft); color: var(--save); display: grid; place-items: center; font-size: 11px; flex: none; }
+  .done-q .a { margin-left: auto; font-weight: 600; }
+  .done-q .edit { color: var(--g-ink-3); font-size: 11.5px; margin-left: 12px; cursor: pointer; }
+
+  /* the active question — large, calm, one at a time */
+  .active-q { border: 1px solid var(--g-hairline); border-radius: 16px; background: var(--g-surface); box-shadow: var(--shadow-panel); padding: 26px 26px 22px; }
+  .active-q .step { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.08em; color: var(--agent); }
+  .active-q h2 { margin: 8px 0 4px; font-size: 23px; font-weight: 700; letter-spacing: -0.015em; }
+  .active-q .why { font-size: 13px; color: var(--g-ink-2); line-height: 1.5; }
+  .active-q .why b { color: var(--g-ink); }
+  .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
+  .choice { display: flex; align-items: center; gap: 11px; padding: 13px 15px; border: 1px solid var(--g-hairline); border-radius: 12px; background: var(--g-surface); cursor: pointer; font-size: 14px; font-weight: 500; transition: border-color 0.15s, background 0.15s; text-decoration: none; color: inherit; }
+  .choice:hover { border-color: color-mix(in srgb, var(--agent) 45%, transparent); background: var(--agent-soft); }
+  .choice.sel { border-color: var(--agent); background: var(--agent-soft); }
+  .choice .rk { width: 20px; height: 20px; border-radius: 99px; border: 1.5px solid var(--g-hairline); flex: none; }
+  .choice.sel .rk { border-color: var(--agent); background: var(--agent); box-shadow: inset 0 0 0 3px var(--g-surface); }
+  .reveal { margin-top: 12px; padding: 11px 14px; border-left: 2px solid color-mix(in srgb, var(--agent) 45%, transparent); background: var(--agent-soft); border-radius: 0 8px 8px 0; font-size: 12.5px; color: var(--g-ink-2); }
+  .reveal b { color: var(--agent); }
+  .active-q .nav { display: flex; align-items: center; gap: 10px; margin-top: 20px; }
+  .active-q .nav .skip { margin-left: auto; font-size: 12.5px; color: var(--g-ink-3); text-decoration: none; }
+
+  /* live: the starting picture the answers are building */
+  .building { margin-top: 22px; border: 1px dashed var(--g-hairline); border-radius: 14px; padding: 16px 18px; background: var(--g-bg-2); }
+  .building .bh { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; }
+  .building .row { display: flex; justify-content: space-between; font-size: 12.5px; padding: 4px 0; color: var(--g-ink-2); }
+  .building .row b { font-family: var(--font-mono); }
+  .building .row.pending { color: var(--g-ink-3); }
+  .building .pbar { display: flex; height: 22px; border-radius: 6px; overflow: hidden; gap: 2px; margin-top: 8px; position: relative; }
+  .building .pbar i { opacity: 0.75; }
+  .building .pbar .you { position: absolute; top: -4px; bottom: -4px; border-left: 2px solid var(--g-ink); }
+
+  .closer { margin-top: 22px; text-align: center; font-size: 12.5px; color: var(--g-ink-3); line-height: 1.6; }
+  .closer b { color: var(--g-ink-2); }
+</style>
+</head>
+<body class="grain">
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="wordmark" href="15-start.html"><span class="mk"></span><b>‹ Back</b></a>
+    <div class="topbar-right">
+      <a class="chip" href="16-explainer.html" style="text-decoration:none">I have my 1040 → upload instead</a>
+      <span class="kbd">⌘K</span>
+    </div>
+  </div>
+</header>
+
+<main class="intake">
+
+  <section class="rise" style="margin-bottom:18px">
+    <div class="progress">
+      <span class="lab">4 of ~6</span>
+      <div class="bar"><i></i></div>
+      <span class="lab">~1 min left</span>
+    </div>
+    <p style="font-size:13px; color:var(--g-ink-3); margin:6px 0 0">No tax return needed. We only ask what changes the answer — and we say why each one matters.</p>
+  </section>
+
+  <div class="qcol">
+    <!-- answered, collapsed + editable -->
+    <div class="done-q rise d1"><span class="tick">✓</span> Filing status <span class="a">Single</span><span class="edit">edit</span></div>
+    <div class="done-q rise d1"><span class="tick">✓</span> Roughly, your total income <span class="a">$200k–250k</span><span class="edit">edit</span></div>
+    <div class="done-q rise d1"><span class="tick">✓</span> Do you own a business? <span class="a">Yes — an LLC/S-corp</span><span class="edit">edit</span></div>
+
+    <!-- the active question -->
+    <div class="active-q rise d2">
+      <div class="step">QUESTION 4 · unlocked because you own a business</div>
+      <h2>How does your business pay you?</h2>
+      <p class="why">This is where business owners most often overpay. <b>How you take the money</b> — salary vs. owner draws — changes your tax by thousands, and it’s usually fixable.</p>
+      <div class="choices">
+        <a class="choice sel"><span class="rk"></span> A salary + owner distributions</a>
+        <a class="choice"><span class="rk"></span> Just owner draws / profit</a>
+        <a class="choice"><span class="rk"></span> A regular paycheck (W-2)</a>
+        <a class="choice"><span class="rk"></span> Not sure — explain it</a>
+      </div>
+      <div class="reveal"><b>Good — that means you have an S-corp lever.</b> We’ll check whether your salary is set in the sweet spot. (One more question after this about retirement, then you’re done.)</div>
+      <div class="nav">
+        <a class="btn btn-ink" href="#">Continue →</a>
+        <a class="skip" href="#">I don’t know — skip for now</a>
+      </div>
+    </div>
+
+    <!-- the picture being built, live -->
+    <section class="building rise d3">
+      <div class="bh"><span class="aavatar" style="--ahue:var(--agent); width:26px; height:26px; font-size:10px">S</span><span class="microlabel">Your starting picture · filling in as you answer</span></div>
+      <div class="row">Estimated income <b>~$220,000</b></div>
+      <div class="row">Estimated tax <b>~$46,000</b> <span style="color:var(--g-ink-3)">(±, until we see the return)</span></div>
+      <div class="row pending">Your bracket <b>building…</b></div>
+      <div class="pbar">
+        <i style="background:var(--s10);flex:6"></i><i style="background:var(--s12);flex:13"></i><i style="background:var(--s22);flex:20"></i><i style="background:var(--s24);flex:24"></i><i style="background:var(--s32);flex:16;opacity:.2"></i><i style="background:var(--s35);flex:16;opacity:.18"></i><i style="background:var(--s37);flex:5;opacity:.18"></i>
+        <span class="you" style="left:50%"></span>
+      </div>
+      <div class="row" style="margin-top:10px; color:var(--save)">Already spotted <b>1 likely opportunity</b> — your S-corp salary</div>
+    </section>
+
+    <div class="closer rise d4">
+      <b>This gets you a rough plan in about a minute.</b> When you’re ready, drop your real 1040 and every number becomes exact — to the dollar.<br/>
+      <a href="16-explainer.html" style="color:var(--agent); text-decoration:none; font-weight:600">Skip ahead with what I’ve got →</a>
+    </div>
+  </div>
+
+  <div class="spec-note rise d5" style="margin-top:30px">SPEC · The no-return on-ramp (from 15’s “answer 6 questions instead”). ADAPTIVE: questions only appear if an engine needs them — answering “I own a business” unlocked Q4; “no business” would skip straight to retirement + state. Each question states WHY it matters (and what it could unlock) — never a bare form field. Answered questions collapse to editable one-liners; the active one is large and singular. The “starting picture” builds live from the rough inputs (estimated, clearly flagged ±) and even surfaces a likely opportunity — momentum, not a wall. Always ends pointing back to the real-return path (exact beats estimated). Wires to: the engines on rough inputs → a provisional snapshot → 16/14. 6 questions max for a typical owner; fewer for a simple W-2 individual.</div>
+
+</main>
+
+</body>
+</html>

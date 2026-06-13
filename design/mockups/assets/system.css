@@ -489,6 +489,25 @@ a.chip:hover { background: var(--g-bg-2); color: var(--g-ink); }
 *::-webkit-scrollbar { width: 10px; height: 10px; }
 *::-webkit-scrollbar-thumb { background-color: #cfcabd; border-radius: 9999px; border: 2px solid transparent; background-clip: padding-box; }
 
+/* ----------------------------------------- plain-language on demand ------ */
+/* The global on-ramp rule: every expert TERM (not figure) carries a dotted
+   underline and reveals a one-sentence plain gloss on hover/tap. Distinct
+   from .prov (which explains how a NUMBER was computed): .term explains what
+   a CONCEPT means. Reused as tooltips on every dense surface's microlabels.  */
+.term { position: relative; cursor: help; text-decoration: underline dotted color-mix(in srgb, var(--agent) 55%, transparent); text-decoration-thickness: 1px; text-underline-offset: 3px; color: inherit; }
+.term > .gloss-pop { display: none; }
+.term:hover > .gloss-pop, .term.open > .gloss-pop { display: block; }
+.gloss-pop {
+  position: absolute; bottom: calc(100% + 9px); left: 0; z-index: 30;
+  width: 290px; padding: 12px 14px; border-radius: 11px;
+  background: var(--g-surface); border: 1px solid var(--g-hairline); box-shadow: var(--shadow-deep);
+  font-family: var(--font-ui); font-weight: 400; text-transform: none; letter-spacing: normal;
+  font-size: 12.5px; line-height: 1.5; color: var(--g-ink-2); cursor: default;
+}
+.gloss-pop .gt { display: block; font-weight: 700; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--agent); margin-bottom: 5px; }
+.gloss-pop b { color: var(--g-ink); }
+.gloss-pop::after { content: ""; position: absolute; top: 100%; left: 16px; border: 6px solid transparent; border-top-color: var(--g-surface); filter: drop-shadow(0 1px 0 var(--g-hairline)); }
+
 /* mockup-only: inline contract notes for the implementing agent */
 .spec-note {
   font-family: var(--font-mono); font-size: 10.5px; color: var(--g-ink-3);
