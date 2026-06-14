@@ -11,10 +11,10 @@
 //   GET /admin/tax-bracket-sets — for the Position micro-strata segment spans
 //
 //   GET /agents/realized-rollup — workspace realized counter (planned vs realized, % realized)
+//   GET /agents/matrix          — clients × strategy-category cells (engine-summed savings_cents per cell)
 //
 // Additive (spec §7-02, Honesty Protocol):
 //   EMR endpoint        — true marginal rate; v1 falls back to nominal bracket
-//   Matrix endpoint     — client × strategy cells; v1 renders from each client's opportunities list
 //
 // Per-surface integration TODO: frontend/INTEGRATION-TODO.02.md
 
@@ -29,7 +29,6 @@ import {
   Chip,
   Money,
   Cavatar,
-  WorkingDots,
   Button,
   Omnibar,
   PositionInstrument,
@@ -139,6 +138,29 @@ interface RealizedRollup {
   }>;
 }
 
+// GET /agents/matrix — clients × strategy-category grid (spec §9.8).
+// Each cell's savings_cents is the engine's summed per-strategy estimate;
+// rows inherit scan-book's opportunity rank (do NOT re-sort). column_totals
+// is positionally aligned to `categories`; cells also carry their own category.
+interface MatrixCell {
+  category: string;
+  savings_cents: number;
+  strategy_count: number;
+}
+interface MatrixRowWire {
+  client_id: string;
+  client_name: string;
+  client_tax_year_id: string;
+  total_savings_cents: number;
+  cells: MatrixCell[];
+}
+interface MatrixOut {
+  categories: string[];
+  rows: MatrixRowWire[];
+  column_totals: MatrixCell[];
+  grand_total_cents: number;
+}
+
 /* ---- helpers ------------------------------------------------------ */
 
 // Stage derivation from overview — matching spec §7-03 engagement pipeline
@@ -228,19 +250,11 @@ type View = "roster" | "matrix";
 /* ---- active filter ------------------------------------------------ */
 type FilterKey = "all" | "business" | "cliff" | "q2" | "goals";
 
-/* ---- matrix columns + categorizer (module scope: stable refs, so the useMemos
-       that call them don't need them in their dependency arrays) ---- */
-const MATRIX_COLS = [
-  { key: "retirement", label: "Retirement (Roth·401k·HSA)" },
-  { key: "entity", label: "Entity (S-corp·QBI agg)" },
-  { key: "charitable", label: "Bunch/DAF" },
-  { key: "tlh", label: "TLH" },
-  { key: "qsbs", label: "QSBS" },
-  { key: "relocation", label: "Relocation" },
-] as const;
-type ColKey = (typeof MATRIX_COLS)[number]["key"];
+/* ---- strategy categorizer (roster filter chips only; the matrix grid is now
+       served live by GET /agents/matrix and no longer derived client-side) ---- */
+type StrategyKind = "retirement" | "entity" | "charitable" | "tlh" | "qsbs" | "relocation" | null;
 
-function categorizeStrategy(name: string, category: string): ColKey | null {
+function categorizeStrategy(name: string, category: string): StrategyKind {
   const n = name.toLowerCase();
   const c = category?.toLowerCase() ?? "";
   if (n.includes("roth") || n.includes("401k") || n.includes("hsa") || n.includes("ira") || c.includes("retirement")) return "retirement";
@@ -252,18 +266,6 @@ function categorizeStrategy(name: string, category: string): ColKey | null {
   return null;
 }
 
-function matrixCells(ov: Overview | undefined): Partial<Record<ColKey, number>> {
-  if (!ov) return {};
-  const cells: Partial<Record<ColKey, number>> = {};
-  for (const s of ov.strategies) {
-    const col = categorizeStrategy(s.name, s.category);
-    if (col && s.estimated_savings_cents) {
-      cells[col] = (cells[col] ?? 0) + s.estimated_savings_cents;
-    }
-  }
-  return cells;
-}
-
 /* ================================================================== */
 export default function BookPage() {
   const [scan, setScan] = useState<ScanRow[] | null>(null);
@@ -271,6 +273,8 @@ export default function BookPage() {
   const [overviews, setOverviews] = useState<Record<string, Overview>>({});
   const [sets, setSets] = useState<BracketSet[] | null>(null);
   const [realized, setRealized] = useState<RealizedRollup | null>(null);
+  const [matrix, setMatrix] = useState<MatrixOut | null>(null);
+  const [matrixError, setMatrixError] = useState(false);
   const [view, setView] = useState<View>("roster");
   const [filter, setFilter] = useState<FilterKey>("all");
   const overviewsRef = useRef<Record<string, Overview>>({});
@@ -286,6 +290,11 @@ export default function BookPage() {
       .get<RealizedRollup>("/agents/realized-rollup")
       .then((r) => setRealized(r.data))
       .catch(() => setRealized(null));
+    // LIVE: clients × strategy-category matrix — every cell is an engine-summed savings figure
+    api
+      .get<MatrixOut>("/agents/matrix", { params: { limit: 50 } })
+      .then((r) => { setMatrix(r.data); setMatrixError(false); })
+      .catch(() => { setMatrix(null); setMatrixError(true); });
   }, []);
 
   /* ---- per-client overview fetch (fan-out as scan lands) ---- */
@@ -347,23 +356,20 @@ export default function BookPage() {
     return { identified, signed };
   }, [overviews]);
 
-  /* ---- matrix: strategy categories × clients (cols + categorizer live at module scope) ---- */
-  // TODO(integration: GET /agents/matrix) — full matrix endpoint; v1 derives from opportunities
+  /* ---- matrix: clients × strategy-categories — LIVE from GET /agents/matrix ---- */
+  // Column order is exactly what the endpoint returns; every cell value is an
+  // engine-summed savings_cents figure (no client-side recompute).
+  const matrixCategories = matrix?.categories ?? [];
 
-  // Column totals across all clients
+  // Column totals keyed by category (positionally aligned to `categories`, but
+  // we key by name so column lookups stay correct regardless of array order).
   const colTotals = useMemo(() => {
-    const totals: Partial<Record<ColKey, number>> = {};
-    for (const ov of Object.values(overviews)) {
-      const cells = matrixCells(ov);
-      for (const [k, v] of Object.entries(cells) as [ColKey, number][]) {
-        totals[k] = (totals[k] ?? 0) + v;
-      }
-    }
+    const totals: Record<string, MatrixCell> = {};
+    for (const c of matrix?.column_totals ?? []) totals[c.category] = c;
     return totals;
-    // matrixCells/categorizeStrategy are stable (defined in component body, no external deps)
-  }, [overviews]);
+  }, [matrix]);
 
-  const grandTotal = Object.values(colTotals).reduce((a, b) => a + (b ?? 0), 0);
+  const grandTotal = matrix?.grand_total_cents ?? 0;
 
   /* ---- empty / loading states ---- */
   const loading = scan === null || clients === null || sets === null;
@@ -508,114 +514,120 @@ export default function BookPage() {
         <section className="panel rise d3 mt-[22px]" id="matrix">
           <PanelHead>
             <MicroLabel>
-              The matrix · clients × strategies — every cell is a full recompute, not a lookup
+              The matrix · clients × strategies — every cell is the engine&rsquo;s summed savings, served live
             </MicroLabel>
             {/* TODO(integration: POST /admin/firm-templates) — save column set as house template */}
             <span className="chip ml-auto cursor-default">save column sets as the house template</span>
           </PanelHead>
-          <div className="overflow-x-auto">
-            <table className="ledger min-w-full font-mono text-[11.5px]">
-              <thead>
-                <tr>
-                  <th className="text-left font-[var(--font-ui)] text-[11.5px]">—</th>
-                  {MATRIX_COLS.map((c) => (
-                    <th key={c.key} className="r text-right">
-                      {c.label}
-                    </th>
-                  ))}
-                  <th className="r text-right">Σ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  [0, 1, 2].map((i) => (
-                    <tr key={i}>
-                      <td colSpan={MATRIX_COLS.length + 2}>
-                        <div className="skeleton my-1 h-[28px] w-full rounded-[4px]" />
-                      </td>
+          {/* LIVE: GET /agents/matrix — categories, rows, column_totals, grand_total all from the endpoint */}
+          {matrixError ? (
+            <div className="px-6 py-12 text-center">
+              <p className="text-[14px] font-semibold text-[var(--g-ink)]">Matrix unavailable</p>
+              <p className="mt-1 text-[12px] text-[var(--g-ink-3)]">
+                The book matrix could not be loaded. Re-scan the book to retry.
+              </p>
+            </div>
+          ) : matrix === null ? (
+            <div className="px-[18px] py-3">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="skeleton my-1 h-[28px] w-full rounded-[4px]" />
+              ))}
+            </div>
+          ) : matrix.rows.length === 0 || matrixCategories.length === 0 ? (
+            <div className="px-6 py-12 text-center">
+              <p className="text-[14px] font-semibold text-[var(--g-ink)]">No strategies across the book yet</p>
+              <p className="mt-1 text-[12px] text-[var(--g-ink-3)]">
+                Apply strategies on a client&rsquo;s plan and they&rsquo;ll roll up into the matrix here.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="ledger min-w-full font-mono text-[11.5px]">
+                  <thead>
+                    <tr>
+                      <th className="text-left font-[var(--font-ui)] text-[11.5px]">—</th>
+                      {matrixCategories.map((cat) => (
+                        <th key={cat} className="r text-right">
+                          {cat}
+                        </th>
+                      ))}
+                      <th className="r text-right">Σ</th>
                     </tr>
-                  ))
-                ) : (
-                  rankedIds.map((id) => {
-                    const ov = overviews[id];
-                    const sc = planScan[id];
-                    const name = ov?.client.display_name ?? clientMap[id]?.display_name ?? sc?.client_name ?? id;
-                    const cells = matrixCells(ov);
-                    const rowTotal = Object.values(cells).reduce((a, b) => a + (b ?? 0), 0);
-                    const signedIds = new Set((ov?.strategies ?? []).filter((s) => ["signed", "accepted", "implementing"].includes(s.disposition)).map((s) => s.id));
-                    const isSealed = signedIds.size > 0;
-                    const isRunning = !ov && sc; // overview still loading
-
-                    return (
-                      <tr key={id}>
-                        <td className="font-[var(--font-ui)]">
-                          {name}
-                          {isSealed ? " ⛁" : ""}
-                        </td>
-                        {isRunning ? (
-                          <td colSpan={MATRIX_COLS.length + 1} className="text-[var(--agent)]">
-                            <WorkingDots className="inline-flex" /> loading
+                  </thead>
+                  <tbody>
+                    {matrix.rows.map((row) => {
+                      // ⛁ = sealed: derived from the already-fetched overview when present
+                      // (the matrix endpoint doesn't carry disposition); absent = no marker.
+                      const ov = overviews[row.client_id];
+                      const isSealed = (ov?.strategies ?? []).some((s) =>
+                        ["signed", "accepted", "implementing"].includes(s.disposition),
+                      );
+                      const cellByCat = cellMap(row);
+                      return (
+                        <tr key={row.client_id}>
+                          <td className="font-[var(--font-ui)]">
+                            {row.client_name}
+                            {isSealed ? " ⛁" : ""}
                           </td>
-                        ) : !ov ? (
-                          <td
-                            colSpan={MATRIX_COLS.length}
-                            className="text-left text-[var(--g-ink-3)]"
-                          >
-                            awaiting baseline confirm
-                          </td>
-                        ) : (
-                          <>
-                            {MATRIX_COLS.map((col) => {
-                              const v = cells[col.key];
-                              if (!v) {
-                                return (
-                                  <td key={col.key} className="zero r text-right text-[var(--g-ink-3)]">
-                                    —
-                                  </td>
-                                );
-                              }
-                              const hot = v >= 100_000_00;
+                          {matrixCategories.map((cat) => {
+                            const cell = cellByCat[cat];
+                            const v = cell?.savings_cents ?? 0;
+                            if (v === 0) {
+                              // quiet cell — no strategy in this category for this client
                               return (
-                                <td
-                                  key={col.key}
-                                  className={`r text-right ${hot ? "font-semibold text-[var(--save)]" : "text-[var(--save)]"}`}
-                                  style={hot ? { background: "rgba(29,138,91,0.08)" } : undefined}
-                                >
-                                  {/* TODO(integration: GET /agents/matrix?client_id&strategy_col) — per-cell engine recompute */}
-                                  {formatK(v)}
-                                  {isSealed ? " ⛁" : ""}
+                                <td key={cat} className="zero r text-right text-[var(--g-ink-3)]">
+                                  —
                                 </td>
                               );
-                            })}
-                            <td className="r text-right text-[var(--save)]">
-                              <b>{formatK(rowTotal)}</b>
-                            </td>
-                          </>
-                        )}
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td className="font-[var(--font-ui)] font-semibold">Across the book</td>
-                  {MATRIX_COLS.map((c) => (
-                    <td key={c.key} className="r text-right font-semibold">
-                      {colTotals[c.key] ? formatK(colTotals[c.key]!) : "—"}
-                    </td>
-                  ))}
-                  <td className="r text-right font-semibold text-[var(--save)]">
-                    {grandTotal > 0 ? formatK(grandTotal) : "—"}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-          <p className="mx-[18px] mb-4 mt-3 font-mono text-[10px] text-[var(--g-ink-3)]">
-            SPEC · cell click → the engine delta for that client × strategy; ⛁ = signed/realized-tracking.
-            {/* TODO(integration: GET /agents/matrix) — v1 derives from opportunities lists */}
-          </p>
+                            }
+                            const hot = v >= 100_000_00;
+                            return (
+                              <td
+                                key={cat}
+                                className={`r text-right ${hot ? "font-semibold text-[var(--save)]" : "text-[var(--save)]"}`}
+                                style={hot ? { background: "rgba(29,138,91,0.08)" } : undefined}
+                                title={
+                                  cell && cell.strategy_count > 0
+                                    ? `${cell.strategy_count} strateg${cell.strategy_count === 1 ? "y" : "ies"} · ${centsToUSD(v)}`
+                                    : undefined
+                                }
+                              >
+                                {formatK(v)}
+                                {isSealed ? " ⛁" : ""}
+                              </td>
+                            );
+                          })}
+                          <td className="r text-right text-[var(--save)]">
+                            <b>{formatK(row.total_savings_cents)}</b>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td className="font-[var(--font-ui)] font-semibold">Across the book</td>
+                      {matrixCategories.map((cat) => {
+                        const t = colTotals[cat]?.savings_cents ?? 0;
+                        return (
+                          <td key={cat} className="r text-right font-semibold">
+                            {t > 0 ? formatK(t) : "—"}
+                          </td>
+                        );
+                      })}
+                      <td className="r text-right font-semibold text-[var(--save)]">
+                        {grandTotal > 0 ? formatK(grandTotal) : "—"}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <p className="mx-[18px] mb-4 mt-3 font-mono text-[10px] text-[var(--g-ink-3)]">
+                LIVE · GET /agents/matrix — each cell is the engine&rsquo;s summed per-strategy estimate; ⛁ = signed/realized-tracking.
+              </p>
+            </>
+          )}
         </section>
       ) : null}
 
@@ -962,6 +974,14 @@ function fmtPct(pct: string | number | null | undefined): string {
     return Number.isFinite(n) ? `${n.toFixed(1)}%` : "";
   }
   return Number.isFinite(pct) ? `${pct.toFixed(1)}%` : "";
+}
+
+/** A matrix row's cells keyed by category, for O(1) column lookup while
+ *  rendering against the endpoint's `categories` order. */
+function cellMap(row: MatrixRowWire): Record<string, MatrixCell> {
+  const m: Record<string, MatrixCell> = {};
+  for (const c of row.cells) m[c.category] = c;
+  return m;
 }
 
 /** Compact money: $1.8M / $112k / $9,170 */

@@ -12,8 +12,10 @@
 //   /lifecycle/journal?tail=20 (the ticker is the audit-journal tail; its
 //   chain_intact drives the "ledger verified" mark). The unsealed-plan queue
 //   items are derived from real plan state.
+// [live] GET /agents/registry (the duty band — the app's agent-backed capability
+//   roster with per-capability presence + last journal activity).
 // [additive] (honestly labeled): low-confidence-extraction queue items (need a
-//   per-client extraction list); the duty band (agent registry / presence).
+//   per-client extraction list).
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -22,7 +24,7 @@ import { centsToUSD } from "@/lib/format";
 import {
   Panel, PanelHead, MicroLabel, Annotation, Chip, Money, Cavatar, Aavatar, WorkingDots,
   MiniButton, Stamp, QueueItem, Ticker, Omnibar, PositionInstrument, hueForClient,
-  type Segment, type AgentKey,
+  AGENT_HUES, type Segment,
 } from "@/components/kit";
 
 /** Compact relative time for the journal ticker ("12s", "4m", "2h", "3d"). */
@@ -79,14 +81,36 @@ function buildSegments(sets: BracketSet[], year: number, filing: string): Segmen
   return rows.map((r, i) => ({ rate: Number(r.rate), fromCents: r.lower_bound_cents, toCents: r.upper_bound_cents ?? (i === rows.length - 1 ? cap : r.lower_bound_cents) }));
 }
 
-/* ---- [additive] duty band — agent registry has no endpoint yet (like Staff).
-   TODO(integration: GET /agents/registry) — render real presence/last-run. ---- */
-const DUTY: { key: AgentKey; name: string; role: string; doing: string; idle?: boolean }[] = [
-  { key: "strategist", name: "The Strategist", role: "memos · optimizers · engine-only figures", doing: "ready" },
-  { key: "clerk", name: "The Intake Clerk", role: "1040 vision OCR · field confidence", doing: "idle", idle: true },
-  { key: "bookrunner", name: "The Bookrunner", role: "book scan · opportunity ranking", doing: "book ranked", idle: true },
-  { key: "liaison", name: "The AO Liaison", role: "pulls P&L from the firm's books", doing: "federation ✓", idle: true },
-];
+/* ---- [live] duty band — GET /agents/registry. The app's agent-backed capability
+   roster; each capability's presence + last activity is derived from the audit
+   journal by the backend (status=available when the journal shows a mapped event,
+   else idle). ---- */
+interface RegistryAgent {
+  key: string;
+  name: string;
+  role: string;
+  kind: "engine" | "agent" | "service";
+  status: "available" | "idle";
+  last_event_at: string | null;
+  last_event_type: string | null;
+  capabilities: string[];
+}
+
+/** Tone the avatar/presence by kind: agents wear the strategist teal, engines &
+ *  services take a muted, kind-distinct hue. (The registry keys aren't the kit's
+ *  four AgentKeys, so we hue by kind rather than by key.) */
+function hueForKind(kind: RegistryAgent["kind"]): string {
+  if (kind === "agent") return AGENT_HUES.strategist;   // teal — the LLM-backed staff
+  if (kind === "service") return AGENT_HUES.clerk;      // steel-blue — extraction/service
+  return AGENT_HUES.bookrunner;                          // olive — deterministic engine
+}
+
+/** Humanize an audit event_type into "what it last did" ("memo.signed" →
+ *  "memo signed", "return_document_uploaded" → "return document uploaded"). */
+function lastDid(eventType: string | null): string {
+  if (!eventType) return "";
+  return eventType.replace(/[._]/g, " ");
+}
 
 const Q_NODES = [
   { label: "APR 15", q: 1 }, { label: "JUN 15", q: 2 }, { label: "SEP 15", q: 3 }, { label: "JAN 15", q: 4 },
@@ -100,8 +124,12 @@ export default function DeskPage() {
   const [sets, setSets] = useState<BracketSet[]>([]);
   const [pendingMemos, setPendingMemos] = useState<PendingMemo[]>([]);
   const [journal, setJournal] = useState<JournalTail | null>(null);
+  // [live] duty band roster (null = loading; [] = empty/unavailable → honest empty state)
+  const [duty, setDuty] = useState<RegistryAgent[] | null>(null);
 
   useEffect(() => { api.get("/clients").then((r) => setClients(Array.isArray(r.data) ? r.data : (r.data?.clients ?? []))).catch(() => setClients([])); }, []);
+  // [live] agent registry — the duty band's presence + last activity
+  useEffect(() => { api.get<{ agents: RegistryAgent[] }>("/agents/registry").then((r) => setDuty(Array.isArray(r.data?.agents) ? r.data.agents : [])).catch(() => setDuty([])); }, []);
   useEffect(() => { api.get("/admin/tax-bracket-sets").then((r) => setSets(r.data)).catch(() => setSets([])); }, []);
   // [live] drafted memos awaiting sign-off — folded into the queue below
   useEffect(() => { api.get<PendingMemo[]>("/memos/pending").then((r) => setPendingMemos(Array.isArray(r.data) ? r.data : [])).catch(() => setPendingMemos([])); }, []);
@@ -334,20 +362,42 @@ export default function DeskPage() {
 
         {/* ===== right column ===== */}
         <div className="flex flex-col gap-[22px]">
-          {/* duty band — [additive] fixture */}
+          {/* duty band — [live] GET /agents/registry */}
           <Panel className="rise d4">
             <PanelHead>
               <MicroLabel>On duty</MicroLabel>
               <Link href="/staff" className="chip agent ml-auto">Staff →</Link>
             </PanelHead>
-            {DUTY.map((a) => (
-              <div key={a.key} className="flex items-center gap-3 border-t border-[var(--g-hairline-soft)] px-[18px] py-3 first:border-t-0">
-                <Aavatar name={a.name} agent={a.key} idle={a.idle} />
-                <div><b className="block text-[13px] font-semibold">{a.name}</b><span className="text-[11.5px] text-[var(--g-ink-3)]">{a.role}</span></div>
-                <div className="ml-auto text-right text-[11.5px] text-[var(--g-ink-2)]">{a.doing}{!a.idle ? <WorkingDots className="ml-1" /> : null}</div>
-              </div>
-            ))}
-            <div className="border-t border-[var(--g-hairline-soft)] px-[18px] py-1.5 font-mono text-[10px] text-[var(--g-ink-3)]"><span className="tone-cost">[additive]</span> live presence from the agent registry</div>
+            {duty === null ? (
+              <div className="p-[18px]"><div className="skeleton h-14 w-full" /></div>
+            ) : duty.length === 0 ? (
+              <div className="px-[18px] py-7 text-center text-[12px] text-[var(--g-ink-3)]">No agents registered.</div>
+            ) : (
+              duty.map((a) => {
+                const idle = a.status === "idle";
+                const did = lastDid(a.last_event_type);
+                return (
+                  <div key={a.key} className="flex items-center gap-3 border-t border-[var(--g-hairline-soft)] px-[18px] py-3 first:border-t-0">
+                    <Aavatar name={a.name} hue={hueForKind(a.kind)} idle={idle} />
+                    <div className="min-w-0">
+                      <b className="block text-[13px] font-semibold">{a.name}</b>
+                      <span className="block truncate text-[11.5px] text-[var(--g-ink-3)]">{a.role}</span>
+                      {a.capabilities.length > 0 ? (
+                        <span className="mt-0.5 block truncate font-mono text-[10px] text-[var(--g-ink-3)]">{a.capabilities.join(" · ")}</span>
+                      ) : null}
+                    </div>
+                    <div className="ml-auto whitespace-nowrap text-right text-[11.5px] text-[var(--g-ink-2)]">
+                      {did ? (
+                        <>{did}{a.last_event_at ? <span className="ml-1 font-mono text-[10px] text-[var(--g-ink-3)]">{relTime(a.last_event_at)} ago</span> : null}{!idle ? <WorkingDots className="ml-1" /> : null}</>
+                      ) : (
+                        <span className="text-[var(--g-ink-3)]">idle</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+            <div className="border-t border-[var(--g-hairline-soft)] px-[18px] py-1.5 font-mono text-[10px] text-[var(--g-ink-3)]"><span className="tone-seal">[live]</span> presence + last activity from the agent registry (GET /agents/registry)</div>
           </Panel>
 
           {/* the season at a glance — real quarterly */}

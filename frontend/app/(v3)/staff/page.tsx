@@ -7,16 +7,24 @@
 // House rules HR-01…05. Audit chain verify chip.
 //
 // Live data wired:
+//   GET /agents/registry            — the agent-backed capability roster (name,
+//                                     role, kind, status, capabilities, last
+//                                     journal activity). Powers the agent cards.
+//   GET /agents/door-stats          — mutating journal events grouped by door
+//                                     (gui/console/mcp/api). Powers the door panel.
 //   GET /lifecycle/audit/verify     — { valid: boolean }
 //   GET /lifecycle/journal?tail=20  — real MCP traffic feed (hash-chained journal tail)
 //
-// Additive (spec §7-10, Honesty Protocol) — CLEARLY LABELED FIXTURES:
-//   Agent registry / status    — no backend endpoint yet (GET /agents/registry); FIXTURE_AGENTS
-//   Door usage counts          — no real counters yet (GET /agents/door-stats); FIXTURE_DOORS
+// Still additive (spec §7-10, Honesty Protocol) — CLEARLY LABELED FIXTURES:
+//   Header summary strip       — on-duty/actions-this-week/approval/inference
+//                                (GET /agents/registry/stats — not built yet)
+//   Ops recommendations        — GET /agents/recommendations (not built yet)
+//   Standing orders / autonomy dial / per-agent stats & decisions are design copy,
+//   not live per-agent data, so they are NOT rendered on the cards (Honesty Protocol).
 //
 // Per-surface integration TODO: frontend/INTEGRATION-TODO.10.md
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
 import {
@@ -28,7 +36,6 @@ import {
   Aavatar,
   MiniButton,
   Omnibar,
-  type AgentKey,
   AGENT_HUES,
 } from "@/components/kit";
 
@@ -76,141 +83,59 @@ function relTime(iso: string): string {
 }
 
 /* ------------------------------------------------------------------ */
-/* FIXTURE DATA — clearly labelled; replace when additive endpoints land */
+/* LIVE wire shapes — agent registry + door stats (spec §9.6)            */
 /* ------------------------------------------------------------------ */
 
-// TODO(integration: GET /agents/registry) — agent registry + status (spec §9.6)
-interface DialTier {
-  label: string;
-  actionClass?: string;
-  active: boolean;
-}
-interface AgentDecision {
-  text: string;
-  time: string;
-  tone?: "decline" | "escalate" | "act";
-}
-interface AgentStat {
-  value: string;
-  label: string;
-}
-interface AgentFixture {
-  key: AgentKey;
+// GET /agents/registry — the app's agent-backed capability roster. Each entry's
+// status + last activity is derived from the audit journal by the backend; it
+// never claims activity the journal lacks.
+interface RegistryAgent {
+  key: string;
   name: string;
-  modelLine: string;
-  standingOrders: string;
-  dial: DialTier[];
-  stats: AgentStat[];
-  decisions: AgentDecision[];
-  idle?: boolean;
+  role: string;
+  kind: "engine" | "agent" | "service";
+  status: "available" | "idle";
+  last_event_at: string | null;
+  last_event_type: string | null;
+  capabilities: string[];
 }
 
-const FIXTURE_AGENTS: AgentFixture[] = [
-  {
-    key: "strategist",
-    name: "The Strategist",
-    modelLine: "qwen3.6-35b · suite gateway · engines as tools · per-client memory",
-    standingOrders:
-      "Figures from engines only — never compose a number. Tie every finding to a stated goal. Pause and ask on any unverified input. Draft in the firm’s voice; the advisor signs.",
-    dial: [
-      { label: "observe", active: false },
-      { label: "propose · memos", active: true, actionClass: "memos" },
-      { label: "act w/ review", active: false },
-      { label: "act in bounds", active: false },
-    ],
-    stats: [
-      { value: "34", label: "runs / wk" },
-      { value: "94%", label: "findings accepted" },
-      { value: "41s", label: "avg run" },
-      { value: "14", label: "engine calls / run" },
-    ],
-    decisions: [
-      { text: "declined to size Webb’s conversion — basis unverified → asked instead", time: "17:18", tone: "decline" },
-      { text: "escalated: Nair RSU double-count suspicion in OCR vs W-2", time: "16:55", tone: "escalate" },
-    ],
-  },
-  {
-    key: "clerk",
-    name: "The Intake Clerk",
-    modelLine: "qwen3.6-vision (P40) → structurer · 200dpi 2-step · bbox provenance",
-    standingOrders:
-      "Read, never infer. Confidence routes review — sort lowest first. A field under 95% always gets a human eye. Recompute must match the return before baseline unlocks.",
-    dial: [
-      { label: "observe", active: false },
-      { label: "propose", active: false },
-      { label: "act w/ review · fields", active: true, actionClass: "fields" },
-      { label: "act in bounds", active: false },
-    ],
-    stats: [
-      { value: "11", label: "returns / wk" },
-      { value: "99.2%", label: "field accuracy" },
-      { value: "38s", label: "avg import" },
-      { value: "1", label: "awaiting your eye" },
-    ],
-    decisions: [
-      { text: "flagged Hartman 5b at 88% — handwriting over print, region attached", time: "16:12", tone: "escalate" },
-    ],
-    idle: true,
-  },
-  {
-    key: "bookrunner",
-    name: "The Bookrunner",
-    modelLine: "scan-book · ranks by FULL recompute · watches constants drift",
-    standingOrders:
-      "Re-rank nightly and after any law/constants change. Surface movers with the reason. Never rank by tax owed — rank by what we can still recover.",
-    dial: [
-      { label: "observe", active: false },
-      { label: "propose", active: false },
-      { label: "act w/ review", active: false },
-      { label: "act in bounds · scans", active: true, actionClass: "scans" },
-    ],
-    stats: [
-      { value: "6/6", label: "book ranked" },
-      { value: "2", label: "movers today" },
-      { value: "$1.88M", label: "identified open" },
-      { value: "nightly", label: "cadence" },
-    ],
-    decisions: [
-      { text: "re-ranked after 2026 IRMAA update — Cho +$2,140, reason attached", time: "17:31", tone: "act" },
-    ],
-    idle: true,
-  },
-  {
-    key: "liaison",
-    name: "The AO Liaison",
-    modelLine: "Accounting-Ops P&L · KC mint → Brigade RFC-8693 → AO · read-only",
-    standingOrders:
-      "Pull on monthly close + on demand. Propose entity updates, never write them. Stamp every figure with its as-of date. HIPAA workspaces are off-limits by policy.",
-    dial: [
-      { label: "observe", active: false },
-      { label: "propose · applies", active: true, actionClass: "applies" },
-      { label: "act w/ review", active: false },
-      { label: "act in bounds", active: false },
-    ],
-    stats: [
-      { value: "2", label: "entities linked" },
-      { value: "17:02", label: "last pull" },
-      { value: "300s", label: "token ttl" },
-      { value: "viewer", label: "AO role cap" },
-    ],
-    decisions: [
-      { text: "pulled Alvarez Studio YTD $31,440 — 12% under plan pace → proposed re-projection", time: "17:02", tone: "act" },
-    ],
-    idle: true,
-  },
-];
+// GET /agents/door-stats — mutating journal events grouped by the door they came
+// through, within a window. Counts mutating audit events, NOT all traffic.
+interface DoorCount {
+  door: string;
+  count: number;
+}
+interface DoorStats {
+  total: number;
+  by_door: DoorCount[];
+  window_days: number;
+}
+
+// Tone an agent by kind: agents wear the strategist teal; engines & services take
+// a muted, kind-distinct hue. (Registry keys aren't the kit's four AgentKeys.)
+function hueForKind(kind: RegistryAgent["kind"]): string {
+  if (kind === "agent") return AGENT_HUES.strategist;
+  if (kind === "service") return AGENT_HUES.clerk;
+  return AGENT_HUES.bookrunner;
+}
+
+// Humanize an audit event_type ("memo.signed" → "memo signed").
+function humanizeEvent(eventType: string | null): string {
+  if (!eventType) return "";
+  return eventType.replace(/[._]/g, " ");
+}
+
+// Human label for a door key; unknown values surface verbatim.
+const DOOR_LABELS: Record<string, string> = {
+  gui: "GUI — the app",
+  console: "Console — you",
+  mcp: "MCP — agents & Claude",
+  api: "API — services",
+};
 
 // LIVE: GET /lifecycle/journal?tail=20 powers the MCP traffic feed (rows built
-// from real JournalEvents below). No fixture remains for the feed.
-
-// TODO(integration: GET /agents/door-stats) — real door usage counts (spec §9.6)
-interface DoorFixture {
-  id: string;
-  label: ReactNode;
-  value: ReactNode;
-  detail: string;
-  hot?: boolean;
-}
+// from real JournalEvents below).
 
 /* ------------------------------------------------------------------ */
 /* HOUSE RULES — static design copy (not data)                          */
@@ -232,6 +157,9 @@ export default function StaffPage() {
   const [auditValid, setAuditValid] = useState<boolean | null>(null);
   const [auditLoading, setAuditLoading] = useState(true);
   const [journal, setJournal] = useState<JournalEvent[] | null>(null);
+  // LIVE: agent registry + door stats (null = loading; [] / null on error)
+  const [agents, setAgents] = useState<RegistryAgent[] | null>(null);
+  const [doors, setDoors] = useState<DoorStats | null>(null);
 
   // LIVE: GET /lifecycle/audit/verify
   useEffect(() => {
@@ -250,33 +178,29 @@ export default function StaffPage() {
       .catch(() => setJournal([]));
   }, []);
 
-  // Door fixture values built here so JSX is available
-  const FIXTURE_DOORS: DoorFixture[] = [
-    {
-      id: "console",
-      label: "Console — you",
-      value: <span className="text-[22px] font-[750]">4</span>,
-      detail: "awaiting sign-off · every client-facing artifact passes here",
-    },
-    {
-      id: "mcp",
-      label: "MCP — agents & Claude",
-      value: (
-        <span className="text-[22px] font-[750]">
-          182
-          <span className="text-[12px] text-[var(--g-ink-3)]"> calls today</span>
-        </span>
-      ),
-      detail: "21 tools · top: scan_book, strategist, analysis · Brigade-discoverable",
-      hot: true,
-    },
-    {
-      id: "api",
-      label: "API — services",
-      value: <span className="text-[22px] font-[750]">37</span>,
-      detail: "AO federation reads · PDF renders · service tokens, scope-capped",
-    },
-  ];
+  // LIVE: GET /agents/registry — the agent cards
+  useEffect(() => {
+    api
+      .get<{ agents: RegistryAgent[] }>("/agents/registry")
+      .then((r) => setAgents(Array.isArray(r.data?.agents) ? r.data.agents : []))
+      .catch(() => setAgents([]));
+  }, []);
+
+  // LIVE: GET /agents/door-stats — the door-usage panel (mutating events, 30d)
+  useEffect(() => {
+    api
+      .get<DoorStats>("/agents/door-stats", { params: { window_days: 30 } })
+      .then((r) => setDoors(r.data))
+      .catch(() => setDoors(null));
+  }, []);
+
+  // Doors to render: live by_door if present, else the four known doors at zero
+  // so the panel stays legible before any mutating action exists.
+  const doorRows: DoorCount[] =
+    doors?.by_door && doors.by_door.length > 0
+      ? doors.by_door
+      : (["gui", "console", "mcp", "api"] as const).map((door) => ({ door, count: 0 }));
+  const doorMax = Math.max(1, ...doorRows.map((d) => d.count));
 
   const auditChip = auditLoading ? (
     <span className="chip text-[var(--g-ink-3)]">audit chain … verifying</span>
@@ -295,49 +219,81 @@ export default function StaffPage() {
       <section className="rise flex flex-wrap items-baseline gap-[14px]">
         <h1 className="m-0 text-[30px] font-[750] leading-none tracking-[-0.02em]">The Staff</h1>
         <Annotation>staff, not features — named, scoped, accountable, and on the record</Annotation>
-        {/* FIXTURE — additive; real figures come from agent registry (spec §9.6) */}
-        {/* TODO(integration: GET /agents/registry/stats) — on-duty count, weekly actions, approval rate, inference cost */}
-        <div className="ml-auto flex gap-[20px] text-[12.5px] text-[var(--g-ink-3)]">
-          <span>on duty <b className="text-[var(--g-ink)]">4</b></span>
-          <span>actions this week <b className="text-[var(--g-ink)]">312</b></span>
-          <span>approved <b className="text-[var(--g-ink)]">96%</b></span>
-          <span>inference this month <b className="fig text-[var(--g-ink)]">$0.00 — local</b></span>
+        {/* on-duty is LIVE from the registry; the rest of this strip
+            (weekly actions / approval / inference) needs GET /agents/registry/stats,
+            which is not built yet — kept and labeled fixture (Honesty Protocol). */}
+        {/* TODO(integration: GET /agents/registry/stats) — weekly actions, approval rate, inference cost */}
+        <div className="ml-auto flex items-baseline gap-[20px] text-[12.5px] text-[var(--g-ink-3)]">
+          <span>on duty <b className="text-[var(--g-ink)]">{agents ? agents.filter((a) => a.status === "available").length : "—"}</b></span>
+          <span className="opacity-70">actions this week <b className="text-[var(--g-ink)]">312</b></span>
+          <span className="opacity-70">approved <b className="text-[var(--g-ink)]">96%</b></span>
+          <span className="opacity-70">inference this month <b className="fig text-[var(--g-ink)]">$0.00 — local</b></span>
+          <span className="font-mono text-[10px] text-[var(--cost)]">[fixture]</span>
         </div>
       </section>
 
-      {/* ---- fixture banner (Honesty Protocol) ---- */}
-      <div className="rise d1 mt-3 rounded-[10px] border border-[color-mix(in_srgb,var(--cost)_35%,transparent)] bg-[color-mix(in_srgb,var(--cost)_5%,transparent)] px-4 py-2.5 font-mono text-[10.5px] text-[var(--cost)]">
-        [fixture] Agent registry and door stats are rendered from static fixture data.
-        {" "}The audit chain chip and the live MCP traffic feed are wired live
-        {" "}(GET /lifecycle/audit/verify · GET /lifecycle/journal?tail=20).
-        {" "}Replace remaining fixtures when GET /agents/registry + GET /agents/door-stats land (spec §9.6).
+      {/* ---- honesty banner (Honesty Protocol) ---- */}
+      <div className="rise d1 mt-3 rounded-[10px] border border-[color-mix(in_srgb,var(--save)_30%,transparent)] bg-[color-mix(in_srgb,var(--save)_6%,transparent)] px-4 py-2.5 font-mono text-[10.5px] text-[var(--g-ink-2)]">
+        <span className="tone-save">[live]</span> Agent cards (GET /agents/registry), door usage (GET /agents/door-stats),
+        {" "}the audit-chain chip (GET /lifecycle/audit/verify) and the MCP traffic feed (GET /lifecycle/journal?tail=20) all read real state.
+        {" "}<span className="tone-cost">[fixture]</span> The header&apos;s weekly-actions / approval / inference figures and the ops recommendations below
+        {" "}still await GET /agents/registry/stats + GET /agents/recommendations (spec §9.6).
       </div>
 
-      {/* ---- agent crew (2-column grid) ---- */}
-      <div className="rise d2 mt-5 grid grid-cols-1 gap-[22px] md:grid-cols-2" style={{ alignItems: "start" }}>
-        {FIXTURE_AGENTS.map((agent, i) => (
-          <AgentCard key={agent.key} agent={agent} delay={i + 1} />
-        ))}
-      </div>
+      {/* ---- agent crew (2-column grid) — [live] GET /agents/registry ---- */}
+      {agents === null ? (
+        <div className="rise d2 mt-5 grid grid-cols-1 gap-[22px] md:grid-cols-2">
+          <div className="skeleton h-[180px] w-full rounded-[14px]" />
+          <div className="skeleton h-[180px] w-full rounded-[14px]" />
+        </div>
+      ) : agents.length === 0 ? (
+        <Panel className="rise d2 mt-5 px-5 py-8">
+          <div className="text-center text-[13px] text-[var(--g-ink-3)]">No agents registered for this workspace.</div>
+        </Panel>
+      ) : (
+        <div className="rise d2 mt-5 grid grid-cols-1 gap-[22px] md:grid-cols-2" style={{ alignItems: "start" }}>
+          {agents.map((agent, i) => (
+            <AgentCard key={agent.key} agent={agent} delay={i + 1} />
+          ))}
+        </div>
+      )}
 
-      {/* ---- the three doors ---- */}
+      {/* ---- the doors — [live] GET /agents/door-stats ---- */}
       <Panel className="rise d5 mt-[22px]">
         <PanelHead>
-          <MicroLabel>The doors · humans, agents, and services enter the same engine through the same gate</MicroLabel>
+          <MicroLabel>The doors · actions by door (last {doors?.window_days ?? 30} days) — humans, agents & services enter the same engine through the same gate</MicroLabel>
           <span className="ml-auto">{auditChip}</span>
         </PanelHead>
-        {/* door cells */}
-        <div className="grid grid-cols-3">
-          {FIXTURE_DOORS.map((door) => (
-            <div
-              key={door.id}
-              className={`border-l border-[var(--g-hairline-soft)] px-5 py-4 first:border-l-0 ${door.hot ? "bg-[rgba(17,130,123,0.05)]" : ""}`}
-            >
-              <b className="block text-[14px]">{door.label}</b>
-              <div className="mt-2">{door.value}</div>
-              <div className="mt-[3px] text-[11px] text-[var(--g-ink-3)]">{door.detail}</div>
-            </div>
-          ))}
+        {/* door cells — counts of MUTATING audit events per door (not all traffic).
+            Static grid (Tailwind JIT can't see a computed col count). */}
+        <div className="grid grid-cols-2 sm:grid-cols-4">
+          {doorRows.map((door) => {
+            const label = DOOR_LABELS[door.door] ?? door.door;
+            const pct = Math.round((door.count / doorMax) * 100);
+            const hot = door.door === "mcp" && door.count > 0;
+            return (
+              <div
+                key={door.door}
+                className={`border-l border-t border-[var(--g-hairline-soft)] px-5 py-4 first:border-l-0 sm:border-t-0 ${hot ? "bg-[rgba(17,130,123,0.05)]" : ""}`}
+              >
+                <b className="block text-[14px]">{label}</b>
+                <div className="mt-2 flex items-baseline gap-1.5">
+                  <span className="fig text-[22px] font-[750]">{door.count}</span>
+                  <span className="text-[11px] text-[var(--g-ink-3)]">events</span>
+                </div>
+                {/* proportion bar across the doors */}
+                <div className="mt-2 h-[5px] w-full overflow-hidden rounded-full bg-[var(--g-hairline-soft)]">
+                  <div className="h-full rounded-full bg-[var(--agent)]" style={{ width: `${pct}%` }} />
+                </div>
+                <div className="mt-[5px] text-[11px] text-[var(--g-ink-3)]">
+                  {door.count === 0 ? "no mutating actions yet" : `${doors?.total ? Math.round((door.count / doors.total) * 100) : 0}% of mutating actions`}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="border-t border-[var(--g-hairline-soft)] px-5 py-1.5 font-mono text-[10px] text-[var(--g-ink-3)]">
+          <span className="tone-save">[live]</span> GET /agents/door-stats — counts <b>mutating</b> audit events (memo signs, confirms, plan writes…) stamped with their door, not all read traffic.
         </div>
         {/* traffic feed — LIVE: GET /lifecycle/journal?tail=20 (hash-chained journal tail) */}
         <div className="font-mono text-[10.5px]">
@@ -347,7 +303,7 @@ export default function StaffPage() {
             </div>
           ) : journal.length === 0 ? (
             <div className="border-t border-[var(--g-hairline-soft)] px-5 py-[7px] text-[var(--g-ink-3)]">
-              no journal events yet — actions across the three doors will appear here
+              no journal events yet — actions across the doors will appear here
             </div>
           ) : (
             journal.map((ev) => (
@@ -401,28 +357,32 @@ export default function StaffPage() {
 }
 
 /* ------------------------------------------------------------------ */
-/* AGENT CARD                                                            */
+/* AGENT CARD — [live] one registry capability + its journal activity    */
 /* ------------------------------------------------------------------ */
 
-function AgentCard({ agent, delay }: { agent: AgentFixture; delay: number }) {
-  const ahue = AGENT_HUES[agent.key];
+function AgentCard({ agent, delay }: { agent: RegistryAgent; delay: number }) {
+  const idle = agent.status === "idle";
+  const did = humanizeEvent(agent.last_event_type);
 
   return (
-    <section
-      className={`panel agentcard rise d${delay}`}
-    >
+    <section className={`panel agentcard rise d${delay}`}>
       {/* top: avatar + identity + talk button */}
       <div className="flex gap-[14px] px-[20px] pb-[12px] pt-[18px]">
         <Aavatar
           name={agent.name}
-          hue={ahue}
-          idle={agent.idle}
+          hue={hueForKind(agent.kind)}
+          idle={idle}
           className="!h-[46px] !w-[46px] !text-[17px]"
         />
         <div className="min-w-0 flex-1">
-          <b className="block text-[16px] leading-tight tracking-[-0.01em]">{agent.name}</b>
-          <span className="mt-0.5 block font-mono text-[11.5px] text-[var(--g-ink-3)]">
-            {agent.modelLine}
+          <div className="flex items-center gap-2">
+            <b className="block text-[16px] leading-tight tracking-[-0.01em]">{agent.name}</b>
+            <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--g-ink-3)]">{agent.kind}</span>
+          </div>
+          <span className="mt-0.5 block text-[12px] leading-snug text-[var(--g-ink-2)]">{agent.role}</span>
+          <span className={`mt-1 inline-flex items-center gap-1 font-mono text-[10px] ${idle ? "text-[var(--g-ink-3)]" : "tone-agent"}`}>
+            <i className={`h-[6px] w-[6px] rounded-full ${idle ? "bg-[var(--g-ink-3)]" : "bg-[var(--agent)]"}`} />
+            {agent.status}
           </span>
         </div>
         <MiniButton go href="/console" className="flex-none self-start">
@@ -430,78 +390,31 @@ function AgentCard({ agent, delay }: { agent: AgentFixture; delay: number }) {
         </MiniButton>
       </div>
 
-      {/* standing orders */}
-      <div className="mx-[20px] rounded-[9px] border border-dashed border-[var(--g-hairline)] px-[13px] py-[10px] text-[12px] leading-[1.6] text-[var(--g-ink-2)]">
-        <span className="mr-[6px] font-mono text-[var(--g-ink-3)]">§</span>
-        {agent.standingOrders}
-      </div>
-
-      {/* autonomy dial */}
-      <div className="mx-[20px] mt-[12px] overflow-hidden rounded-[9px] border border-[var(--g-hairline)]">
-        <div className="flex text-center text-[10px] font-semibold">
-          {agent.dial.map((tier, i) => (
-            <span
-              key={i}
-              className={`flex-1 border-l border-[var(--g-hairline-soft)] px-[4px] py-[6px] first:border-l-0 ${
-                tier.active
-                  ? "bg-[rgba(17,130,123,0.13)] text-[var(--agent)]"
-                  : "text-[var(--g-ink-3)]"
-              }`}
-            >
-              {tier.label}
+      {/* capabilities — what this capability can actually do (from the roster) */}
+      {agent.capabilities.length > 0 ? (
+        <div className="mx-[20px] flex flex-wrap gap-1.5">
+          {agent.capabilities.map((cap) => (
+            <span key={cap} className="rounded-full border border-[var(--g-hairline)] bg-[var(--g-surface)] px-[9px] py-[3px] font-mono text-[10px] text-[var(--g-ink-2)]">
+              {cap}
             </span>
           ))}
         </div>
-      </div>
+      ) : null}
 
-      {/* stats strip */}
-      <div className="mt-[4px] flex border-t border-[var(--g-hairline-soft)]">
-        {agent.stats.map((stat, i) => (
-          <div
-            key={i}
-            className="flex-1 border-l border-[var(--g-hairline-soft)] px-[20px] py-[10px] first:border-l-0"
-          >
-            <b className="block text-[15px]">{stat.value}</b>
-            <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--g-ink-3)]">{stat.label}</span>
-          </div>
-        ))}
+      {/* last activity — derived from the audit journal by the backend */}
+      <div className="mt-[14px] flex items-baseline gap-[10px] border-t border-[var(--g-hairline-soft)] px-[20px] py-[10px] text-[12px] text-[var(--g-ink-2)]">
+        <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--g-ink-3)]">last activity</span>
+        {did ? (
+          <>
+            <span className="flex-1 leading-relaxed tone-agent">{did}</span>
+            {agent.last_event_at ? (
+              <span className="ml-auto whitespace-nowrap font-mono text-[9.5px] text-[var(--g-ink-3)]">{relTime(agent.last_event_at)} ago</span>
+            ) : null}
+          </>
+        ) : (
+          <span className="flex-1 leading-relaxed text-[var(--g-ink-3)]">no recorded activity yet</span>
+        )}
       </div>
-
-      {/* recent decisions (incl. declines & escalations) */}
-      {agent.decisions.map((dec, i) => (
-        <DecisionRow key={i} decision={dec} />
-      ))}
     </section>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* DECISION ROW                                                          */
-/* ------------------------------------------------------------------ */
-
-function DecisionRow({ decision }: { decision: AgentDecision }) {
-  const glyph =
-    decision.tone === "decline"
-      ? "↳ declined:"
-      : decision.tone === "escalate"
-      ? "↳ escalated:"
-      : "↳";
-
-  return (
-    <div className="flex items-baseline gap-[10px] border-t border-[var(--g-hairline-soft)] px-[20px] py-[9px] text-[12px] text-[var(--g-ink-2)]">
-      <span
-        className={
-          decision.tone === "decline"
-            ? "text-[var(--cost)] font-mono text-[10px]"
-            : decision.tone === "escalate"
-            ? "text-[var(--cliff)] font-mono text-[10px]"
-            : "font-mono text-[10px] text-[var(--g-ink-3)]"
-        }
-      >
-        {glyph}
-      </span>
-      <span className="flex-1 leading-relaxed">{decision.text}</span>
-      <span className="ml-auto whitespace-nowrap font-mono text-[9.5px] text-[var(--g-ink-3)]">{decision.time}</span>
-    </div>
   );
 }

@@ -14,9 +14,13 @@
 // The findings, savings, prose, and trajectory are real engine output; the
 // document Sheet renders them. The gold seal is backed by the audit chain.
 //
+// LIVE: firm branding is read from GET /admin/branding (firm_name → letterhead,
+//   advisor_signature → sign-off). When branding is unset the endpoint returns a
+//   null body and we fall back to the default firm name; the authoritative signer
+//   of record (memo.signed_by) always wins on a sealed memo.
+//
 // [additive] (honestly marked, never faked):
 //   - the literal engine-call trace + plan stream (the payload has no call list)
-//   - firm branding (GET /admin/branding) — default shown, TODO at the call site
 //   - the Technical⟷Client-friendly register transform
 // LLM narrates, engines compute — the model cannot invent a figure.
 
@@ -83,14 +87,22 @@ interface MemoState {
   latest_run: StrategistRun | null;
 }
 
-// TODO(integration: GET /admin/branding) — firm letterhead; default until it lands
-const FIRM_NAME = "Northstar Tax Advisory";
+/* ---- firm branding (GET /admin/branding) ---- */
+interface Branding {
+  firm_name: string | null;
+  logo_blob_key: string | null;
+  primary_color: string | null;
+  advisor_signature: string | null;
+}
+// Fallback letterhead name when branding is unset (endpoint returns null body).
+const DEFAULT_FIRM_NAME = "Northstar Tax Advisory";
 const exhibitLetter = (i: number) => String.fromCharCode(65 + i);
 const shortHash = (h: string) => (h.length > 16 ? `${h.slice(0, 16)}…` : h);
 
 export default function MemoPage() {
   const { overview, loading } = useClientOverview();
   const [state, setState] = useState<MemoState | null>(null);
+  const [branding, setBranding] = useState<Branding | null>(null);
   const [hidden, setHidden] = useState<Set<number>>(new Set());
   // The advisor's working draft body, mirrored locally so the textarea is
   // controlled; seeded from the persisted memo, saved back on blur.
@@ -125,6 +137,17 @@ export default function MemoPage() {
     if (taxYearId) void load.run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taxYearId]);
+
+  // Firm branding for the letterhead + sign-off (global, fetched once on mount).
+  // A 200 with a null body means branding is unset → we fall back to the default.
+  useEffect(() => {
+    let alive = true;
+    api
+      .get<Branding | null>("/admin/branding")
+      .then((r) => { if (alive) setBranding(r.data); })
+      .catch(() => { if (alive) setBranding(null); });
+    return () => { alive = false; };
+  }, []);
 
   // Run the strategist for real → persists a run + ensures a draft memo.
   const runStrategist = useAction(async () => {
@@ -201,6 +224,8 @@ export default function MemoPage() {
 
   const client = overview.client;
   const taxYear = planYear.tax_year;
+  // Letterhead firm name from branding, falling back to the default when unset.
+  const firmName = branding?.firm_name || DEFAULT_FIRM_NAME;
   const findings = run?.findings ?? [];
   const visibleFindings = findings.filter((_, i) => !hidden.has(i));
   const savingsFindings = visibleFindings.filter((f) => f.impact_kind === "savings");
@@ -300,7 +325,7 @@ export default function MemoPage() {
           {/* the sheet */}
           <Sheet className="px-[58px] py-[52px]">
             <Letterhead
-              firm={<>{FIRM_NAME} <span className="ml-2 font-[var(--font-ui)] text-[10px] tracking-[0.14em] text-[var(--p-ink-3)]">MEMORANDUM</span></>}
+              firm={<>{firmName} <span className="ml-2 font-[var(--font-ui)] text-[10px] tracking-[0.14em] text-[var(--p-ink-3)]">MEMORANDUM</span></>}
               docRef={`${client.display_name} · ${taxYear}${memo ? ` · v${memo.version}` : ""}`}
             />
             <div className="mt-5 grid grid-cols-2 gap-x-8 gap-y-2 text-[13px]">
@@ -415,7 +440,7 @@ export default function MemoPage() {
             <div className="mt-9">
               <SignoffBlock
                 signed={isSigned}
-                signer={isSigned ? (memo?.signed_by ?? "you") : undefined}
+                signer={isSigned ? (memo?.signed_by ?? branding?.advisor_signature ?? "you") : undefined}
                 date={isSigned && memo?.signed_at ? `sealed ${new Date(memo.signed_at).toLocaleDateString()}` : undefined}
                 hash={isSigned && memo?.content_hash ? shortHash(memo.content_hash) : undefined}
                 auditRef={isSigned && memo?.audit_event_id ? `audit ${memo.audit_event_id.slice(0, 8)}` : undefined}

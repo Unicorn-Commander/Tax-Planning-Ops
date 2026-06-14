@@ -14,15 +14,18 @@
 // [live] Simplified position (3 marks max): client overview bracket snapshot.
 // [live] Keep/identified plate: the signed run's identified savings.
 //
+// [live] Branding: the letterhead firm name is read from GET /admin/branding
+//   (null body when unset → fall back to the default firm name).
+// [live] Fee-net framing: GET /admin/engagements/{clientId}/fee supplies the
+//   operator-set fee. When a fee is on file we frame the signed run's identified
+//   savings net of that fee (saved $X against a $Y fee → net $Z). When no fee is
+//   on file (null), we say so honestly — no fee figure is invented or hardcoded.
+//
 // [additive] Everything below is HONESTLY LABELED (per Honesty Protocol):
-//   - fee-net framing (the "123 : 1" ratio): fee config endpoint not yet built.
 //   - Client-friendly narrative text per finding: the register transform
 //     (additive per spec §7-06) is not built; we show recommended_action as-is.
 //   - Calendar steps: derived from finding categories; the tasks model
 //     (spec §9.4) would supply statutory deadlines.
-//
-// TODO(integration: GET /admin/branding) — firm name; default until it lands.
-// TODO(integration: GET /admin/engagements/{clientId}/fee) — fee for net framing.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -79,8 +82,31 @@ interface MemoState {
   latest_run: StrategistRun | null;
 }
 
-// TODO(integration: GET /admin/branding) — firm name; default until it lands.
-const FIRM_NAME = "Northstar Tax Advisory";
+/* ---- firm branding (GET /admin/branding) ---- */
+interface Branding {
+  firm_name: string | null;
+  logo_blob_key: string | null;
+  primary_color: string | null;
+  advisor_signature: string | null;
+}
+// Fallback letterhead name when branding is unset (endpoint returns null body).
+const DEFAULT_FIRM_NAME = "Northstar Tax Advisory";
+
+/* ---- the engagement fee (GET /admin/engagements/{client_id}/fee) ---- */
+type FeeBasis = "flat" | "aum" | "hourly" | "value";
+interface EngagementFee {
+  id: string;
+  client_id: string;
+  fee_cents: number;
+  fee_basis: FeeBasis;
+  fee_note: string | null;
+}
+const FEE_BASIS_LABEL: Record<FeeBasis, string> = {
+  flat: "flat, no surprises",
+  aum: "% of assets",
+  hourly: "hourly",
+  value: "value-based",
+};
 
 /* ---- the four plate ids ---- */
 type PlateId = "cover" | "position" | "moves" | "keep";
@@ -93,6 +119,8 @@ export default function PresentPage() {
   // clientId is provided by the ClientOverviewProvider in the (theater) layout.
   const { clientId, overview, loading } = useClientOverview();
   const [state, setState] = useState<MemoState | null>(null);
+  const [branding, setBranding] = useState<Branding | null>(null);
+  const [fee, setFee] = useState<EngagementFee | null>(null);
   const [sLoading, setSLoading] = useState(false);
   const [plateIndex, setPlateIndex] = useState(0);
   const deckRef = useRef<HTMLDivElement>(null);
@@ -115,6 +143,28 @@ export default function PresentPage() {
       .catch(() => setState(null))
       .finally(() => setSLoading(false));
   }, [taxYearId]);
+
+  // Firm branding for the letterhead (global; 200+null body when unset → default).
+  useEffect(() => {
+    let alive = true;
+    api
+      .get<Branding | null>("/admin/branding")
+      .then((r) => { if (alive) setBranding(r.data); })
+      .catch(() => { if (alive) setBranding(null); });
+    return () => { alive = false; };
+  }, []);
+
+  // The operator-set engagement fee for net-of-fee framing. 200+null body means
+  // no fee is on file → we keep an honest "fee not set" state and never invent one.
+  useEffect(() => {
+    if (!clientId) return;
+    let alive = true;
+    api
+      .get<EngagementFee | null>(`/admin/engagements/${clientId}/fee`)
+      .then((r) => { if (alive) setFee(r.data); })
+      .catch(() => { if (alive) setFee(null); });
+    return () => { alive = false; };
+  }, [clientId]);
 
   // Present from the SIGNED memo only. latest_run is the run the latest memo was
   // built from, so it lines up with latest_memo's body when that memo is signed.
@@ -207,9 +257,14 @@ export default function PresentPage() {
   const clientName = client?.display_name ?? "Your client";
   const taxYear = planYear?.tax_year ?? 2025;
   const totalSavings = run?.total_savings_identified_cents ?? 0;
-  // TODO(integration: GET /admin/engagements/{clientId}/fee) — fee config not built.
-  // The fee-net framing is ADDITIVE (spec §9 / §7-13). We show no fee figure until
-  // the endpoint exists. Never invent or hardcode a fee dollar.
+  // Letterhead firm name from branding, falling back to the default when unset.
+  const firmName = branding?.firm_name || DEFAULT_FIRM_NAME;
+  // Net-of-fee framing: the savings are the signed run's identified figure; the
+  // fee is operator-supplied. We only subtract — no tax figure is computed here.
+  // When no fee is on file (fee === null) we keep an honest "fee not set" state.
+  const feeCents = fee?.fee_cents ?? null;
+  const netOfFeeCents =
+    feeCents !== null && totalSavings > 0 ? totalSavings - feeCents : null;
 
   // ===== honest empty state: nothing signed yet =====
   if (!signedMemo || !run) {
@@ -330,7 +385,7 @@ export default function PresentPage() {
           onKeyDown={(e) => e.key === "Enter" && setPlateIndex(0)}
         >
           <Letterhead
-            firm={<>{FIRM_NAME}</>}
+            firm={<>{firmName}</>}
             docRef={`PREPARED FOR ${clientName.toUpperCase()} · ${taxYear}`}
           />
 
@@ -367,12 +422,21 @@ export default function PresentPage() {
           {totalSavings > 0 ? (
             <div className="nof" style={{ fontSize: 15, color: "var(--p-ink-2)" }}>
               identified across {taxYear}&ndash;{taxYear + 4} &middot; every figure computed, none estimated
-              {/* TODO(integration: GET /admin/engagements/{clientId}/fee) — fee-net framing
-                  is additive (spec §9 / §7-13). When the fee endpoint lands, show:
-                  net of [fee]: [net savings] stays with you — [ratio] : 1 */}
-              <span className="ml-2 font-mono text-[10px]" style={{ color: "var(--p-ink-3)" }}>
-                [fee-net framing: additive — see INTEGRATION-TODO.13.md]
-              </span>
+              {feeCents !== null && netOfFeeCents !== null ? (
+                <span style={{ display: "block", marginTop: 6 }}>
+                  net of our {centsToUSD(feeCents)} fee:{" "}
+                  <b style={{ color: "var(--p-save)" }}>{centsToUSD(netOfFeeCents)}</b> stays with you
+                  {feeCents > 0 ? (
+                    <span className="ml-2 font-mono text-[11px]" style={{ color: "var(--p-ink-3)" }}>
+                      {(totalSavings / feeCents).toFixed(0)} : 1
+                    </span>
+                  ) : null}
+                </span>
+              ) : (
+                <span style={{ display: "block", marginTop: 6, fontSize: 13, color: "var(--p-ink-3)" }}>
+                  fee not set &mdash; net-of-fee framing appears once the engagement fee is on file
+                </span>
+              )}
             </div>
           ) : null}
 
@@ -504,25 +568,30 @@ export default function PresentPage() {
               marginTop: 26,
             }}
           >
-            {/* fee side — additive (no fee endpoint yet) */}
+            {/* fee side — LIVE from GET /admin/engagements/{clientId}/fee */}
             <div
               style={{
                 padding: "24px 28px",
                 borderRight: "1px solid var(--p-hairline)",
               }}
             >
-              <MicroLabel style={{ color: "var(--p-ink-3)" }}>Our fee &mdash; flat, no surprises</MicroLabel>
-              {/* TODO(integration: GET /admin/engagements/{clientId}/fee) — additive */}
+              <MicroLabel style={{ color: "var(--p-ink-3)" }}>
+                {fee ? `Our fee${FEE_BASIS_LABEL[fee.fee_basis] ? ` — ${FEE_BASIS_LABEL[fee.fee_basis]}` : ""}` : "Our fee"}
+              </MicroLabel>
               <div
                 className="fig-serif"
                 style={{ fontFamily: "var(--font-ui)", fontWeight: 800, fontSize: 40, letterSpacing: "-0.03em" }}
               >
-                <span className="font-mono" style={{ fontSize: 13, color: "var(--p-ink-3)" }}>
-                  [additive — fee endpoint not built]
-                </span>
+                {fee ? centsToUSD(fee.fee_cents) : (
+                  <span className="font-mono" style={{ fontSize: 13, color: "var(--p-ink-3)" }}>
+                    fee not set
+                  </span>
+                )}
               </div>
               <p style={{ fontSize: 13, margin: "8px 0 0", color: "var(--p-ink-2)" }}>
-                plan + implementation support + quarterly reviews
+                {fee?.fee_note
+                  ? fee.fee_note
+                  : "plan + implementation support + quarterly reviews"}
               </p>
             </div>
             {/* savings side — LIVE from the signed run */}
@@ -548,6 +617,18 @@ export default function PresentPage() {
             </div>
           </div>
 
+          {/* net-of-fee line — honest framing; only when a fee is on file */}
+          {netOfFeeCents !== null && feeCents !== null ? (
+            <p style={{ fontSize: 15, margin: "16px 0 0", color: "var(--p-ink-2)" }}>
+              {centsToUSD(totalSavings)} identified against a {centsToUSD(feeCents)} fee &mdash;{" "}
+              <b style={{ color: "var(--p-save)" }}>net {centsToUSD(netOfFeeCents)}</b> stays with you.
+            </p>
+          ) : totalSavings > 0 ? (
+            <p style={{ fontSize: 13.5, margin: "16px 0 0", color: "var(--p-ink-3)" }}>
+              Set the engagement fee to show the net-of-fee figure here.
+            </p>
+          ) : null}
+
           {/* calendar steps — derived from finding categories */}
           <CalendarSteps findings={topFindings} taxYear={taxYear} />
 
@@ -558,7 +639,7 @@ export default function PresentPage() {
           >
             Every dollar figure on these pages was computed by deterministic tax engines from
             your filed {taxYear} return and current law ({taxYear} constants, verified).
-            Prepared by {FIRM_NAME} &middot; this is planning, not a filed return.
+            Prepared by {firmName} &middot; this is planning, not a filed return.
             {signedMemo.signed_at ? (
               <>
                 {" "}Reviewed and signed{signedMemo.signed_by ? ` by ${signedMemo.signed_by}` : ""} on{" "}
