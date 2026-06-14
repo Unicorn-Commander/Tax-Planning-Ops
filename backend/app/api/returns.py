@@ -3,7 +3,9 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.auth import require_scopes
 from app.core.config import Settings, get_settings
@@ -74,6 +76,24 @@ async def post_form1040_document(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
+
+
+@router.get("/extracted-returns", response_model=list[ExtractedReturnRead])
+async def list_extracted_returns(
+    client_id: UUID,
+    _ctx: AuthContext = Depends(require_scopes(("taxplan:advisor",))),
+    db: AsyncSession = Depends(get_tenant_db),
+) -> list[ExtractedReturn]:
+    """Extracted returns for a client (one per tax year). RLS scopes to the
+    workspace; we additionally filter to the requested client."""
+    rows = await db.scalars(
+        select(ExtractedReturn)
+        .join(ClientTaxYear, ExtractedReturn.client_tax_year_id == ClientTaxYear.id)
+        .where(ClientTaxYear.client_id == client_id)
+        .options(selectinload(ExtractedReturn.fields))
+        .order_by(ExtractedReturn.created_at.desc())
+    )
+    return list(rows.all())
 
 
 @router.get("/extracted-returns/{extracted_return_id}", response_model=ExtractedReturnRead)

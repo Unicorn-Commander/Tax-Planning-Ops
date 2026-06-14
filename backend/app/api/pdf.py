@@ -3,6 +3,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import require_scopes
@@ -24,6 +25,22 @@ async def put_branding(
 ) -> dict[str, str]:
     branding = await upsert_branding(db, workspace_id=ctx.workspace_id, payload=payload)
     return {"id": str(branding.id)}
+
+
+@router.get("/plans/{plan_tax_year_id}/pdf", response_model=list[PlanDocumentOut])
+async def list_plan_pdfs(
+    plan_tax_year_id: UUID,
+    _ctx: AuthContext = Depends(require_scopes(("taxplan:advisor",))),
+    db: AsyncSession = Depends(get_tenant_db),
+) -> list[PlanDocument]:
+    """Versioned, hashed plan PDFs for a plan year (newest first). RLS scopes
+    to the workspace. POST generates a new version; GET lists what's stored."""
+    rows = await db.scalars(
+        select(PlanDocument)
+        .where(PlanDocument.client_tax_year_id == plan_tax_year_id)
+        .order_by(PlanDocument.version.desc())
+    )
+    return list(rows.all())
 
 
 @router.post("/plans/{plan_tax_year_id}/pdf", response_model=PlanDocumentOut)
