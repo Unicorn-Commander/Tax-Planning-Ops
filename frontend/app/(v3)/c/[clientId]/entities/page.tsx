@@ -81,7 +81,7 @@ interface BusinessSection {
   half_se_deduction_cents: number;
   qbi_deduction_cents: number;
   qbi_per_business: QbiPerBusiness[];
-  assumptions?: string | null;
+  assumptions?: string[] | string | null;
 }
 
 type Maybe<T> = T | { available: false; reason?: string };
@@ -806,11 +806,15 @@ export default function EntitiesPage() {
               }
             />
           </div>
-          {biz.assumptions ? (
-            <p className="border-t border-[var(--g-hairline-soft)] px-5 py-3 font-mono text-[10.5px] text-[var(--g-ink-3)]">
-              {biz.assumptions}
-            </p>
-          ) : null}
+          {(() => {
+            // backend sends assumptions as string[]; join (handle string/empty too)
+            const a = Array.isArray(biz.assumptions) ? biz.assumptions : biz.assumptions ? [biz.assumptions] : [];
+            return a.length > 0 ? (
+              <p className="border-t border-[var(--g-hairline-soft)] px-5 py-3 font-mono text-[10.5px] text-[var(--g-ink-3)]">
+                {a.join(" · ")}
+              </p>
+            ) : null;
+          })()}
         </Panel>
       ) : null}
 
