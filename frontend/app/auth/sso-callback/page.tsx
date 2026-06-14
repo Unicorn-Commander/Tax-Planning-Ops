@@ -27,7 +27,8 @@ function CallbackInner() {
         };
         localStorage.setItem("user", JSON.stringify(user));
         setUser(user);
-        router.replace("/dashboard");
+        // v3: land on the posture resolver (→ Desk for a firm, Your Plan for solo)
+        router.replace("/");
       })
       .catch(() => {
         localStorage.removeItem("access_token");

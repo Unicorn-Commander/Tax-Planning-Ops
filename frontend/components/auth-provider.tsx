@@ -29,7 +29,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         setUser(JSON.parse(userJson) as User);
         if (pathname === "/auth/login") {
-          router.replace("/dashboard");
+          // v3: land on the posture resolver (→ Desk for a firm, Your Plan for solo)
+          router.replace("/");
         }
         return;
       } catch {
