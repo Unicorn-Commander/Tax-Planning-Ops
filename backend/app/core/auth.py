@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid5
 
 from fastapi import HTTPException, Request, status
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
@@ -14,6 +14,17 @@ from app.integrations.keycloak import KeycloakVerifier
 from app.schemas.auth import AuthContext
 
 WORKSPACE_HEADER = "X-Workspace-Id"
+
+# Stable namespace for deriving a self-serve workspace from a user's subject.
+# A UC user with no explicit workspace claim becomes the advisor of their OWN
+# deterministic workspace (uuid5 of `sub`) — auto-provisioned by ensure_workspace
+# and isolated by RLS. This is what makes the suite SSO genuinely multi-user:
+# any authenticated UC user can transact in their own isolated tenant without an
+# out-of-band provisioning step, while managed/firm workspaces still require an
+# explicitly granted workspace_id + taxplan role.
+_SELF_SERVE_WS_NAMESPACE = UUID("d5f7e2a0-7c3b-4e6a-9f1d-7461782d706c")
+# Baseline scope a self-serve user holds WITHIN their own derived workspace.
+_SELF_SERVE_SCOPES = frozenset({"taxplan:advisor"})
 
 
 def _scopes_from_claims(claims: dict[str, Any]) -> set[str]:
@@ -50,15 +61,32 @@ def _claim_workspace_ids(claims: dict[str, Any]) -> tuple[UUID | None, set[UUID]
     return primary, ids
 
 
+def derive_self_serve_workspace(claims: dict[str, Any]) -> UUID | None:
+    """The deterministic own-workspace a token self-serves into, or None.
+
+    Returns None when the token carries an explicit workspace claim (a managed
+    or firm workspace) — those still require an explicitly granted role. When
+    there is NO workspace claim, any authenticated subject gets their own
+    `uuid5(sub)` workspace (stable, unique, RLS-isolated, auto-provisioned)."""
+    _, authorized = _claim_workspace_ids(claims)
+    if authorized:
+        return None
+    sub = claims.get("sub")
+    return uuid5(_SELF_SERVE_WS_NAMESPACE, str(sub)) if sub else None
+
+
 def resolve_workspace_id(
     claims: dict[str, Any], header_workspace_id: str | None
 ) -> tuple[UUID, set[UUID]]:
     primary, authorized = _claim_workspace_ids(claims)
     if not authorized:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="workspace claim missing",
-        )
+        derived = derive_self_serve_workspace(claims)
+        if derived is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="workspace claim missing",
+            )
+        primary, authorized = derived, {derived}
     if header_workspace_id:
         selected = UUID(str(header_workspace_id))
     else:
@@ -108,6 +136,12 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             workspace_id, authorized = resolve_workspace_id(
                 claims, request.headers.get(WORKSPACE_HEADER)
             )
+            scopes = _scopes_from_claims(claims)
+            # Self-serve: a UC user with no explicit workspace claim is the
+            # advisor of their own derived workspace (RLS-isolated). Managed /
+            # firm workspaces still require an explicitly granted taxplan role.
+            if derive_self_serve_workspace(claims) is not None:
+                scopes = scopes | _SELF_SERVE_SCOPES
             entitled = await check_entitlement(workspace_id, self.settings)
             if not entitled:
                 raise HTTPException(
@@ -118,7 +152,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 uc_uid=str(claims.get("uc_uid") or claims.get("sub") or ""),
                 workspace_id=workspace_id,
                 authorized_workspace_ids=authorized,
-                scopes=_scopes_from_claims(claims),
+                scopes=scopes,
             )
         except HTTPException as exc:
             return JSONResponse(
