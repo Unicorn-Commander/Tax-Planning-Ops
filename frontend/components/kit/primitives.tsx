@@ -10,11 +10,11 @@ import { hueForClient, type AgentKey, AGENT_HUES, type Tone } from "./tokens";
 export type Vars = CSSProperties & Record<`--${string}`, string | number>;
 
 /* ---------------- text ---------------- */
-export function MicroLabel({ children, className }: { children: ReactNode; className?: string }) {
-  return <span className={cn("microlabel", className)}>{children}</span>;
+export function MicroLabel({ children, className, style }: { children: ReactNode; className?: string; style?: CSSProperties }) {
+  return <span className={cn("microlabel", className)} style={style}>{children}</span>;
 }
-export function Annotation({ children, className }: { children: ReactNode; className?: string }) {
-  return <span className={cn("annotation", className)}>{children}</span>;
+export function Annotation({ children, className, style }: { children: ReactNode; className?: string; style?: CSSProperties }) {
+  return <span className={cn("annotation", className)} style={style}>{children}</span>;
 }
 /** The brand mark: the marginal-rate spectrum as a hairline rule. */
 export function StrataLine({ className, style }: { className?: string; style?: CSSProperties }) {
@@ -102,6 +102,7 @@ export function Chip({
   tone = "neutral",
   icon,
   className,
+  style,
   children,
   href,
   onClick,
@@ -109,6 +110,7 @@ export function Chip({
   tone?: ChipTone;
   icon?: ReactNode;
   className?: string;
+  style?: CSSProperties;
   children: ReactNode;
   href?: string;
   onClick?: () => void;
@@ -120,9 +122,9 @@ export function Chip({
       {children}
     </>
   );
-  if (href) return <a className={cls} href={href}>{inner}</a>;
-  if (onClick) return <button type="button" className={cls} onClick={onClick}>{inner}</button>;
-  return <span className={cls}>{inner}</span>;
+  if (href) return <a className={cls} style={style} href={href}>{inner}</a>;
+  if (onClick) return <button type="button" className={cls} style={style} onClick={onClick}>{inner}</button>;
+  return <span className={cls} style={style}>{inner}</span>;
 }
 
 /* ---------------- stamp ----------------
