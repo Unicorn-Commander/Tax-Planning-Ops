@@ -349,7 +349,14 @@ async def generate_strategist_memo(
                 st_cfg,
             ).total_state_tax_cents
 
-    corp_tax = aggregate_for_comprehensive(entities).corporate_tax_cents if entities else 0
+    corp_tax = 0
+    if entities:
+        _corp_agg = aggregate_for_comprehensive(
+            entities,
+            state=client.primary_state if client else None,
+            tax_year=tax_year.tax_year,
+        )
+        corp_tax = _corp_agg.corporate_tax_cents + _corp_agg.state_corporate_tax_cents
     findings.extend(
         goal_aware_findings(
             profile=profile,

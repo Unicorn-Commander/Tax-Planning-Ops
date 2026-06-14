@@ -85,7 +85,11 @@ async def get_client_analysis(
     # Business entities fold into the comprehensive return: their income joins
     # Schedule 1, SE tax + the ½-SE deduction apply, and §199A QBI is computed.
     entities = await list_entities(db, client_tax_year_id=tax_year_id)
-    agg = aggregate_for_comprehensive(entities)
+    agg = aggregate_for_comprehensive(
+        entities,
+        state=client.primary_state if client else None,
+        tax_year=tax_year.tax_year,
+    )
     # C-corp salaries → 1040 wages; C-corp dividends → qualified (and ordinary)
     # dividends. The corporate tax is added separately as the integrated total.
     comp_form1040 = inputs.model_copy(
@@ -143,7 +147,10 @@ async def get_client_analysis(
             # C-corp double tax: the corporation's own 21% tax sits on top of the
             # owner's personal tax on salary + dividends.
             "corporate_tax_cents": agg.corporate_tax_cents,
-            "integrated_total_tax_cents": comp.total_tax_cents + agg.corporate_tax_cents,
+            "state_corporate_tax_cents": agg.state_corporate_tax_cents,
+            "integrated_total_tax_cents": (
+                comp.total_tax_cents + agg.corporate_tax_cents + agg.state_corporate_tax_cents
+            ),
             "has_c_corp": agg.has_c_corp,
             "assumptions": comp.assumptions,
         }
@@ -171,7 +178,10 @@ async def get_client_analysis(
                 "state_tax_cents": st.total_state_tax_cents,
                 "state_marginal_rate": str(st.marginal_rate),
                 "federal_plus_state_total_cents": (
-                    comp.total_tax_cents + agg.corporate_tax_cents + st.total_state_tax_cents
+                    comp.total_tax_cents
+                    + agg.corporate_tax_cents
+                    + agg.state_corporate_tax_cents
+                    + st.total_state_tax_cents
                 ),
                 "assumptions": st.assumptions,
             }

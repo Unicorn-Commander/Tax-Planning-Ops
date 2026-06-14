@@ -15,10 +15,23 @@ from app.engines.qbi import QBIConfig, QBIThreshold
 from app.engines.scorp import SCorpConfig
 from app.engines.se_tax import SETaxConfig
 
-# State C-corp income-tax rates (flat-rate states), keyed by state. SC = 5.0% on
-# SC taxable income (SC Dept. of Revenue, C-Corporation). The license fee is a
-# separate non-income levy and is not represented here. Extend as states are added.
-STATE_CORPORATE_RATES: dict[str, str] = {"SC": "0.05"}
+# State C-corp income-tax rates (top marginal / flat rate), keyed by state, for
+# TY2025. SC = 5.0% on SC taxable income (SC Dept. of Revenue, C-Corporation);
+# the SC license fee is a separate non-income levy and is not represented here.
+# Where a state grades its corporate rate, the TOP marginal rate is used (a
+# planning approximation). States with NO corporate income tax are intentionally
+# absent so state_corporate_config(_for) returns None: SD, WY, OH (CAT gross-
+# receipts, not income), WA (B&O gross-receipts), NV (commerce tax), TX
+# (franchise/margin tax — not a corporate income tax). Extend as states are added.
+STATE_CORPORATE_RATES: dict[str, str] = {
+    "SC": "0.05",
+    "AL": "0.065", "AR": "0.043", "CO": "0.044", "CT": "0.075", "DE": "0.087",
+    "DC": "0.0825", "HI": "0.064", "IA": "0.071", "ID": "0.05695", "IN": "0.049",
+    "KS": "0.065", "KY": "0.05", "LA": "0.055", "MD": "0.0825", "ME": "0.0893",
+    "MI": "0.06", "MN": "0.098", "MO": "0.04", "MS": "0.05", "MT": "0.0675",
+    "NE": "0.052", "NM": "0.059", "ND": "0.0431", "OK": "0.04", "OR": "0.076",
+    "RI": "0.07", "UT": "0.045", "VT": "0.085", "WI": "0.079", "WV": "0.0651",
+}
 
 
 def state_corporate_config(state: str, tax_year: int) -> StateCorporateConfig | None:

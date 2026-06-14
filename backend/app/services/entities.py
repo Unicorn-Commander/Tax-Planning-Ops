@@ -18,7 +18,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.engine_configs import ty2025_corporate_config, ty2025_qbi_config, ty2025_se_tax_config
-from app.engines.corporate import CorporateTaxInput, calculate_corporate_tax
+from app.engines.corporate import (
+    CorporateTaxInput,
+    calculate_corporate_tax,
+    calculate_state_corporate_tax,
+)
 from app.engines.passthrough import (
     PartnershipK1Entity,
     PassthroughInput,
@@ -33,6 +37,7 @@ from app.integrations.accounting_ops import fetch_pl
 from app.models.entity import BusinessEntity
 from app.schemas.entity import BusinessEntityIn
 from app.services.audit import append_audit_event
+from app.year_configs import state_corporate_config_for
 
 
 async def list_entities(
@@ -194,12 +199,18 @@ class BusinessAggregation(BaseModel):
     owner_wages_add_cents: int = 0  # C-corp salaries → 1040 wages
     owner_qualified_dividends_cents: int = 0  # C-corp dividends → 1040 qual div
     corporate_tax_cents: int = 0
+    # State corporate income tax on the C-corp(s) — populated when the corp's
+    # state is known (e.g. a SC C-corp pays SC's 5% on top of the federal 21%).
+    state_corporate_tax_cents: int = 0
     has_c_corp: bool = False
 
 
-def aggregate_for_comprehensive(entities: list[BusinessEntity]) -> BusinessAggregation:
+def aggregate_for_comprehensive(
+    entities: list[BusinessEntity], *, state: str | None = None, tax_year: int = 2025
+) -> BusinessAggregation:
     if not entities:
         return BusinessAggregation()
+    state_corp_cfg = state_corporate_config_for(state.upper(), tax_year) if state else None
     pt = aggregate_passthrough(_to_passthrough_input(entities))
     agg = BusinessAggregation(
         se_base_cents=pt.total_se_earnings_base_cents,
@@ -227,6 +238,12 @@ def aggregate_for_comprehensive(entities: list[BusinessEntity]) -> BusinessAggre
             cfg,
         )
         agg.corporate_tax_cents += corp.corporate_tax_cents
+        # State corporate tax on the same (post-NOL) corporate taxable income.
+        if state_corp_cfg is not None:
+            state_corp = calculate_state_corporate_tax(
+                corp.corporate_taxable_income_cents, state_corp_cfg
+            )
+            agg.state_corporate_tax_cents += state_corp.state_corporate_tax_cents
     return agg
 
 
