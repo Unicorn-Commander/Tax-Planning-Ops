@@ -6,17 +6,16 @@
 // ledger (both sides → net, engine-verified). The AO panel.
 //
 // Engine-only numbers (HARD INVARIANT): every dollar comes from an API field.
-// The salary-search curve is [additive] — the optimize_scorp_salary trace does
-// not yet have an endpoint. We render a CLEARLY LABELED illustrative fixture
-// curve per the Honesty Protocol. See INTEGRATION-TODO.08.md.
+// The salary-search curve is now LIVE — optimize_scorp_salary recomputes federal
+// tax across the split (real per-point deltas) and the optimizer marks its pick.
 //
 // Live data wired:
-//   GET /clients/tax-years/:id/business-entities   — entity list + AO workspace ids
-//   GET /clients/tax-years/:id/analysis            — analysis.business (SE, QBI, schedule_1)
+//   GET  /clients/tax-years/:id/business-entities   — entity list + AO workspace ids
+//   GET  /clients/tax-years/:id/analysis            — analysis.business (SE, QBI, schedule_1)
+//   POST /agents/clients/tax-years/:id/optimize/scorp — reasonable-comp search curve + pick
 //   POST /clients/tax-years/:id/business-entities/:entityId/sync-accounting-ops  — AO pull-now
 //
 // Additive (stubbed per Honesty Protocol):
-//   optimize_scorp_salary trace endpoint  — salary-search curve
 //   map-diff / mode-switch re-run         — mode chips (sole-prop / S-corp / what-if C-corp)
 
 import { useEffect, useMemo, useState, useCallback } from "react";
@@ -121,6 +120,19 @@ function flowLabel(e: BusinessEntity): string {
   return `Sched C ${centsToUSD(e.amount_cents)}`;
 }
 
+/* The S-corp salary optimizer trace (live: POST /agents/.../optimize/scorp).
+   `curve` is the owner's federal total tax across the salary split (a real
+   engine recompute at each salary); the headline `optimal_salary_cents` /
+   `savings_vs_all_salary_cents` come from the optimizer's payroll-vs-QBI
+   net-cost metric — a different (and more complete) axis than the curve, so we
+   plot the curve's shape and mark the optimizer's pick, not the curve's min. */
+interface ScorpOptimize {
+  optimal_salary_cents: number;
+  savings_vs_all_salary_cents: number;
+  qbi_deduction_at_optimal_cents: number;
+  curve: { salary_cents: number; total_tax_cents: number }[];
+}
+
 /* ======================================================== main component === */
 
 export default function EntitiesPage() {
@@ -128,6 +140,7 @@ export default function EntitiesPage() {
   const [entities, setEntities] = useState<BusinessEntity[] | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [entLoading, setEntLoading] = useState(true);
+  const [scorpOpt, setScorpOpt] = useState<ScorpOptimize | null>(null);
   const [syncing, setSyncing] = useState<string | null>(null); // entity id being synced
 
   const planYear = useMemo(() => {
@@ -158,6 +171,18 @@ export default function EntitiesPage() {
       .then((r) => setAnalysis(r.data))
       .catch(() => setAnalysis(null));
   }, [taxYearId]);
+
+  // S-corp salary optimizer — real reasonable-comp search curve + the
+  // optimizer's pick (only when an S-corp entity is present).
+  useEffect(() => {
+    if (!taxYearId || !entities) { setScorpOpt(null); return; }
+    const sc = entities.find((e) => e.kind === "s_corp_k1");
+    if (!sc) { setScorpOpt(null); return; }
+    api
+      .post(`/agents/clients/tax-years/${taxYearId}/optimize/scorp`, {}, { params: { entity_id: sc.id } })
+      .then((r) => setScorpOpt(r.data))
+      .catch(() => setScorpOpt(null));
+  }, [taxYearId, entities]);
 
   // AO pull-now for a single entity
   const pullAo = useCallback(
@@ -272,6 +297,25 @@ export default function EntitiesPage() {
       s.category?.toLowerCase().includes("entity"),
   );
   const electionNetCents = scorpStrategy?.estimated_savings_cents ?? null;
+
+  // Real salary-search curve. The optimizer returns federal total tax at each
+  // salary split; we plot "tax saved vs all-salary" = tax at the all-salary
+  // (max) point minus tax at this split — a real delta of two engine recomputes
+  // (higher = better). The optimizer's own pick is marked separately.
+  const scorpCurve =
+    scorpOpt && scorpOpt.curve.length > 1
+      ? (() => {
+          const maxSalary = Math.max(...scorpOpt.curve.map((p) => p.salary_cents));
+          const allSalaryTax =
+            scorpOpt.curve.find((p) => p.salary_cents === maxSalary)?.total_tax_cents ?? 0;
+          return scorpOpt.curve
+            .map((p) => ({
+              salaryCents: p.salary_cents,
+              netBenefitCents: allSalaryTax - p.total_tax_cents,
+            }))
+            .sort((a, b) => a.salaryCents - b.salaryCents);
+        })()
+      : null;
 
   /* ---- AO panel: entities with an AO workspace linked ---- */
   const aoEntities = ents.filter((e) => e.accounting_ops_workspace_id);
@@ -413,91 +457,91 @@ export default function EntitiesPage() {
             <MicroLabel>
               <Term k="scorp-split">Reasonable-comp search</Term> · net benefit vs salary
             </MicroLabel>
-            {/* TODO(integration: POST /clients/tax-years/:id/optimize-scorp-salary) — real curve */}
+            {/* live: POST /agents/clients/tax-years/:id/optimize/scorp */}
             <span
               className="chip agent ml-auto cursor-default"
-              title="Curve trace from optimize_scorp_salary — additive endpoint (spec §9.2)"
+              title="Real reasonable-comp search from optimize_scorp_salary (engine)"
             >
-              {scorp
-                ? `optimizer pick · ${scorpW2 !== null ? centsToUSD(scorpW2) : "—"} — [fixture]`
-                : "add an S-corp entity to see the curve"}
+              {!scorp
+                ? "add an S-corp entity to see the curve"
+                : scorpOpt
+                  ? `optimizer pick · ${centsToUSD(scorpOpt.optimal_salary_cents)}`
+                  : "computing…"}
             </span>
           </PanelHead>
           <div className="px-5 py-4">
             {scorp ? (
               <>
                 {/*
-                  [FIXTURE — ILLUSTRATIVE ONLY]
-                  The salary-search curve requires the optimize_scorp_salary trace endpoint
-                  (spec §9.2, additive). Until that endpoint exists, we render a CLEARLY
-                  LABELED illustrative curve that shows the SHAPE of the tradeoff — not
-                  the client-specific optimum dollar. Real point-by-point amounts must not
-                  be shown as engine output.
-                  TODO(integration: POST /clients/tax-years/:id/optimize-scorp-salary)
+                  Real reasonable-comp search (optimize_scorp_salary). The curve's
+                  y-axis is "federal tax saved vs all-salary" — a delta of two real
+                  engine recomputes — and the marked optimum is the optimizer's own
+                  payroll-vs-QBI pick (a more complete metric than the income-tax
+                  curve alone), so the pin need not sit at the curve's visual peak.
                 */}
-                <div
-                  className="mb-2 rounded-[8px] border border-[var(--cost)] px-3 py-2 font-mono text-[10.5px]"
-                  style={{ borderColor: "rgba(201,114,67,0.4)", background: "rgba(201,114,67,0.06)" }}
-                >
-                  <span className="tone-cost font-semibold">[FIXTURE — ILLUSTRATIVE]</span>{" "}
-                  <span className="text-[var(--g-ink-3)]">
-                    Curve shape only — not the client&apos;s actual optimization trace. The real
-                    curve requires the optimize_scorp_salary endpoint (additive, spec §9.2).
-                  </span>
-                </div>
-                {/*
-                  The fixture: 9 points covering $30k–$80k salary range.
-                  We use the real shareholder W-2 to anchor the x-axis label of the floor,
-                  but the y-values (net benefit) are illustrative, NOT client dollars.
-                  The SalaryCurve component draws from these props; it does not compute tax.
-                */}
-                <SalaryCurve
-                  points={[
-                    { salaryCents: 3000000, netBenefitCents: -50000 },
-                    { salaryCents: 3500000, netBenefitCents: 40000 },
-                    { salaryCents: 4000000, netBenefitCents: 110000 },
-                    { salaryCents: 4500000, netBenefitCents: 133000 },
-                    { salaryCents: 5000000, netBenefitCents: 120000 },
-                    { salaryCents: 5500000, netBenefitCents: 95000 },
-                    { salaryCents: 6000000, netBenefitCents: 60000 },
-                    { salaryCents: 7000000, netBenefitCents: 10000 },
-                    { salaryCents: 8000000, netBenefitCents: -40000 },
-                  ]}
-                  optimumSalaryCents={scorpW2 ?? 4500000}
-                  floorFromCents={scorpW2 !== null ? Math.round(scorpW2 * 0.85) : 3500000}
-                  floorToCents={scorpW2 ?? 4500000}
-                  height={200}
-                  className="w-full"
-                />
-                <ChartLegend
-                  className="mt-2"
-                  items={[
-                    { label: "net benefit curve [illustrative]", tone: "var(--agent)" },
-                    { label: "reasonable-comp floor zone", tone: "rgba(201,114,67,0.7)" },
-                  ]}
-                />
+                {scorpCurve && scorpOpt ? (
+                  <>
+                    <SalaryCurve
+                      points={scorpCurve}
+                      optimumSalaryCents={scorpOpt.optimal_salary_cents}
+                      floorFromCents={
+                        scorpW2 !== null
+                          ? Math.round(scorpW2 * 0.85)
+                          : Math.round(scorpOpt.optimal_salary_cents * 0.85)
+                      }
+                      floorToCents={scorpW2 ?? scorpOpt.optimal_salary_cents}
+                      height={200}
+                      className="w-full"
+                    />
+                    <ChartLegend
+                      className="mt-2"
+                      items={[
+                        { label: "fed tax saved vs all-salary (engine)", tone: "var(--agent)" },
+                        { label: "reasonable-comp floor zone", tone: "rgba(201,114,67,0.7)" },
+                      ]}
+                    />
+                    <p className="mt-2 text-[12px] text-[var(--g-ink-3)]">
+                      Optimizer pick{" "}
+                      <span className="font-mono">{centsToUSD(scorpOpt.optimal_salary_cents)}</span>
+                      {scorpOpt.savings_vs_all_salary_cents > 0 ? (
+                        <>
+                          {" "}· saves{" "}
+                          <span className="font-mono tone-save">
+                            {centsToUSD(scorpOpt.savings_vs_all_salary_cents)}
+                          </span>{" "}
+                          vs all-salary (payroll + §199A)
+                        </>
+                      ) : null}
+                      {scorpOpt.qbi_deduction_at_optimal_cents > 0 ? (
+                        <>
+                          {" "}· QBI at optimum{" "}
+                          <span className="font-mono">
+                            {centsToUSD(scorpOpt.qbi_deduction_at_optimal_cents)}
+                          </span>
+                        </>
+                      ) : null}
+                    </p>
+                  </>
+                ) : (
+                  <div className="skeleton h-[200px] w-full rounded-[10px]" />
+                )}
                 {scorpW2 !== null ? (
                   <p className="mt-2 text-[12px] text-[var(--g-ink-3)]">
-                    Shareholder W-2 set at{" "}
-                    <span className="font-mono">{centsToUSD(scorpW2)}</span>.
-                    The unconstrained optimum and comp-floor evidence require the optimizer
-                    trace (additive).
+                    Current shareholder W-2{" "}
+                    <span className="font-mono">{centsToUSD(scorpW2)}</span> anchors the
+                    reasonable-comp floor; the curve is the engine recomputed across the split.
                   </p>
                 ) : (
                   <p className="mt-2 text-[12px] text-[var(--g-ink-3)]">
-                    Set shareholder W-2 wages on the entity to anchor the search.
+                    Set shareholder W-2 wages on the entity to anchor the comp floor.
                   </p>
                 )}
               </>
             ) : (
               <div className="py-8 text-center">
                 <p className="text-[13px] text-[var(--g-ink-3)]">
-                  Add an S-corp K-1 entity with shareholder W-2 wages to see the salary
+                  Add an S-corp K-1 entity with shareholder W-2 wages to see the live salary
                   optimization curve.
-                </p>
-                <p className="mt-1 font-mono text-[10.5px] text-[var(--g-ink-3)]">
-                  {/* TODO(integration: POST /clients/tax-years/:id/optimize-scorp-salary) */}
-                  [additive: optimize_scorp_salary trace endpoint]
                 </p>
               </div>
             )}

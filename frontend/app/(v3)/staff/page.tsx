@@ -7,12 +7,12 @@
 // House rules HR-01…05. Audit chain verify chip.
 //
 // Live data wired:
-//   GET /lifecycle/audit/verify  — { valid: boolean }
+//   GET /lifecycle/audit/verify     — { valid: boolean }
+//   GET /lifecycle/journal?tail=20  — real MCP traffic feed (hash-chained journal tail)
 //
 // Additive (spec §7-10, Honesty Protocol) — CLEARLY LABELED FIXTURES:
-//   Agent registry / status    — no backend endpoint yet; rendered from FIXTURE_AGENTS
-//   MCP traffic feed           — no journal read API yet; rendered from FIXTURE_TRAFFIC
-//   Door usage counts          — no real counters yet; rendered from FIXTURE_DOORS
+//   Agent registry / status    — no backend endpoint yet (GET /agents/registry); FIXTURE_AGENTS
+//   Door usage counts          — no real counters yet (GET /agents/door-stats); FIXTURE_DOORS
 //
 // Per-surface integration TODO: frontend/INTEGRATION-TODO.10.md
 
@@ -38,6 +38,41 @@ import {
 
 interface AuditVerifyResponse {
   valid: boolean;
+}
+
+// GET /lifecycle/journal?tail=20 — newest-first tail of the hash-chained journal
+interface JournalEvent {
+  id: string;
+  created_at: string;
+  event_type: string;
+  actor_uc_uid: string;
+  aggregate_type: string;
+  aggregate_id: string;
+  payload: Record<string, unknown>;
+  hash: string;
+  prev_hash: string | null;
+}
+interface JournalTail {
+  events: JournalEvent[];
+  status: {
+    count: number;
+    latest_hash: string | null;
+    latest_at: string | null;
+    chain_intact: boolean;
+  };
+}
+
+// Compact relative time for the live traffic feed ("12s", "4m", "2h", "3d").
+function relTime(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return "";
+  const secs = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (secs < 60) return `${secs}s`;
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h`;
+  return `${Math.round(hrs / 24)}d`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -165,21 +200,8 @@ const FIXTURE_AGENTS: AgentFixture[] = [
   },
 ];
 
-// TODO(integration: GET /lifecycle/journal?tail=20) — real MCP traffic feed (spec §9.5)
-interface TrafficRow {
-  caller: string;
-  door: string;
-  path: string;
-  verdict: string;
-  ok: boolean;
-  time: string;
-}
-const FIXTURE_TRAFFIC: TrafficRow[] = [
-  { caller: "strategist", door: "MCP", path: "GET …/tax-years/8f21/strategist", verdict: "200 · memo drafted", ok: true, time: "17:18:09" },
-  { caller: "tax-planning-ops → AO", door: "API", path: "GET /reports/pl?ws=7775…", verdict: "200 · net_income", ok: true, time: "17:02:44" },
-  { caller: "d.reyes", door: "console", path: "POST /plans/…/finalize", verdict: "sealed · hash stamped", ok: true, time: "16:48:02" },
-  { caller: "unknown client", door: "API", path: "GET /clients (no workspace)", verdict: "403 · RLS", ok: false, time: "15:11:37" },
-];
+// LIVE: GET /lifecycle/journal?tail=20 powers the MCP traffic feed (rows built
+// from real JournalEvents below). No fixture remains for the feed.
 
 // TODO(integration: GET /agents/door-stats) — real door usage counts (spec §9.6)
 interface DoorFixture {
@@ -209,6 +231,7 @@ const HOUSE_RULES = [
 export default function StaffPage() {
   const [auditValid, setAuditValid] = useState<boolean | null>(null);
   const [auditLoading, setAuditLoading] = useState(true);
+  const [journal, setJournal] = useState<JournalEvent[] | null>(null);
 
   // LIVE: GET /lifecycle/audit/verify
   useEffect(() => {
@@ -217,6 +240,14 @@ export default function StaffPage() {
       .then((r) => setAuditValid(r.data.valid))
       .catch(() => setAuditValid(null))
       .finally(() => setAuditLoading(false));
+  }, []);
+
+  // LIVE: GET /lifecycle/journal?tail=20 — real MCP traffic feed (newest-first)
+  useEffect(() => {
+    api
+      .get<JournalTail>("/lifecycle/journal", { params: { tail: 20 } })
+      .then((r) => setJournal(r.data.events ?? []))
+      .catch(() => setJournal([]));
   }, []);
 
   // Door fixture values built here so JSX is available
@@ -276,9 +307,10 @@ export default function StaffPage() {
 
       {/* ---- fixture banner (Honesty Protocol) ---- */}
       <div className="rise d1 mt-3 rounded-[10px] border border-[color-mix(in_srgb,var(--cost)_35%,transparent)] bg-[color-mix(in_srgb,var(--cost)_5%,transparent)] px-4 py-2.5 font-mono text-[10.5px] text-[var(--cost)]">
-        [fixture] Agent registry, traffic feed, and door stats are rendered from static fixture data.
-        {" "}The audit chain chip above is wired live (GET /lifecycle/audit/verify).
-        {" "}Replace fixtures when GET /agents/registry + GET /lifecycle/journal land (spec §9.5–9.6).
+        [fixture] Agent registry and door stats are rendered from static fixture data.
+        {" "}The audit chain chip and the live MCP traffic feed are wired live
+        {" "}(GET /lifecycle/audit/verify · GET /lifecycle/journal?tail=20).
+        {" "}Replace remaining fixtures when GET /agents/registry + GET /agents/door-stats land (spec §9.6).
       </div>
 
       {/* ---- agent crew (2-column grid) ---- */}
@@ -307,21 +339,30 @@ export default function StaffPage() {
             </div>
           ))}
         </div>
-        {/* traffic feed — FIXTURE */}
-        {/* TODO(integration: GET /lifecycle/journal?tail=20) — real MCP traffic feed */}
+        {/* traffic feed — LIVE: GET /lifecycle/journal?tail=20 (hash-chained journal tail) */}
         <div className="font-mono text-[10.5px]">
-          {FIXTURE_TRAFFIC.map((row, i) => (
-            <div
-              key={i}
-              className="flex flex-wrap gap-[14px] border-t border-[var(--g-hairline-soft)] px-5 py-[7px] text-[var(--g-ink-3)]"
-            >
-              <b className="text-[var(--g-ink-2)] font-[500]">{row.caller}</b>
-              <span>{row.door}</span>
-              <span className="hidden sm:inline">{row.path}</span>
-              <span className={row.ok ? "text-[var(--save)]" : "text-[var(--cliff)]"}>{row.verdict}</span>
-              <span className="ml-auto">{row.time}</span>
+          {journal === null ? (
+            <div className="border-t border-[var(--g-hairline-soft)] px-5 py-[7px] text-[var(--g-ink-3)]">
+              loading journal…
             </div>
-          ))}
+          ) : journal.length === 0 ? (
+            <div className="border-t border-[var(--g-hairline-soft)] px-5 py-[7px] text-[var(--g-ink-3)]">
+              no journal events yet — actions across the three doors will appear here
+            </div>
+          ) : (
+            journal.map((ev) => (
+              <div
+                key={ev.id}
+                className="flex flex-wrap gap-[14px] border-t border-[var(--g-hairline-soft)] px-5 py-[7px] text-[var(--g-ink-3)]"
+              >
+                <b className="text-[var(--g-ink-2)] font-[500]">{ev.actor_uc_uid}</b>
+                <span className="text-[var(--agent)]">{ev.event_type}</span>
+                <span className="hidden sm:inline">{ev.aggregate_type}</span>
+                <span className="hidden sm:inline">#{ev.hash.slice(0, 8)}</span>
+                <span className="ml-auto">{relTime(ev.created_at)}</span>
+              </div>
+            ))
+          )}
         </div>
       </Panel>
 

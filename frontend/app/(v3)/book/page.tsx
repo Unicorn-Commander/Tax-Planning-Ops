@@ -10,10 +10,11 @@
 //   GET /clients/:id/overview  — per-client snapshot + strategies (for micro-strata + milestones)
 //   GET /admin/tax-bracket-sets — for the Position micro-strata segment spans
 //
+//   GET /agents/realized-rollup — workspace realized counter (planned vs realized, % realized)
+//
 // Additive (spec §7-02, Honesty Protocol):
 //   EMR endpoint        — true marginal rate; v1 falls back to nominal bracket
 //   Matrix endpoint     — client × strategy cells; v1 renders from each client's opportunities list
-//   Realized counter    — next-year reconciliation
 //
 // Per-surface integration TODO: frontend/INTEGRATION-TODO.02.md
 
@@ -118,6 +119,24 @@ interface BracketSet {
   filing_status: string;
   standard_deduction_cents: number;
   rows: BracketRow[];
+}
+
+// GET /agents/realized-rollup — workspace realized reconciliation counter
+interface RealizedRollup {
+  total_planned_cents: number;
+  total_realized_cents: number;
+  total_variance_cents: number;
+  realized_pct: string; // e.g. "62.5%" (already formatted by the backend)
+  clients: Array<{
+    client_id: string;
+    client_name: string;
+    client_tax_year_id: string;
+    tax_year: number;
+    planned_cents: number;
+    realized_cents: number;
+    variance_cents: number;
+    outcome_count: number;
+  }>;
 }
 
 /* ---- helpers ------------------------------------------------------ */
@@ -251,6 +270,7 @@ export default function BookPage() {
   const [clients, setClients] = useState<ClientRow[] | null>(null);
   const [overviews, setOverviews] = useState<Record<string, Overview>>({});
   const [sets, setSets] = useState<BracketSet[] | null>(null);
+  const [realized, setRealized] = useState<RealizedRollup | null>(null);
   const [view, setView] = useState<View>("roster");
   const [filter, setFilter] = useState<FilterKey>("all");
   const overviewsRef = useRef<Record<string, Overview>>({});
@@ -261,6 +281,11 @@ export default function BookPage() {
     api.get("/agents/scan-book").then((r) => setScan(r.data)).catch(() => setScan([]));
     api.get("/clients").then((r) => setClients(r.data)).catch(() => setClients([]));
     api.get("/admin/tax-bracket-sets").then((r) => setSets(r.data)).catch(() => setSets([]));
+    // LIVE: workspace realized counter (planned vs realized across reconciled outcomes)
+    api
+      .get<RealizedRollup>("/agents/realized-rollup")
+      .then((r) => setRealized(r.data))
+      .catch(() => setRealized(null));
   }, []);
 
   /* ---- per-client overview fetch (fan-out as scan lands) ---- */
@@ -607,12 +632,24 @@ export default function BookPage() {
           }
           label="signed · tracking to realized [additive]"
         />
-        {/* TODO(integration: GET /agents/book-rollup/realized) — realized reconciliation (§9.7) */}
+        {/* LIVE: GET /agents/realized-rollup — realized reconciliation (§9.7), gold treatment */}
         <RollupNum
           value={
-            <span className="block text-[22px] font-[750] leading-none tracking-[-0.02em] text-[var(--g-ink-3)]">—</span>
+            realized && realized.total_realized_cents > 0 ? (
+              <span className="flex items-baseline gap-[7px]">
+                <Money
+                  cents={realized.total_realized_cents}
+                  className="!text-[22px] !leading-none !tracking-[-0.02em] !text-[var(--seal)]"
+                />
+                <span className="font-mono text-[11px] text-[var(--seal)]">
+                  {fmtPct(realized.realized_pct)}
+                </span>
+              </span>
+            ) : (
+              <span className="block text-[22px] font-[750] leading-none tracking-[-0.02em] text-[var(--g-ink-3)]">—</span>
+            )
           }
-          label="realized · next-return reconciliation [additive]"
+          label="realized · next-return reconciliation"
         />
         <RollupNum
           value={
@@ -623,8 +660,9 @@ export default function BookPage() {
           label={`file${rankedIds.length === 1 ? "" : "s"} in the book`}
         />
         <Annotation className="ml-auto max-w-[280px]">
-          next spring this row gains the number that renews every retainer:{" "}
-          <b className="text-[var(--g-ink)]">realized</b>.
+          the number that renews every retainer —{" "}
+          <b className="text-[var(--seal)]">realized</b> — reconciles against the next return as
+          outcomes land.
         </Annotation>
         <Button
           variant="agent"
@@ -912,6 +950,19 @@ const FILING_SHORT: Record<string, string> = {
   hoh: "hoh",
   qss: "qss",
 };
+
+/** Render realized_pct safely: backend sends a formatted string like "62.5%",
+ *  but tolerate a bare number (0–100) too. Returns "" for unusable input. */
+function fmtPct(pct: string | number | null | undefined): string {
+  if (pct === null || pct === undefined) return "";
+  if (typeof pct === "string") {
+    const trimmed = pct.trim();
+    if (trimmed.endsWith("%")) return trimmed; // already formatted
+    const n = Number(trimmed);
+    return Number.isFinite(n) ? `${n.toFixed(1)}%` : "";
+  }
+  return Number.isFinite(pct) ? `${pct.toFixed(1)}%` : "";
+}
 
 /** Compact money: $1.8M / $112k / $9,170 */
 function formatK(cents: number): string {

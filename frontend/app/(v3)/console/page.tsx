@@ -1,9 +1,11 @@
 "use client";
 
-// Surface 00 — THE CONSOLE (door 2). The shell is real (it IS the door); the
-// streaming run (plan card → engine-call trace → priced questions), the inline
-// artifacts, and the GUI↔chat sync are Phase 2 (frontier) over the same engine
-// tools the GUI buttons call. No faked streaming here (the AO port's mistake).
+// Surface 00 — THE CONSOLE (door 2). The shell is real (it IS the door); the MCP
+// server (door 3) is now LIVE too (a real stdio MCP server, 31 tools, manifest
+// 0.2.0). The streaming run (plan card → engine-call trace → priced questions),
+// the inline artifacts, and the GUI↔chat sync are still Phase 2 (frontier) over
+// the same engine tools the GUI buttons call. No faked streaming here (the AO
+// port's mistake).
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -86,7 +88,8 @@ function ConsoleInner() {
         </p>
         <ul className="mt-3 space-y-1.5 text-[12.5px] text-[var(--g-ink-3)]">
           <li><b className="tone-agent">[live]</b> strategist / propose-plan / scan-book are the answer engine.</li>
-          <li><b className="tone-cost">[additive]</b> the streaming run (plan + call trace + question objects), inline-artifact embedding, GUI↔chat sync, and the real MCP server (shared with ⌘K).</li>
+          <li><b className="tone-agent">[live]</b> the MCP server (door 3) — a real stdio server, 31 tools, manifest 0.2.0, Brigade-discoverable; the same engine tools the buttons call.</li>
+          <li><b className="tone-cost">[additive]</b> the streaming run (plan + call trace + question objects), inline-artifact embedding, and GUI↔chat sync.</li>
         </ul>
       </Panel>
     </div>

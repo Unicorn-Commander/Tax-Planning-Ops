@@ -10,17 +10,26 @@
 // Anything not in the API is honestly labeled — see INTEGRATION-TODO.07.md.
 //
 // Live data sources:
-//   GET /clients/:id/overview  →  .strategies (name/disposition/amount_cents/estimated_savings_cents/status_flag)
-//                               →  .quarterly  (quarter/due_date/required_payment_cents/payment_made_cents/
-//                                               unpaid_rollforward_cents/safe_harbor_basis/status)
-//   GET /plans/:planId/pdf     →  PlanDoc[] (id/version/garage_key/payload_hash)
+//   GET /clients/:id/overview         →  .strategies (name/disposition/amount_cents/
+//                                          estimated_savings_cents/status_flag)
+//                                     →  .quarterly  (quarter/due_date/required_payment_cents/
+//                                          payment_made_cents/unpaid_rollforward_cents/
+//                                          safe_harbor_basis/status)
+//   GET /plans/:planId/pdf            →  PlanDoc[] (id/version/garage_key/payload_hash)
+//   GET /plans/:planId/tasks          →  TaskOut[]  (5-field contract rows — spec §9.4) [LIVE]
+//   POST /plans/:planId/tasks         →  add a contract (seeded from an accepted strategy) [LIVE]
+//   PATCH /tasks/:taskId              →  advance a contract's status [LIVE]
+//   GET /statutory-deadlines?tax_year →  [{key,label,citation,due_date}] catalog [LIVE]
+//   GET /plans/:planId/realized       →  RealizedOutcomeOut[] (reconciled outcomes — spec §9.7) [LIVE]
 //
-// Additive (Honesty Protocol — rendered as labeled fixtures):
-//   tasks model (5-field contracts + statutory deadlines + evidence upload) — spec §9.4
-//   realized reconciliation (next-year return/books vs plan) — spec §9.7
+// Additive (Honesty Protocol — still rendered as labeled fixtures):
+//   evidence upload to Garage (the PROOF field shows status but the upload affordance
+//     is not yet wired) — spec §9.4
 //   per-strategy one-pager / CPA-letter renderers — spec §9.8
+//   2210-AI annualized quarterly mode — spec §9.4
+//   versioned PDF listing / per-version download — INTEGRATION-TODO.07
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
 import { centsToUSD } from "@/lib/format";
@@ -50,13 +59,86 @@ interface PlanDoc {
   payload_hash: string;
 }
 
-// TODO(integration: GET /plans/:planId/tasks) — 5-field contract model (spec §9.4)
-// ContractRow renders [additive] label placeholders for the 5 fields (WHO/WHAT/CASH/
-// DEADLINE/PROOF) until this endpoint lands. The savings figure comes from
-// overview.strategies (engine-sourced); nothing else is fabricated.
+/* ---- wire shapes for the now-live task / deadline / realized endpoints ---- */
+
+type TaskStatus = "open" | "in_progress" | "done" | "blocked" | "dismissed";
+
+interface TaskOut {
+  id: string;
+  client_tax_year_id: string;
+  client_strategy_id: string | null;
+  title: string;
+  owner: string;
+  amount_cents: number | null;
+  due_date: string | null; // ISO datetime
+  statutory_key: string | null;
+  status: TaskStatus;
+  evidence_blob_key: string | null;
+  evidence_uploaded_at: string | null;
+  sort_order: number;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface StatutoryDeadline {
+  key: string;
+  label: string;
+  citation: string;
+  due_date: string; // ISO date
+}
+
+interface RealizedOutcome {
+  id: string;
+  client_tax_year_id: string;
+  client_strategy_id: string | null;
+  realized_tax_year: number;
+  planned_savings_cents: number;
+  realized_savings_cents: number | null;
+  realized_amount_cents: number | null;
+  basis: string;
+  source_ref: string | null;
+  reconciled_at: string | null;
+  variance_cents: number | null;
+  note: string | null;
+}
 
 /* ---- disposition helpers ---- */
 const SIGNED_DISPOSITIONS = new Set(["signed", "accepted", "implementing"]);
+
+/* ---- task status helpers (5-field contract STATUS) ---- */
+const STATUS_LABEL: Record<TaskStatus, string> = {
+  open: "open",
+  in_progress: "in progress",
+  done: "done",
+  blocked: "blocked",
+  dismissed: "dismissed",
+};
+function statusTone(status: TaskStatus): "save" | "cost" | "agent" | "neutral" {
+  if (status === "done") return "save";
+  if (status === "blocked") return "cost";
+  if (status === "in_progress") return "agent";
+  return "neutral";
+}
+/** The next status when an advisor advances a contract (open → in progress → done). */
+function nextStatus(status: TaskStatus): TaskStatus | null {
+  if (status === "open") return "in_progress";
+  if (status === "in_progress") return "done";
+  return null; // done / blocked / dismissed are terminal for the simple advance affordance
+}
+function advanceVerb(status: TaskStatus): string | null {
+  if (status === "open") return "Start";
+  if (status === "in_progress") return "Mark done";
+  return null;
+}
+
+/** Render an ISO date/datetime as a short "MON D, YYYY" label. */
+function shortDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
 
 /** Build cumulative required-vs-paid arrays from quarterly rows (4 quarters).
  *  Required cumulative: 22.5% / 45% / 67.5% / 90% of the full-year total.
@@ -109,23 +191,120 @@ export default function PlanPage() {
   const [docs, setDocs] = useState<PlanDoc[] | null>(null);
   const [docsLoading, setDocsLoading] = useState(true);
 
-  const planYearId = overview?.plan_year_id ?? null;
+  // Tasks (5-field contracts), the statutory-deadline catalog, and realized outcomes —
+  // all now LIVE. They are NOT part of the overview payload, so each is fetched here
+  // and re-fetched after a mutation (the overview reload() does not cover them).
+  const [tasks, setTasks] = useState<TaskOut[] | null>(null);
+  const [deadlines, setDeadlines] = useState<StatutoryDeadline[]>([]);
+  const [realized, setRealized] = useState<RealizedOutcome[] | null>(null);
+  const [busyTaskId, setBusyTaskId] = useState<string | null>(null); // task being advanced
+  const [seedingStrategyId, setSeedingStrategyId] = useState<string | null>(null); // strategy → contract
+
+  // taxYearId = the plan year (fall back to the base year) — the id every
+  // /plans/:id endpoint keys off.
+  const taxYearId = overview?.plan_year_id ?? overview?.base_year_id ?? null;
   const planYear = useMemo(
-    () => overview?.years.find((y) => y.id === planYearId) ?? overview?.years[0],
-    [overview, planYearId],
+    () => overview?.years.find((y) => y.id === taxYearId) ?? overview?.years[0],
+    [overview, taxYearId],
   );
+  const taxYear = planYear?.tax_year ?? null;
   const hue = hueForClient(clientId);
 
   /* ---- fetch versioned PDF docs ---- */
   useEffect(() => {
-    if (!planYearId) { setDocs([]); setDocsLoading(false); return; }
+    if (!taxYearId) { setDocs([]); setDocsLoading(false); return; }
     setDocsLoading(true);
-    // TODO(integration: GET /plans/:planId/pdf-docs) — list of versioned+hashed plan PDFs
-    api.get(`/plans/${planYearId}/pdf`)
+    // TODO(integration: GET /plans/:planId/pdf-docs) — list of ALL versioned+hashed plan PDFs
+    api.get(`/plans/${taxYearId}/pdf`)
       .then((r) => setDocs(Array.isArray(r.data) ? r.data : [r.data]))
       .catch(() => setDocs([]))
       .finally(() => setDocsLoading(false));
-  }, [planYearId]);
+  }, [taxYearId]);
+
+  /* ---- fetch implementation tasks (5-field contracts) — LIVE ---- */
+  const loadTasks = useCallback(() => {
+    if (!taxYearId) { setTasks([]); return; }
+    api.get<TaskOut[]>(`/plans/${taxYearId}/tasks`)
+      .then((r) => setTasks(r.data))
+      .catch(() => setTasks([]));
+  }, [taxYearId]);
+  useEffect(loadTasks, [loadTasks]);
+
+  /* ---- fetch realized outcomes — LIVE ---- */
+  const loadRealized = useCallback(() => {
+    if (!taxYearId) { setRealized([]); return; }
+    api.get<RealizedOutcome[]>(`/plans/${taxYearId}/realized`)
+      .then((r) => setRealized(r.data))
+      .catch(() => setRealized([]));
+  }, [taxYearId]);
+  useEffect(loadRealized, [loadRealized]);
+
+  /* ---- fetch the statutory-deadline catalog for this tax year — LIVE ---- */
+  useEffect(() => {
+    if (taxYear == null) { setDeadlines([]); return; }
+    api.get<StatutoryDeadline[]>(`/statutory-deadlines`, { params: { tax_year: taxYear } })
+      .then((r) => setDeadlines(r.data))
+      .catch(() => setDeadlines([]));
+  }, [taxYear]);
+
+  // key → catalog entry, so a task's statutory_key resolves to its label + citation + date.
+  const deadlineByKey = useMemo(() => {
+    const m = new Map<string, StatutoryDeadline>();
+    for (const d of deadlines) m.set(d.key, d);
+    return m;
+  }, [deadlines]);
+
+  // strategy id → its open task (so a strategy row knows whether a contract exists yet).
+  const taskByStrategy = useMemo(() => {
+    const m = new Map<string, TaskOut>();
+    for (const t of tasks ?? []) {
+      if (t.client_strategy_id) m.set(t.client_strategy_id, t);
+    }
+    return m;
+  }, [tasks]);
+
+  /* ---- advance a contract's status (open → in_progress → done) — PATCH /tasks/:id ---- */
+  const advanceTask = useCallback(
+    async (task: TaskOut) => {
+      const next = nextStatus(task.status);
+      if (!next) return;
+      setBusyTaskId(task.id);
+      try {
+        await api.patch(`/tasks/${task.id}`, { status: next });
+        loadTasks();
+      } catch {
+        // surface-level: the row stays put; the strategist panel still reflects state
+      } finally {
+        setBusyTaskId(null);
+      }
+    },
+    [loadTasks],
+  );
+
+  /* ---- seed a contract from an accepted strategy — POST /plans/:id/tasks ---- */
+  const seedContract = useCallback(
+    async (strategy: StrategyRow, statutoryKey?: string) => {
+      if (!taxYearId) return;
+      setSeedingStrategyId(strategy.id);
+      try {
+        await api.post(`/plans/${taxYearId}/tasks`, {
+          title: strategy.name,
+          client_strategy_id: strategy.id,
+          // CASH defaults to the strategy amount server-side when omitted; pass it
+          // explicitly so the row reads true immediately on the optimistic refetch.
+          amount_cents: strategy.amount_cents || undefined,
+          // WHEN: an optional statutory deadline key; the service resolves the date.
+          statutory_key: statutoryKey,
+        });
+        loadTasks();
+      } catch {
+        // surface-level: nothing to roll back; the affordance simply re-enables
+      } finally {
+        setSeedingStrategyId(null);
+      }
+    },
+    [taxYearId, loadTasks],
+  );
 
   /* ---- strategy summary figures — ALL from the engine ---- */
   const identified = useMemo(
@@ -142,17 +321,26 @@ export default function PlanPage() {
   );
   const isPlanSealed = planYear?.finalized_at != null;
 
+  /* ---- realized totals — engine/operator-sourced (sum of reconciled actuals) ---- */
+  const realizedTotal = useMemo(
+    () => (realized ?? []).reduce((s, r) => s + (r.realized_savings_cents ?? 0), 0),
+    [realized],
+  );
+  const realizedReconciledAt = useMemo(() => {
+    const stamps = (realized ?? [])
+      .map((r) => r.reconciled_at)
+      .filter((x): x is string => !!x)
+      .sort();
+    return stamps.length ? stamps[stamps.length - 1] : null;
+  }, [realized]);
+  // realized as a share of identified — drives the progress bar width (0–100%).
+  const realizedPct = identified > 0 ? Math.min(1, realizedTotal / identified) : 0;
+
   /* ---- safe-harbor chart data — engine-sourced ---- */
   const { requiredCumCents, paidCumCents, penaltyCents } = useMemo(
     () => buildSafeHarborSeries(overview?.quarterly ?? []),
     [overview],
   );
-
-  // [additive] Task contracts (5-field) come from GET /plans/:planId/tasks (spec §9.4).
-  // ContractRow renders [additive] label placeholders for those fields until
-  // the endpoint lands. No fixture array needed here — strategy rows supply
-  // the engine-sourced figures; the 5-field body is visibly stubbed in the component.
-  // TODO(integration: GET /plans/:planId/tasks) — replace field stubs with real rows
 
   /* ---- loading ---- */
   if (loading) {
@@ -220,7 +408,7 @@ export default function PlanPage() {
           LEDGER: Identified → Signed → Realized
           - Identified: engine-computed sum of overview.strategies
           - Signed: engine-computed sum of signed strategies
-          - Realized: [additive] — labeled fixture
+          - Realized: LIVE — sum of reconciled outcomes (GET /plans/:id/realized)
       ================================================================ */}
       <section className="panel rise d1 mt-4 grid grid-cols-1 gap-0 overflow-hidden sm:grid-cols-3">
 
@@ -278,32 +466,110 @@ export default function PlanPage() {
           </div>
         </div>
 
-        {/* col 3: realized — [additive] fixture */}
+        {/* col 3: realized — LIVE (reconciled against the filed return / books) */}
         <div className="px-[22px] py-[18px]">
-          <MicroLabel>
-            Realized to date{" "}
-            <span className="ml-1 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--cost)]">
-              [additive]
-            </span>
-          </MicroLabel>
-          {/* TODO(integration: GET /plans/:planId/realized) — realized reconciliation (spec §9.7) */}
-          <div className="mt-1.5 text-[27px] font-[750] leading-none tracking-[-0.025em] text-[var(--g-ink-3)]">
-            —
+          <MicroLabel>Realized to date</MicroLabel>
+          <div className="mt-1.5 text-[27px] font-[750] leading-none tracking-[-0.025em]">
+            {realized === null ? (
+              <span className="text-[var(--g-ink-3)]">—</span>
+            ) : realized.length === 0 ? (
+              <span className="text-[var(--g-ink-3)]">—</span>
+            ) : (
+              <ProvFigure
+                cents={realizedTotal}
+                tone="seal"
+                prov={{
+                  label: "savings realized vs. the filed return / books",
+                  engine: "realized.reconcile",
+                  source: "books",
+                  inputs: [
+                    { k: "reconciled outcomes", v: `${realized.length}` },
+                    { k: "vs identified", v: `${(realizedPct * 100).toFixed(0)}%` },
+                  ],
+                }}
+              />
+            )}
+            <span className="ml-0.5 text-[13px] font-normal text-[var(--g-ink-3)]">/yr</span>
           </div>
           <div className="mt-2 h-[7px] w-full overflow-hidden rounded-full bg-[rgba(31,28,23,0.08)]">
-            <div className="h-full w-0 rounded-full bg-gradient-to-r from-[var(--seal)] to-[#e7cf9b]" />
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-[var(--seal)] to-[#e7cf9b] transition-[width] duration-500"
+              style={{ width: `${Math.round(realizedPct * 100)}%` }}
+            />
           </div>
           <div className="mt-1.5 font-mono text-[11px] text-[var(--g-ink-3)]">
-            reconciles against the filed return · additive when next-year return/books arrive
+            {realized === null
+              ? "loading reconciled outcomes…"
+              : realized.length === 0
+                ? "no outcomes reconciled yet · reconciles against the filed return"
+                : `${realized.length} reconciled${realizedReconciledAt ? ` · latest ${shortDate(realizedReconciledAt)}` : ""}`}
           </div>
         </div>
       </section>
 
       {/* ================================================================
+          REALIZED LEDGER — per-outcome reconciliation (planned → realized → variance)
+          LIVE: GET /plans/:planId/realized. Honest empty state when nothing
+          has been reconciled yet.
+      ================================================================ */}
+      {realized !== null && realized.length > 0 ? (
+        <Panel className="rise d1 mt-[22px]">
+          <PanelHead>
+            <MicroLabel>Realized ledger · planned → realized → variance</MicroLabel>
+            <Annotation className="!text-[13px]">
+              what each signed strategy actually delivered, measured against the filed return / books
+            </Annotation>
+            <Chip tone="seal" className="ml-auto !text-[10.5px]">{realized.length} reconciled</Chip>
+          </PanelHead>
+          <div className="divide-y divide-[var(--g-hairline-soft)]">
+            {realized.map((r) => {
+              const strategy = overview.strategies.find((s) => s.id === r.client_strategy_id);
+              const v = r.variance_cents;
+              return (
+                <div key={r.id} className="flex flex-wrap items-center gap-[12px] px-[22px] py-[14px]">
+                  <Stamp kind="verified" className="!transform-none !text-[9px]">reconciled</Stamp>
+                  <span className="text-[13.5px] font-semibold leading-tight">
+                    {strategy?.name ?? r.note ?? "Reconciled outcome"}
+                  </span>
+                  <span className="font-mono text-[10px] text-[var(--g-ink-3)]">
+                    TY{r.realized_tax_year} · {r.basis}
+                    {r.reconciled_at ? ` · ${shortDate(r.reconciled_at)}` : ""}
+                  </span>
+                  <span className="ml-auto flex items-center gap-[16px]">
+                    <span className="text-right">
+                      <div className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--g-ink-3)]">planned</div>
+                      <Money cents={r.planned_savings_cents} className="text-[13px] font-bold" />
+                    </span>
+                    <span className="text-right">
+                      <div className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--g-ink-3)]">realized</div>
+                      {r.realized_savings_cents != null ? (
+                        <Money cents={r.realized_savings_cents} tone="seal" className="text-[13px] font-bold" />
+                      ) : (
+                        <span className="text-[13px] text-[var(--g-ink-3)]">—</span>
+                      )}
+                    </span>
+                    <span className="text-right">
+                      <div className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--g-ink-3)]">variance</div>
+                      {v != null ? (
+                        <Money cents={v} signed tone={v >= 0 ? "save" : "cost"} className="text-[13px] font-bold" />
+                      ) : (
+                        <span className="text-[13px] text-[var(--g-ink-3)]">pending</span>
+                      )}
+                    </span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </Panel>
+      ) : null}
+
+      {/* ================================================================
           IMPLEMENTATION CONTRACTS
           StrategyName + savingsCents come from overview.strategies (engine).
-          The 5-field contract rows (who/what/cash/deadline/proof) are [additive]
-          labeled fixtures — they demonstrate the layout awaiting GET /plans/:planId/tasks.
+          The 5-field contract rows (who/what/cash/deadline/status) are LIVE from
+          GET /plans/:planId/tasks. PROOF (evidence upload to Garage) stays labeled
+          additive — the upload affordance is not yet wired.
       ================================================================ */}
       <Panel className="rise d2 mt-[22px]">
         <PanelHead>
@@ -329,6 +595,13 @@ export default function PlanPage() {
                 key={s.id}
                 strategy={s}
                 isFirst={i === 0}
+                task={taskByStrategy.get(s.id) ?? null}
+                deadlineByKey={deadlineByKey}
+                deadlines={deadlines}
+                onAdvance={advanceTask}
+                onSeed={seedContract}
+                advancing={busyTaskId === (taskByStrategy.get(s.id)?.id ?? "")}
+                seeding={seedingStrategyId === s.id}
               />
             ))}
           </div>
@@ -564,24 +837,49 @@ export default function PlanPage() {
 
 /* ================================================================= ContractRow */
 /* Renders ONE strategy as a 5-field implementation contract.
-   savingsCents comes from the strategy row (engine). The 5 fields are [additive]
-   fixtures until GET /plans/:planId/tasks lands (spec §9.4). */
+   savingsCents comes from the strategy row (engine). The contract fields
+   (WHO=owner / WHAT=title / CASH=amount_cents / WHEN=due_date+statutory_key /
+   STATUS) are LIVE from a linked task (GET /plans/:planId/tasks). When no task
+   exists yet for the strategy, an "add to plan" affordance seeds one (POST).
+   PROOF (evidence upload to Garage) is still labeled additive. */
 
 function ContractRow({
   strategy,
   isFirst,
+  task,
+  deadlineByKey,
+  deadlines,
+  onAdvance,
+  onSeed,
+  advancing,
+  seeding,
 }: {
   strategy: StrategyRow;
   isFirst: boolean;
+  task: TaskOut | null;
+  deadlineByKey: Map<string, StatutoryDeadline>;
+  deadlines: StatutoryDeadline[];
+  onAdvance: (task: TaskOut) => void;
+  onSeed: (strategy: StrategyRow, statutoryKey?: string) => void;
+  advancing: boolean;
+  seeding: boolean;
 }) {
+  const [pickDeadline, setPickDeadline] = useState(false);
   const isSigned = SIGNED_DISPOSITIONS.has(strategy.disposition);
   const isWaiting = strategy.status_flag === "explore" || (!isSigned && !isFirst);
 
+  // WHEN: resolve the task's statutory_key → catalog label/citation/date; else its due_date.
+  const deadlineEntry = task?.statutory_key ? deadlineByKey.get(task.statutory_key) ?? null : null;
+  const deadlineDate = task?.due_date ?? deadlineEntry?.due_date ?? null;
+  const statusDone = task?.status === "done";
+
   return (
-    <div className={`px-[22px] py-[18px] ${isSigned ? "opacity-80" : ""}`}>
+    <div className={`px-[22px] py-[18px] ${isSigned ? "opacity-90" : ""}`}>
       {/* contract header */}
       <div className="flex flex-wrap items-baseline gap-[12px]">
-        {isSigned ? (
+        {task ? (
+          <Chip tone={statusTone(task.status)} className="!text-[10px]">{STATUS_LABEL[task.status]}</Chip>
+        ) : isSigned ? (
           <Stamp kind="verified" className="!transform-none !text-[9px]">done</Stamp>
         ) : isWaiting ? (
           <Chip tone="cost" className="!text-[10px]">waiting on client</Chip>
@@ -591,41 +889,114 @@ function ContractRow({
         <span className="text-[15px] font-semibold leading-tight tracking-[-0.01em]">
           {strategy.name}
         </span>
-        <span className="ml-auto font-[700] text-[16px]">
-          <Money cents={strategy.estimated_savings_cents} tone="save" />
-          <span className="ml-0.5 text-[12px] font-normal text-[var(--g-ink-3)]">/yr</span>
+        <span className="ml-auto flex items-center gap-[10px]">
+          {/* advance the contract: open → in progress → done (PATCH) */}
+          {task && advanceVerb(task.status) ? (
+            <MiniButton seal={task.status === "in_progress"} disabled={advancing} onClick={() => onAdvance(task)}>
+              {advancing ? "…" : advanceVerb(task.status)}
+            </MiniButton>
+          ) : null}
+          <span className="font-[700] text-[16px]">
+            <Money cents={strategy.estimated_savings_cents} tone="save" />
+            <span className="ml-0.5 text-[12px] font-normal text-[var(--g-ink-3)]">/yr</span>
+          </span>
         </span>
       </div>
 
       {/* 5-field contract grid */}
       <div className="mt-[12px] grid grid-cols-2 gap-[10px] sm:grid-cols-5">
         <FieldBox label="who">
-          {/* TODO(integration: GET /plans/:planId/tasks) — who field */}
-          <span className="text-[var(--g-ink-3)] font-mono text-[10px]">[additive]</span>
+          {task ? (
+            <span className="text-[12px]">{task.owner}</span>
+          ) : (
+            <span className="text-[var(--g-ink-3)] font-mono text-[10px]">— no contract yet</span>
+          )}
         </FieldBox>
         <FieldBox label="what">
-          {/* TODO(integration: GET /plans/:planId/tasks) — what field */}
-          <span className="text-[var(--g-ink-3)] font-mono text-[10px]">[additive]</span>
+          {task ? (
+            <span className="text-[12px]">{task.title}</span>
+          ) : (
+            <span className="text-[var(--g-ink-3)] font-mono text-[10px]">— no contract yet</span>
+          )}
         </FieldBox>
         <FieldBox label="cash">
-          {/* TODO(integration: GET /plans/:planId/tasks) — cash field (estimated periodic cost) */}
-          <span className="text-[var(--g-ink-3)] font-mono text-[10px]">[additive]</span>
+          {task && task.amount_cents != null ? (
+            <Money cents={task.amount_cents} className="text-[12px] font-semibold" />
+          ) : (
+            <span className="text-[var(--g-ink-3)] font-mono text-[10px]">—</span>
+          )}
         </FieldBox>
         <FieldBox label="deadline" warn={false}>
-          {/* TODO(integration: GET /plans/:planId/tasks) — statutory deadline (engine-supplied) */}
-          <span className="text-[var(--g-ink-3)] font-mono text-[10px]">[additive]</span>
+          {deadlineDate ? (
+            <span className="text-[12px]">
+              {shortDate(deadlineDate)}
+              {deadlineEntry ? (
+                <span className="mt-[2px] block font-mono text-[9px] text-[var(--g-ink-3)]">
+                  {deadlineEntry.citation}
+                </span>
+              ) : null}
+            </span>
+          ) : (
+            <span className="text-[var(--g-ink-3)] font-mono text-[10px]">—</span>
+          )}
         </FieldBox>
         <FieldBox label="proof">
-          {/* TODO(integration: GET /plans/:planId/tasks) — evidence/document upload */}
-          {isSigned ? (
+          {/* PROOF (evidence upload to Garage) — [additive]: the upload affordance
+              is not yet wired. We honestly reflect server-recorded evidence state. */}
+          {/* TODO(integration: evidence upload to Garage) — POST evidence_blob_key + PATCH task */}
+          {task?.evidence_uploaded_at ? (
+            <span className="inline-flex items-center gap-[5px] font-mono text-[9.5px] text-[var(--save)]">
+              ✓ filed {shortDate(task.evidence_uploaded_at)}
+            </span>
+          ) : statusDone || (!task && isSigned) ? (
             <span className="inline-flex items-center gap-[5px] font-mono text-[9.5px] text-[var(--save)]">
               ✓ confirmed
             </span>
           ) : (
-            <span className="text-[var(--g-ink-3)] font-mono text-[10px]">[additive]</span>
+            <span className="text-[var(--g-ink-3)] font-mono text-[10px]">
+              upload <span className="text-[var(--cost)]">[additive]</span>
+            </span>
           )}
         </FieldBox>
       </div>
+
+      {/* add-to-plan affordance: seed a contract from this strategy (POST /plans/:id/tasks) */}
+      {!task ? (
+        <div className="mt-[12px] flex flex-wrap items-center gap-[8px]">
+          <MiniButton go disabled={seeding} onClick={() => onSeed(strategy)}>
+            {seeding ? "adding…" : "+ Add to plan"}
+          </MiniButton>
+          {deadlines.length > 0 ? (
+            <>
+              <button
+                type="button"
+                className="font-mono text-[10px] text-[var(--agent)] underline-offset-2 hover:underline disabled:opacity-50"
+                disabled={seeding}
+                onClick={() => setPickDeadline((v) => !v)}
+              >
+                {pickDeadline ? "hide deadlines" : "with a statutory deadline ▾"}
+              </button>
+              {pickDeadline ? (
+                <div className="mt-[6px] flex w-full flex-wrap gap-[6px]">
+                  {deadlines.map((d) => (
+                    <button
+                      key={d.key}
+                      type="button"
+                      disabled={seeding}
+                      onClick={() => onSeed(strategy, d.key)}
+                      className="rounded-[7px] border border-[var(--g-hairline-soft)] px-[9px] py-[5px] text-left text-[10.5px] leading-tight hover:border-[var(--agent)] disabled:opacity-50"
+                      title={d.citation}
+                    >
+                      <span className="block font-medium">{d.label}</span>
+                      <span className="font-mono text-[9px] text-[var(--g-ink-3)]">{shortDate(d.due_date)} · {d.citation}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* strategy client_facing_copy (live) */}
       {strategy.client_facing_copy ? (

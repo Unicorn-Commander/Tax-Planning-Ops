@@ -6,25 +6,23 @@
 // no agent chrome, no file nav. Four plates; arrow keys and F-key navigation.
 //
 // DATA WIRING:
-// [live-ish] Cover headline savings + top accepted findings: these come from
-//   GET /agents/clients/tax-years/{id}/strategist (same endpoint as Memo 06).
-// [live-ish] Simplified position (3 marks max): client overview bracket snapshot.
-// [live-ish] Keep/cost plate: overview.strategies totals.
+// [live] Present builds from the SIGNED memo. We load the persisted memo state
+//   (GET /clients/tax-years/{id}/memo). When the latest memo is signed we present
+//   its body + the linked run's findings/totals; until then we show an honest
+//   empty state ("Sign the memo to present it").
+// [live] Cover headline savings + top findings: from the signed memo's run.
+// [live] Simplified position (3 marks max): client overview bracket snapshot.
+// [live] Keep/identified plate: the signed run's identified savings.
 //
 // [additive] Everything below is HONESTLY LABELED (per Honesty Protocol):
-//   - memo persistence / sign state: the strategist result is re-fetched per
-//     session (ephemeral); signed source would require spec §9.1.
 //   - fee-net framing (the "123 : 1" ratio): fee config endpoint not yet built.
 //   - Client-friendly narrative text per finding: the register transform
 //     (additive per spec §7-06) is not built; we show recommended_action as-is.
-//   - Calendar steps: derived from strategy categories; the tasks model
+//   - Calendar steps: derived from finding categories; the tasks model
 //     (spec §9.4) would supply statutory deadlines.
 //
-// TODO(integration: GET /agents/clients/tax-years/{id}/strategist) — headline
-//   savings + findings (§7-06; same payload the Memo surface uses).
 // TODO(integration: GET /admin/branding) — firm name; default until it lands.
 // TODO(integration: GET /admin/engagements/{clientId}/fee) — fee for net framing.
-// TODO(integration: memo persistence §9.1) — present from the signed memo.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -39,7 +37,7 @@ import {
   type Segment,
 } from "@/components/kit";
 
-/* ---- the strategist payload shape (same as Memo) ---- */
+/* ---- the persisted memo state (GET /clients/tax-years/{id}/memo) ---- */
 interface Finding {
   title: string;
   category: string;
@@ -49,17 +47,36 @@ interface Finding {
   citation: string;
   caveat: string;
 }
-interface Strategist {
-  client_name: string;
-  tax_year: number;
-  current_total_tax_cents: number;
-  marginal_rate: string;
+interface StrategistRun {
+  id: string;
   findings: Finding[];
+  memo_text: string | null;
+  current_total_tax_cents: number;
   total_savings_identified_cents: number;
-  memo: string | null;
-  memo_available: boolean;
+  marginal_rate: string;
   objectives_summary: string | null;
-  disclaimer: string;
+  disclaimer: string | null;
+}
+interface MemoOut {
+  id: string;
+  version: number;
+  body_md: string;
+  status: "draft" | "signed";
+  signed_by: string | null;
+  signed_at: string | null;
+  content_hash: string | null;
+  audit_event_id: string | null;
+}
+interface MemoVersionSummary {
+  version: number;
+  status: string;
+  signed_at: string | null;
+  created_at: string;
+}
+interface MemoState {
+  latest_memo: MemoOut | null;
+  versions: MemoVersionSummary[];
+  latest_run: StrategistRun | null;
 }
 
 // TODO(integration: GET /admin/branding) — firm name; default until it lands.
@@ -75,7 +92,7 @@ export default function PresentPage() {
   // All hooks must be called before any early returns (rules-of-hooks).
   // clientId is provided by the ClientOverviewProvider in the (theater) layout.
   const { clientId, overview, loading } = useClientOverview();
-  const [strategist, setStrategist] = useState<Strategist | null>(null);
+  const [state, setState] = useState<MemoState | null>(null);
   const [sLoading, setSLoading] = useState(false);
   const [plateIndex, setPlateIndex] = useState(0);
   const deckRef = useRef<HTMLDivElement>(null);
@@ -88,17 +105,26 @@ export default function PresentPage() {
   }, [overview]);
   const taxYearId = planYear?.id ?? null;
 
-  // Fetch strategist once we know the tax-year id.
-  // TODO(integration: GET /agents/clients/tax-years/{id}/strategist)
+  // Load the persisted memo state once we know the tax-year id.
   useEffect(() => {
     if (!taxYearId) return;
     setSLoading(true);
     api
-      .get(`/agents/clients/tax-years/${taxYearId}/strategist`)
-      .then((r) => setStrategist(r.data as Strategist))
-      .catch(() => setStrategist(null))
+      .get<MemoState>(`/clients/tax-years/${taxYearId}/memo`)
+      .then((r) => setState(r.data))
+      .catch(() => setState(null))
       .finally(() => setSLoading(false));
   }, [taxYearId]);
+
+  // Present from the SIGNED memo only. latest_run is the run the latest memo was
+  // built from, so it lines up with latest_memo's body when that memo is signed.
+  const signedMemo = state?.latest_memo?.status === "signed" ? state.latest_memo : null;
+  const run = signedMemo ? (state?.latest_run ?? null) : null;
+  // Is there a newer unsigned draft sitting on top of the signed deliverable?
+  const newerDraft = useMemo(
+    () => Boolean(state?.versions?.some((v) => v.status === "draft")),
+    [state],
+  );
 
   // Arrow-key + F navigation (all hooks must be called before any return)
   useEffect(() => {
@@ -158,20 +184,14 @@ export default function PresentPage() {
     return spans;
   }, [planYear]);
 
-  // Top accepted / savings findings for the "moves" plate (up to 3)
+  // Top savings findings for the "moves" plate (up to 3), from the signed run.
   const topFindings: Finding[] = useMemo(() => {
-    if (!strategist) return [];
-    return strategist.findings
+    if (!run) return [];
+    return run.findings
       .filter((f) => f.impact_kind === "savings")
       .sort((a, b) => b.estimated_impact_cents - a.estimated_impact_cents)
       .slice(0, 3);
-  }, [strategist]);
-
-  // Keep/cost: from overview.strategies
-  const identified = useMemo(
-    () => (overview?.strategies ?? []).reduce((a, s) => a + (s.estimated_savings_cents || 0), 0),
-    [overview],
-  );
+  }, [run]);
 
   // Loading skeleton
   if (loading || sLoading) {
@@ -184,12 +204,61 @@ export default function PresentPage() {
 
   const client = overview?.client;
   const snap = planYear?.snapshot;
-  const clientName = client?.display_name ?? strategist?.client_name ?? "Your client";
-  const taxYear = planYear?.tax_year ?? strategist?.tax_year ?? 2025;
-  const totalSavings = strategist?.total_savings_identified_cents ?? identified;
+  const clientName = client?.display_name ?? "Your client";
+  const taxYear = planYear?.tax_year ?? 2025;
+  const totalSavings = run?.total_savings_identified_cents ?? 0;
   // TODO(integration: GET /admin/engagements/{clientId}/fee) — fee config not built.
   // The fee-net framing is ADDITIVE (spec §9 / §7-13). We show no fee figure until
   // the endpoint exists. Never invent or hardcode a fee dollar.
+
+  // ===== honest empty state: nothing signed yet =====
+  if (!signedMemo || !run) {
+    return (
+      <div ref={deckRef} className="flex min-h-screen flex-col">
+        <div
+          className="sticky top-0 z-50 flex items-center gap-3.5 border-b px-6 py-3"
+          style={{
+            background: "color-mix(in srgb, var(--g-bg) 80%, transparent)",
+            backdropFilter: "blur(14px)",
+            borderColor: "var(--g-hairline-soft)",
+          }}
+        >
+          <Link
+            href={`/c/${clientId}/memo`}
+            className="mini-btn inline-flex items-center gap-1.5 no-underline"
+            title="Back to the memo (Esc)"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            esc — back to the memo
+          </Link>
+          <Chip style={{ borderColor: "rgba(31,28,23,0.2)" }}>present mode &middot; locked to the signed memo</Chip>
+        </div>
+
+        <div className="flex flex-1 items-center justify-center px-6 py-16">
+          <div className="sheet plate" style={{ padding: "64px 72px", maxWidth: 720, textAlign: "center" }}>
+            <MicroLabel style={{ justifyContent: "center" }}>Present</MicroLabel>
+            <h1 style={{ fontSize: 34, margin: "16px 0 10px" }}>Sign the memo to present it.</h1>
+            <p className="lede" style={{ fontSize: 17, color: "var(--p-ink-2)" }}>
+              The client deck is built from the <b>signed</b> memorandum — its sealed
+              narrative, the engine-verified findings, and the identified savings.
+              Nothing here is shown to a client until you&rsquo;ve reviewed and sealed it.
+            </p>
+            <p style={{ marginTop: 14, fontSize: 14.5, color: "var(--p-ink-3)" }}>
+              {newerDraft
+                ? `${clientName} · ${taxYear}: a draft is in progress on the Memo page — sign it to unlock present mode.`
+                : `${clientName} · ${taxYear}: run the strategist on the Memo page, review the findings, then sign & seal.`}
+            </p>
+            <Link
+              href={`/c/${clientId}/memo`}
+              className="mini-btn seal mt-6 inline-flex items-center gap-1.5 no-underline"
+            >
+              Go to the memo →
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const currentPlate = PLATE_ORDER[plateIndex];
 
@@ -216,6 +285,15 @@ export default function PresentPage() {
         <Chip style={{ borderColor: "rgba(31,28,23,0.2)" }}>
           client view &middot; no controls &middot; no jargon
         </Chip>
+
+        <span className="font-mono text-[10.5px]" style={{ color: "var(--g-ink-3)" }}>
+          sealed memo v{signedMemo.version}{signedMemo.content_hash ? ` · ${signedMemo.content_hash.slice(0, 8)}` : ""}
+        </span>
+        {newerDraft ? (
+          <span className="font-mono text-[10px]" style={{ color: "var(--cost)" }}>
+            (a newer draft is unsigned — presenting the sealed version)
+          </span>
+        ) : null}
 
         {/* plate nav dots */}
         <div className="ml-auto flex items-center gap-1.5">
@@ -257,18 +335,18 @@ export default function PresentPage() {
           />
 
           <h1 style={{ fontSize: 42, margin: "22px 0 10px" }}>
-            {strategist?.objectives_summary
-              ? strategist.objectives_summary.split(".")[0] + "."
+            {run.objectives_summary
+              ? run.objectives_summary.split(".")[0] + "."
               : "Your next few years, planned to the dollar."}
           </h1>
 
           <p className="lede" style={{ fontSize: 19 }}>
-            {strategist?.memo
-              ? strategist.memo.split(/\n+/)[0].slice(0, 220)
+            {signedMemo.body_md
+              ? signedMemo.body_md.split(/\n+/)[0].slice(0, 220)
               : `We analyzed your ${taxYear} return and identified the moves that matter most.`}
           </p>
 
-          {/* headline savings — LIVE from strategist or overview.strategies */}
+          {/* headline savings — LIVE from the signed memo's run */}
           <div
             className="fig-serif"
             style={{
@@ -283,7 +361,7 @@ export default function PresentPage() {
           >
             {totalSavings > 0
               ? centsToUSD(totalSavings)
-              : <span style={{ fontSize: 36, color: "var(--p-ink-3)" }}>Run the strategist to see the headline</span>}
+              : <span style={{ fontSize: 36, color: "var(--p-ink-3)" }}>No savings identified this year</span>}
           </div>
 
           {totalSavings > 0 ? (
@@ -392,31 +470,9 @@ export default function PresentPage() {
                 />
               ))}
             </div>
-          ) : !strategist ? (
-            /* no strategist run yet — honest additive note */
-            <div
-              className="font-mono"
-              style={{
-                margin: "24px 0",
-                padding: "18px 22px",
-                border: "1px dashed var(--p-hairline)",
-                borderRadius: 10,
-                fontSize: 12,
-                color: "var(--p-ink-3)",
-                lineHeight: 1.7,
-              }}
-            >
-              <span className="tone-cost">[additive]</span> The &ldquo;moves&rdquo; plate renders from
-              the top 3 accepted findings of the signed memo (spec §7-13). Run the strategist on the
-              Memo page and sign it to populate this plate. See INTEGRATION-TODO.13.md.
-              <br />
-              <span className="font-mono" style={{ fontSize: 10 }}>
-                TODO(integration: GET /agents/clients/tax-years/&#123;id&#125;/strategist)
-              </span>
-            </div>
           ) : (
             <p style={{ fontSize: 13, color: "var(--p-ink-3)", marginTop: 20 }}>
-              No savings findings in the strategist run yet.
+              The sealed memo has no savings findings to stage as moves.
             </p>
           )}
 
@@ -469,7 +525,7 @@ export default function PresentPage() {
                 plan + implementation support + quarterly reviews
               </p>
             </div>
-            {/* savings side — LIVE from strategist / overview */}
+            {/* savings side — LIVE from the signed run */}
             <div style={{ padding: "24px 28px" }}>
               <MicroLabel style={{ color: "var(--p-save)" }}>Identified savings</MicroLabel>
               <div
@@ -492,10 +548,10 @@ export default function PresentPage() {
             </div>
           </div>
 
-          {/* calendar steps — derived from strategy categories */}
+          {/* calendar steps — derived from finding categories */}
           <CalendarSteps findings={topFindings} taxYear={taxYear} />
 
-          {/* provenance footline */}
+          {/* provenance footline — now backed by the signed memo's seal */}
           <p
             className="fn"
             style={{ marginTop: 26, fontSize: 12.5, color: "var(--p-ink-3)", lineHeight: 1.65 }}
@@ -503,8 +559,13 @@ export default function PresentPage() {
             Every dollar figure on these pages was computed by deterministic tax engines from
             your filed {taxYear} return and current law ({taxYear} constants, verified).
             Prepared by {FIRM_NAME} &middot; this is planning, not a filed return.
-            {/* TODO(integration: memo persistence §9.1) — "reviewed and signed by [signer] · [ref]"
-                populates when the memo is signed. */}
+            {signedMemo.signed_at ? (
+              <>
+                {" "}Reviewed and signed{signedMemo.signed_by ? ` by ${signedMemo.signed_by}` : ""} on{" "}
+                {new Date(signedMemo.signed_at).toLocaleDateString()}
+                {signedMemo.audit_event_id ? ` · audit ${signedMemo.audit_event_id.slice(0, 8)}` : ""}.
+              </>
+            ) : null}
           </p>
 
           <PlateFootnote n={4} label="THE AGREEMENT" />
@@ -591,7 +652,7 @@ function MoveRow({ n, title, body, amtCents }: { n: number; title: string; body:
   );
 }
 
-/* ---- calendar steps derived from strategy categories ---- */
+/* ---- calendar steps derived from finding categories ---- */
 function CalendarSteps({ findings }: { findings: Finding[]; taxYear: number }) {
   // TODO(integration: tasks model §9.4) — statutory deadlines per strategy.
   // Until that endpoint lands we derive rough calendar steps from the top

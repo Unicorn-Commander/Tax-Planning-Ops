@@ -7,11 +7,13 @@
 // [live] GET /agents/scan-book (the book pulse — kept in the backend's
 //   savings-ranked order, NOT re-sorted by total_tax) · GET /clients + each
 //   /clients/:id/overview (snapshot + strategies + quarterly + years) · GET
-//   /admin/tax-bracket-sets (micro-strata spans + the constants card).
-// [additive] (honestly labeled): drafted-memo + extraction queue items (need
-//   memo persistence / per-client extraction list); the duty band (agent
-//   registry); the ticker (audit-journal tail). The unsealed-plan queue items
-//   are derived from real plan state.
+//   /admin/tax-bracket-sets (micro-strata spans + the constants card) · GET
+//   /memos/pending (drafted memos join the sign-off queue) · GET
+//   /lifecycle/journal?tail=20 (the ticker is the audit-journal tail; its
+//   chain_intact drives the "ledger verified" mark). The unsealed-plan queue
+//   items are derived from real plan state.
+// [additive] (honestly labeled): low-confidence-extraction queue items (need a
+//   per-client extraction list); the duty band (agent registry / presence).
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -22,6 +24,19 @@ import {
   MiniButton, Stamp, QueueItem, Ticker, Omnibar, PositionInstrument, hueForClient,
   type Segment, type AgentKey,
 } from "@/components/kit";
+
+/** Compact relative time for the journal ticker ("12s", "4m", "2h", "3d"). */
+function relTime(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return "";
+  const secs = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (secs < 60) return `${secs}s`;
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h`;
+  return `${Math.round(hrs / 24)}d`;
+}
 
 /* ---- live shapes (same as Book/Season) ---- */
 interface ScanRow { client_id: string; client_name: string }
@@ -37,6 +52,20 @@ interface Overview {
 }
 interface BracketRow { lower_bound_cents: number; upper_bound_cents: number | null; rate: string; ordinal: number }
 interface BracketSet { id: string; tax_year: number; jurisdiction: string; filing_status: string; rows: BracketRow[] }
+
+/* ---- live: drafted memos awaiting sign-off (GET /memos/pending) ---- */
+interface PendingMemo {
+  memo_id: string; client_tax_year_id: string; client_name: string; tax_year: number;
+  version: number; created_at: string; total_savings_identified_cents: number | null;
+}
+/* ---- live: audit-journal tail (GET /lifecycle/journal?tail=20) ---- */
+interface JournalEvent {
+  id: string; created_at: string; event_type: string; actor_uc_uid: string;
+  aggregate_type: string; aggregate_id: string; payload: Record<string, unknown>;
+  hash: string; prev_hash: string | null;
+}
+interface JournalStatus { count: number; latest_hash: string | null; latest_at: string | null; chain_intact: boolean }
+interface JournalTail { events: JournalEvent[]; status: JournalStatus }
 
 function buildSegments(sets: BracketSet[], year: number, filing: string): Segment[] {
   if (!sets.length) return [];
@@ -69,9 +98,15 @@ export default function DeskPage() {
   const [scanOrder, setScanOrder] = useState<string[] | null>(null);
   const [overviews, setOverviews] = useState<Record<string, Overview>>({});
   const [sets, setSets] = useState<BracketSet[]>([]);
+  const [pendingMemos, setPendingMemos] = useState<PendingMemo[]>([]);
+  const [journal, setJournal] = useState<JournalTail | null>(null);
 
   useEffect(() => { api.get("/clients").then((r) => setClients(Array.isArray(r.data) ? r.data : (r.data?.clients ?? []))).catch(() => setClients([])); }, []);
   useEffect(() => { api.get("/admin/tax-bracket-sets").then((r) => setSets(r.data)).catch(() => setSets([])); }, []);
+  // [live] drafted memos awaiting sign-off — folded into the queue below
+  useEffect(() => { api.get<PendingMemo[]>("/memos/pending").then((r) => setPendingMemos(Array.isArray(r.data) ? r.data : [])).catch(() => setPendingMemos([])); }, []);
+  // [live] audit-journal tail — drives the ticker + the ledger-verified mark
+  useEffect(() => { api.get<JournalTail>("/lifecycle/journal?tail=20").then((r) => setJournal(r.data)).catch(() => setJournal(null)); }, []);
   useEffect(() => {
     // keep scan-book's savings ranking (do NOT re-sort by total_tax — spec §11)
     api.get("/agents/scan-book").then((r) => {
@@ -107,9 +142,30 @@ export default function DeskPage() {
     [overviews],
   );
 
-  /* ---- sign-off queue (from real plan state) ---- */
+  /* ---- map a memo's tax-year id back to its client via loaded overviews ---- */
+  const clientForTaxYear = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const [clientId, ov] of Object.entries(overviews)) {
+      for (const y of ov.years) m.set(y.id, clientId);
+    }
+    return m;
+  }, [overviews]);
+
+  /* ---- sign-off queue: drafted memos [live] + unsealed plans + baseline review ---- */
   const queue = useMemo(() => {
-    const items: { id: string; kind: "plan" | "intake"; client: string; clientId: string; sub: string; href: string }[] = [];
+    const items: { id: string; kind: "memo" | "plan" | "intake"; client: string; clientId: string | null; sub: string; href: string }[] = [];
+    // [live] drafted memos awaiting signature — the truest "sign the memo" work
+    for (const m of pendingMemos) {
+      const clientId = clientForTaxYear.get(m.client_tax_year_id) ?? null;
+      const saved = m.total_savings_identified_cents;
+      const savedNote = saved && saved > 0 ? `${centsToUSD(saved)} identified · ` : "";
+      items.push({
+        id: `memo-${m.memo_id}`, kind: "memo", client: m.client_name, clientId,
+        sub: `${savedNote}draft v${m.version} · TY ${m.tax_year} — review, edit, or sign to seal`,
+        // resolvable → deep-link the client's memo; otherwise the firm-wide book (no tax-year memo route)
+        href: clientId ? `/c/${clientId}/memo` : "/book",
+      });
+    }
     for (const c of clients ?? []) {
       const ov = overviews[c.id];
       if (!ov) continue;
@@ -122,7 +178,7 @@ export default function DeskPage() {
       }
     }
     return items;
-  }, [clients, overviews]);
+  }, [clients, overviews, pendingMemos, clientForTaxYear]);
 
   /* ---- season: quarterly across the book ---- */
   const qNum = currentQuarter();
@@ -139,8 +195,32 @@ export default function DeskPage() {
     return { rows, unfunded };
   }, [clients, overviews, qNum]);
 
-  const loading = clients === null;
   const fedSet = sets.find((s) => s.jurisdiction?.toLowerCase().includes("fed")) ?? sets[0];
+
+  /* ---- ticker = the audit-journal tail [live]; falls back to derived metrics
+     while the journal is empty/unavailable (e.g. a brand-new workspace) ---- */
+  const tickItems = useMemo(() => {
+    const evs = journal?.events ?? [];
+    if (evs.length > 0) {
+      return evs.map((e) => {
+        const t = e.event_type.toLowerCase();
+        const tone: "save" | "cost" | "seal" | "agent" =
+          /sign|seal|finaliz|lock/.test(t) ? "seal" : /declin|reject|flag|fail|void/.test(t) ? "cost" : "agent";
+        const label = `${e.event_type.replace(/[._]/g, " ")} · ${e.aggregate_type}`;
+        return { tone, label, value: `${e.hash.slice(0, 8)} · ${relTime(e.created_at)} ago` };
+      });
+    }
+    // derived fallback — clearly not the journal; same shape the v1 surface used
+    return [
+      { tone: "seal" as const, label: "your sign-off", value: `${queue.length} waiting` },
+      { tone: "save" as const, label: "identified this season", value: centsToUSD(identifiedTotal) },
+      { tone: "cost" as const, label: `Q${qNum} unfunded`, value: `${season.unfunded} clients` },
+      { tone: "agent" as const, label: "engines on", value: `${fedSet?.tax_year ?? 2026} constants · golden-tested` },
+    ];
+  }, [journal, queue.length, identifiedTotal, season.unfunded, qNum, fedSet]);
+  const ledgerVerified = journal?.status.chain_intact ?? null;
+
+  const loading = clients === null;
 
   return (
     <div className="wrap py-7 pb-16">
@@ -177,15 +257,17 @@ export default function DeskPage() {
         <Chip tone="agent" href="/staff">● staff</Chip>
       </div>
 
-      {/* ticker — [additive] audit-journal tail; until then a derived recent-activity line */}
-      {queue.length > 0 ? (
-        <Ticker className="mt-5" items={[
-          { tone: "seal", label: "your sign-off", value: `${queue.length} waiting` },
-          { tone: "save", label: "identified this season", value: centsToUSD(identifiedTotal) },
-          { tone: "cost", label: `Q${qNum} unfunded`, value: `${season.unfunded} clients` },
-          { tone: "agent", label: "engines on", value: `${fedSet?.tax_year ?? 2026} constants · golden-tested` },
-        ]} />
-      ) : null}
+      {/* ticker — [live] the audit-journal tail (newest events scrolling); a tiny
+          "ledger verified" mark when the hash chain still checks. Falls back to
+          derived metrics only while the journal is empty/unavailable. */}
+      <div className="mt-5 flex items-center gap-3">
+        <Ticker className="min-w-0 flex-1" items={tickItems} />
+        {ledgerVerified !== null ? (
+          <span className={`hidden shrink-0 font-mono text-[10px] sm:inline ${ledgerVerified ? "tone-save" : "tone-cost"}`} title={journal?.status.latest_hash ? `chain head ${journal.status.latest_hash.slice(0, 12)}` : undefined}>
+            {ledgerVerified ? "● ledger verified" : "● ledger broken"}
+          </span>
+        ) : null}
+      </div>
 
       <div className="mt-6 grid items-start gap-[22px] lg:grid-cols-[1.62fr_1fr]">
         <div className="flex flex-col gap-[22px]">
@@ -204,16 +286,16 @@ export default function DeskPage() {
               queue.map((it) => (
                 <QueueItem
                   key={it.id}
-                  lead={<Cavatar name={it.client} hue={hueForClient(it.clientId)} className="!h-[34px] !w-[34px]" />}
-                  title={it.kind === "plan" ? `Plan ready to seal — ${it.client}` : `Baseline review — ${it.client}`}
+                  lead={<Cavatar name={it.client} hue={hueForClient(it.clientId ?? it.id)} className="!h-[34px] !w-[34px]" />}
+                  title={it.kind === "memo" ? `Memo drafted — ${it.client}` : it.kind === "plan" ? `Plan ready to seal — ${it.client}` : `Baseline review — ${it.client}`}
                   sub={it.sub}
-                  badge={<Stamp kind={it.kind === "plan" ? "draft" : "flag"} className="!transform-none !text-[9px]">{it.kind === "plan" ? "unsealed" : "intake"}</Stamp>}
-                  actions={<MiniButton href={it.href} seal={it.kind === "plan"} go={it.kind !== "plan"}>{it.kind === "plan" ? "Finalize & seal" : "Review"}</MiniButton>}
+                  badge={<Stamp kind={it.kind === "intake" ? "flag" : "draft"} className="!transform-none !text-[9px]">{it.kind === "memo" ? "drafted" : it.kind === "plan" ? "unsealed" : "intake"}</Stamp>}
+                  actions={<MiniButton href={it.href} seal={it.kind !== "intake"} go={it.kind === "intake"}>{it.kind === "memo" ? "Review & sign" : it.kind === "plan" ? "Finalize & seal" : "Review"}</MiniButton>}
                 />
               ))
             )}
             <div className="border-t border-[var(--g-hairline-soft)] px-5 py-2 font-mono text-[10px] text-[var(--g-ink-3)]">
-              <span className="tone-cost">[additive]</span> drafted-memo + low-confidence-extraction items join here with memo persistence + the per-client extraction list.
+              <span className="tone-seal">[live]</span> drafted memos (GET /memos/pending) · <span className="tone-cost">[additive]</span> low-confidence-extraction items join with the per-client extraction list.
             </div>
           </Panel>
 
