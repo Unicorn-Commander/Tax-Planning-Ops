@@ -16,3 +16,4 @@ export * from "./sheet";
 export * from "./queue";
 export * from "./console";
 export * from "./chrome";
+export * from "./charts";
