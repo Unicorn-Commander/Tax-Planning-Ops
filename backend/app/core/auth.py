@@ -9,9 +9,12 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.responses import JSONResponse, Response
 
 from app.core.config import Settings
+from app.core.request_context import current_door, normalize_door
 from app.integrations.control_plane import check_entitlement
 from app.integrations.keycloak import KeycloakVerifier
 from app.schemas.auth import AuthContext
+
+DOOR_HEADER = "X-UC-Door"
 
 WORKSPACE_HEADER = "X-Workspace-Id"
 
@@ -120,6 +123,19 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         self.verifier = verifier or KeycloakVerifier(settings)
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        # Stamp which door this request came through (GUI / Console / MCP / API)
+        # so audit events carry it as provenance and door-usage stats can count it.
+        # Server-side callers (the MCP server) set X-UC-Door explicitly; a browser
+        # request is recognised as the GUI by its Origin matching our frontend —
+        # no custom cross-origin header (and so no CORS-preflight change) needed.
+        door = request.headers.get(DOOR_HEADER)
+        if not door:
+            raw = request.headers.get("origin") or request.headers.get("referer") or ""
+            origin = raw.rstrip("/")
+            allowed = [o.rstrip("/") for o in self.settings.CORS_ORIGINS]
+            if origin and any(origin.startswith(o) for o in allowed):
+                door = "gui"
+        current_door.set(normalize_door(door))
         if request.method == "OPTIONS" or request.url.path.startswith(self.SKIP_PREFIXES):
             return await call_next(request)
         # HTTPException raised inside BaseHTTPMiddleware bypasses FastAPI's

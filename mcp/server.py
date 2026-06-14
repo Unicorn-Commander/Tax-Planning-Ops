@@ -231,7 +231,9 @@ def build_request(
     url = join_url(base, path)
 
     # 2) Headers — forward auth + workspace, nothing more.
-    headers: dict[str, str] = {"Accept": "application/json"}
+    # Identify this caller as the MCP door (the third door) — the backend stamps
+    # it onto audit events as provenance and the door-usage stats count it.
+    headers: dict[str, str] = {"Accept": "application/json", "X-UC-Door": "mcp"}
     tok = token if token is not None else os.environ.get("TPO_MCP_TOKEN")
     if tok:
         headers["Authorization"] = f"Bearer {tok}"

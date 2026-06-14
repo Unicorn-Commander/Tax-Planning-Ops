@@ -1,6 +1,7 @@
 from app.db.base import Base
 from app.models.branding import WorkspaceBranding
 from app.models.client import Client
+from app.models.engagement import Engagement
 from app.models.entity import BusinessEntity
 from app.models.implementation import ImplementationTask, RealizedOutcome
 from app.models.memo import Memo, StrategistRun
@@ -28,6 +29,7 @@ __all__ = [
     "ClientStrategy",
     "ClientTaxYear",
     "Document",
+    "Engagement",
     "ExtractedField",
     "ExtractedReturn",
     "ImplementationTask",

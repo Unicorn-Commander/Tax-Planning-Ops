@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.request_context import current_door
 from app.models.tax_year import AuditJournal
 
 # Hard cap on how many journal rows a single read can pull back, regardless of
@@ -51,6 +52,9 @@ async def append_audit_event(
     aggregate_id: UUID,
     payload: dict[str, Any],
 ) -> AuditJournal:
+    # Stamp the door this action came through (gui/console/mcp/api) as provenance,
+    # unless the caller already set it. Covered by the hash like any payload field.
+    payload = {"door": current_door.get(), **payload}
     previous = await db.scalar(
         select(AuditJournal)
         .where(AuditJournal.workspace_id == workspace_id)
