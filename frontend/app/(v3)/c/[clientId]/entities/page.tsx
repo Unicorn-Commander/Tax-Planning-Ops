@@ -45,6 +45,7 @@ import {
   type EntityNode,
   type EntityEdge,
 } from "@/components/kit";
+import { CorporateReturnPanel } from "@/components/corporate-return-panel";
 
 /* ======================================================== wire shapes ======= */
 
@@ -776,6 +777,14 @@ export default function EntitiesPage() {
           ) : null}
         </div>
       </div>
+
+      {/* ================================================================ corporate return (1120) */}
+      {/* Renders only when a C-corp entity is present; fed by the dedicated
+          corporate-analysis engine endpoint (federal 21% + state, the double
+          tax, retained earnings, AET watch, and salary-vs-dividend optimum). */}
+      {taxYearId && ents.some((e) => e.kind === "c_corp") ? (
+        <CorporateReturnPanel taxYearId={taxYearId} />
+      ) : null}
 
       {/* ================================================================ business analysis summary */}
       {bizAvail ? (

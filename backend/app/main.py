@@ -10,6 +10,7 @@ from app.api.admin import router as admin_router
 from app.api.agents import router as agents_router
 from app.api.auth import router as auth_router
 from app.api.clients import router as clients_router
+from app.api.corporate import router as corporate_router
 from app.api.demo import router as demo_router
 from app.api.engagement import router as engagement_router
 from app.api.entities import router as entities_router
@@ -99,6 +100,9 @@ def create_app() -> FastAPI:
     # + opt-in demo data (a dedicated 'Sample Firm (demo)' workspace).
     app.include_router(workspaces_router, prefix="/api/v1")
     app.include_router(demo_router, prefix="/api/v1")
+    # C-corp / 1120 standalone planning view (federal + state corp tax, AET,
+    # double-tax, salary/dividend optimization).
+    app.include_router(corporate_router, prefix="/api/v1")
     return app
 
 

@@ -149,6 +149,18 @@ export const GLOSS: Record<string, Gloss> = {
     term: "Bunching / DAF",
     gloss: "Stack several years of charitable giving into one year so it clears the standard deduction.",
   },
+  "c-corp-1120": {
+    term: "C-corp / Form 1120",
+    gloss: "A C-corp pays its own 21% federal tax (plus any state); the owner is taxed again on salary and dividends — the double tax.",
+  },
+  "acc-earnings-tax": {
+    term: "Accumulated earnings tax",
+    gloss: "A 20% penalty if a C-corp piles up earnings beyond ~$250k without a business reason instead of paying them out.",
+  },
+  "salary-dividend": {
+    term: "Salary vs dividend",
+    gloss: "Salary is deductible to the corp but is payroll + ordinary income to the owner; dividends aren't deductible (double-taxed) but skip payroll.",
+  },
 };
 
 /* ---- Source classes for figures (§0.3) ----------------------------------- */
