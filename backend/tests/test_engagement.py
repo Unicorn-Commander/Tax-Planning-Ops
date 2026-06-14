@@ -67,6 +67,9 @@ class _FakeSession:
     async def flush(self) -> None:
         return None
 
+    async def refresh(self, _obj: Any) -> None:
+        return None
+
 
 def _client() -> Client:
     return Client(id=CLIENT_ID, workspace_id=WS, display_name="Jordan Alvarez")

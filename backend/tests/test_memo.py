@@ -95,6 +95,9 @@ class _FakeSession:
     async def flush(self) -> None:
         return None
 
+    async def refresh(self, _obj: Any) -> None:
+        return None
+
 
 def _run_result(memo_text: str | None) -> dict[str, Any]:
     return {

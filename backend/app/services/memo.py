@@ -163,6 +163,10 @@ async def save_memo_draft(
     if latest is not None and latest.status == "draft":
         latest.body_md = body_md
         await db.flush()
+        # Reload server-side onupdate columns (updated_at) before the row is
+        # serialized — accessing an expired column during model_validate would
+        # otherwise lazy-load outside the async greenlet.
+        await db.refresh(latest)
         return latest
 
     memo = Memo(
@@ -176,6 +180,7 @@ async def save_memo_draft(
     )
     db.add(memo)
     await db.flush()
+    await db.refresh(memo)
     return memo
 
 
@@ -210,6 +215,7 @@ async def sign_memo(
     memo.content_hash = content_hash
     memo.audit_event_id = event.id
     await db.flush()
+    await db.refresh(memo)
     return memo
 
 

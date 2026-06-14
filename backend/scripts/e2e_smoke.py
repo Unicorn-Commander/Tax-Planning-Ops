@@ -225,7 +225,151 @@ def main() -> int:
         % (pdf.get("version"), (pdf.get("garage_key") or "")[:60])
     )
 
-    # 11. Audit chain verify
+    # ===== Phase 9 — the additive transaction path (memo/sign, scenario, tasks,
+    # realized, journal) + the honest-notes read endpoints, all under real auth. =====
+
+    # 11. Strategist run (persists a run + seeds a draft memo)
+    run = step(
+        "strategist run (persist)",
+        api.post(f"/clients/tax-years/{plan_year_id}/strategist/run", json={}),
+    )
+    memo_state = run.get("memo_state") or {}
+    memo = memo_state.get("latest_memo") or {}
+    memo_id = memo.get("id")
+    print(
+        "     run findings=%s memo v%s status=%s"
+        % (len((run.get("run") or {}).get("findings") or []), memo.get("version"), memo.get("status"))
+    )
+
+    # 12. Edit the draft body
+    step(
+        "save memo draft",
+        api.put(
+            f"/clients/tax-years/{plan_year_id}/memo",
+            json={"body_md": f"## Working memo (e2e {run_tag})\nEdited by the smoke."},
+        ),
+    )
+
+    # 13. Sign & seal -> a real content_hash + a hash-chained audit event
+    signed = step("sign memo", api.post(f"/memos/{memo_id}/sign", json={}))
+    if not (signed.get("status") == "signed" and signed.get("content_hash") and signed.get("audit_event_id")):
+        print(f"[FAIL] sign did not seal: {signed}")
+        sys.exit(1)
+    print(
+        "     signed v%s hash=%s audit=%s"
+        % (signed.get("version"), (signed.get("content_hash") or "")[:12], str(signed.get("audit_event_id"))[:8])
+    )
+
+    # 14. The signed memo must have left the pending queue
+    pending = step("memos pending", api.get("/memos/pending"))
+    pend_items = pending.get("items") if isinstance(pending, dict) else pending
+    if memo_id in {p.get("memo_id") for p in (pend_items or [])}:
+        print("[FAIL] signed memo still in the pending queue")
+        sys.exit(1)
+
+    # 15. Scenario recompute — a real engine before/after delta
+    scen = step(
+        "scenario recompute (-$20k Sch-1 income)",
+        api.post(
+            f"/agents/clients/tax-years/{plan_year_id}/scenario",
+            json={"delta_fields": {"schedule_1_income_cents": -2000000}},
+        ),
+    )
+    print(
+        "     tax_delta_cents=%s marginal %s->%s"
+        % (scen.get("tax_delta_cents"), scen.get("marginal_rate_base"), scen.get("marginal_rate_scenario"))
+    )
+
+    # 16. EMR sweep + Roth optimizer (real engine traces)
+    emr = step("EMR sweep", api.post(f"/agents/clients/tax-years/{plan_year_id}/emr-sweep", json={}))
+    print(
+        "     emr points=%s true_next_dollar=%s"
+        % (len(emr.get("points") or []), emr.get("true_next_dollar_rate"))
+    )
+    step("optimize roth", api.post(f"/agents/clients/tax-years/{plan_year_id}/optimize/roth", json={}))
+
+    # 17. Statutory deadlines + a 5-field implementation contract
+    step("statutory deadlines", api.get("/statutory-deadlines", params={"tax_year": 2026}))
+    task = step(
+        "create task (5-field contract)",
+        api.post(
+            f"/plans/{plan_year_id}/tasks",
+            json={
+                "title": "Fund Solo 401(k) employee deferral",
+                "owner": "client",
+                "amount_cents": 2000000,
+                "statutory_key": "solo_401k_employee",
+                "client_strategy_id": attach.get("id"),
+            },
+        ),
+        201,
+    )
+    step("advance task -> in_progress", api.patch(f"/tasks/{task.get('id')}", json={"status": "in_progress"}))
+    tasks = step("list tasks", api.get(f"/plans/{plan_year_id}/tasks"))
+    print(f"     tasks={len(tasks.get('items') or [])} (with statutory due dates)")
+
+    # 18. Realized reconciliation (planned locked from the strategy) + book rollup
+    step(
+        "reconcile realized outcome",
+        api.post(
+            f"/plans/{plan_year_id}/realized",
+            json={
+                "client_strategy_id": attach.get("id"),
+                "realized_tax_year": 2027,
+                "realized_savings_cents": 1800000,
+                "basis": "next_year_return",
+            },
+        ),
+        201,
+    )
+    rollup = step("realized rollup", api.get("/agents/realized-rollup"))
+    print(
+        "     rollup planned=%s realized=%s"
+        % (rollup.get("total_planned_cents"), rollup.get("total_realized_cents"))
+    )
+
+    # 19. Journal read — the signed + reconciled events, each with a door stamp
+    journal = step("journal tail", api.get("/lifecycle/journal", params={"tail": 20}))
+    events = journal.get("events") or []
+    types = {e.get("event_type") for e in events}
+    if "memo.signed" not in types:
+        print(f"[FAIL] memo.signed missing from journal tail: {sorted(t for t in types if t)}")
+        sys.exit(1)
+    doors = {(e.get("payload") or {}).get("door") for e in events}
+    print(
+        "     journal events=%s doors=%s chain_intact=%s"
+        % (len(events), doors, (journal.get("status") or {}).get("chain_intact"))
+    )
+
+    # 20. The honest-notes read endpoints
+    reg = step("agent registry", api.get("/agents/registry"))
+    print(f"     registry agents={len(reg.get('agents') or [])}")
+    step("door stats", api.get("/agents/door-stats"))
+    mtx = step("clients x strategies matrix", api.get("/agents/matrix"))
+    print(f"     matrix rows={len(mtx.get('rows') or [])} grand_total={mtx.get('grand_total_cents')}")
+    step("read branding (200 + null ok when unset)", api.get("/admin/branding"))
+    step("set advisory fee", api.put(f"/admin/engagements/{client_id}/fee", json={"fee_cents": 350000, "fee_basis": "flat"}))
+    step("read advisory fee", api.get(f"/admin/engagements/{client_id}/fee"))
+
+    # 21. Streaming strategist (door 2) — read the SSE event stream to completion
+    seen: list[str] = []
+    with api.stream(
+        "POST", f"/agents/clients/tax-years/{plan_year_id}/strategist/stream", json={}
+    ) as sresp:
+        if sresp.status_code != 200:
+            print(f"[FAIL] strategist stream: HTTP {sresp.status_code}")
+            sys.exit(1)
+        for line in sresp.iter_lines():
+            if line.startswith("data: "):
+                seen.append(json.loads(line[6:]).get("type"))
+                if seen[-1] == "done" or len(seen) > 60:
+                    break
+    if not ("plan" in seen and "done" in seen):
+        print(f"[FAIL] stream missing plan/done: {seen[:12]}")
+        sys.exit(1)
+    print(f"{CHECK} strategist stream (SSE)\n     event types: {seen[:8]}")
+
+    # 22. Audit chain verify (now also covers memo.signed + outcome.reconciled)
     audit = step("verify audit chain", api.get("/lifecycle/audit/verify"))
     if not (audit.get("valid") or audit.get("ok")):
         print(f"[FAIL] audit chain reported invalid: {audit}")

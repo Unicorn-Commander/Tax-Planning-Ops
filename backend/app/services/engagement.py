@@ -65,4 +65,7 @@ async def upsert_engagement(
     engagement.fee_note = payload.fee_note
     db.add(engagement)
     await db.flush()
+    # Reload server-side timestamp columns before serialization (an UPDATE
+    # expires updated_at, which would otherwise lazy-load outside the greenlet).
+    await db.refresh(engagement)
     return engagement
