@@ -4,6 +4,7 @@ from app.models.client import Client
 from app.models.engagement import Engagement
 from app.models.entity import BusinessEntity
 from app.models.implementation import ImplementationTask, RealizedOutcome
+from app.models.membership import WorkspaceMembership
 from app.models.memo import Memo, StrategistRun
 from app.models.profile import ClientPlanningProfile
 from app.models.strategy import ClientStrategy, StrategyLibrary
@@ -42,6 +43,7 @@ __all__ = [
     "TaxBracketSet",
     "TaxSituationSnapshot",
     "Workspace",
+    "WorkspaceMembership",
     "PlanDocument",
     "WorkspaceBranding",
 ]

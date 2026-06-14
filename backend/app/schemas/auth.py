@@ -26,5 +26,8 @@ class MeResponse(BaseModel):
     sub: str
     workspace_id: UUID
     authorized_workspace_ids: list[UUID]
+    # The caller's named workspaces (for the switcher). Empty for legacy tokens
+    # until a membership is recorded; the active workspace is always included.
+    workspaces: list[WorkspaceMembership] = Field(default_factory=list)
     scopes: list[str]
     claims: dict[str, Any]

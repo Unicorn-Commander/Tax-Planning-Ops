@@ -53,18 +53,31 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       .get("/me")
       .then((response) => {
         if (cancelled) return;
-        const ids = Array.isArray(response.data?.authorized_workspace_ids)
-          ? response.data.authorized_workspace_ids
-          : [];
         const activeId = response.data?.workspace_id;
-        const next = ids.map((id: string) => ({
-          workspaceId: id,
-          // Honest label until the control-plane exposes workspace names — show
-          // the short id, not a fabricated "Primary workspace" ordinal.
-          displayName: id.slice(0, 8),
-          role: "member",
-          isDefault: id === activeId,
-        }));
+        // Prefer the named membership list (/me.workspaces); fall back to the
+        // bare authorized ids (short-id label) for legacy responses.
+        const named = Array.isArray(response.data?.workspaces)
+          ? response.data.workspaces
+          : [];
+        let next: WorkspaceMembership[];
+        if (named.length > 0) {
+          next = named.map((w: WorkspaceMembership) => ({
+            workspaceId: w.workspaceId,
+            displayName: w.displayName || w.workspaceId.slice(0, 8),
+            role: w.role || "member",
+            isDefault: w.isDefault ?? w.workspaceId === activeId,
+          }));
+        } else {
+          const ids = Array.isArray(response.data?.authorized_workspace_ids)
+            ? response.data.authorized_workspace_ids
+            : [];
+          next = ids.map((id: string) => ({
+            workspaceId: id,
+            displayName: id.slice(0, 8),
+            role: "member",
+            isDefault: id === activeId,
+          }));
+        }
         setWorkspaces(next);
         setStoredWorkspaces(next);
         const resolved = resolveActiveWorkspaceId(next, getStoredWorkspaceId());

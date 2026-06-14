@@ -13,6 +13,7 @@ from app.core.request_context import current_door, normalize_door
 from app.integrations.control_plane import check_entitlement
 from app.integrations.keycloak import KeycloakVerifier
 from app.schemas.auth import AuthContext
+from app.services.workspaces import is_workspace_member
 
 DOOR_HEADER = "X-UC-Door"
 
@@ -149,9 +150,24 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                     detail="missing bearer token",
                 )
             claims = await self.verifier.verify(auth_header.removeprefix("Bearer ").strip())
-            workspace_id, authorized = resolve_workspace_id(
-                claims, request.headers.get(WORKSPACE_HEADER)
-            )
+            header_ws = request.headers.get(WORKSPACE_HEADER)
+            uc_uid = str(claims.get("uc_uid") or claims.get("sub") or "")
+            try:
+                workspace_id, authorized = resolve_workspace_id(claims, header_ws)
+            except HTTPException as exc:
+                # Multi-workspace: a header selecting a workspace the token's
+                # claims don't cover is allowed ONLY if the user is a member of
+                # it (authorized against workspace_membership under RLS). Any
+                # other 403 (and all 401s) propagate unchanged.
+                if exc.status_code == status.HTTP_403_FORBIDDEN and header_ws and uc_uid:
+                    selected = UUID(str(header_ws))
+                    if await is_workspace_member(uc_uid, selected):
+                        _, claims_authorized = _claim_workspace_ids(claims)
+                        workspace_id, authorized = selected, claims_authorized | {selected}
+                    else:
+                        raise
+                else:
+                    raise
             scopes = _scopes_from_claims(claims)
             # Self-serve: a UC user with no explicit workspace claim is the
             # advisor of their own derived workspace (RLS-isolated). Managed /

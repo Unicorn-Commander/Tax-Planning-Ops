@@ -29,6 +29,7 @@ from app.api.scenarios import router as scenarios_router
 from app.api.strategies import router as strategies_router
 from app.api.stream import router as stream_router
 from app.api.tasks import router as tasks_router
+from app.api.workspaces import router as workspaces_router
 from app.core.auth import JWTAuthMiddleware
 from app.core.config import get_settings
 from app.db.session import close_db
@@ -90,6 +91,8 @@ def create_app() -> FastAPI:
     app.include_router(matrix_router, prefix="/api/v1")
     app.include_router(engagement_router, prefix="/api/v1")
     app.include_router(stream_router, prefix="/api/v1")
+    # Phase 10: real multi-workspace tenancy (a user's named workspaces + switch).
+    app.include_router(workspaces_router, prefix="/api/v1")
     return app
 
 
