@@ -54,6 +54,41 @@ def _cents(value: Decimal) -> int:
     return int(value.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
 
+# ---------------------------------------------------------------------------
+# State corporate income tax (flat-rate states; layered on top of federal 1120)
+# ---------------------------------------------------------------------------
+
+
+class StateCorporateConfig(BaseModel):
+    state: str
+    tax_year: int
+    corporate_rate: Decimal  # flat state corporate income-tax rate on state taxable income
+
+
+class StateCorporateResult(BaseModel):
+    state: str
+    state_taxable_income_cents: int
+    state_corporate_tax_cents: int
+    marginal_rate: Decimal
+
+
+def calculate_state_corporate_tax(
+    state_taxable_income_cents: int, config: StateCorporateConfig
+) -> StateCorporateResult:
+    """Flat-rate state C-corp tax. State corporate taxable income is its own
+    apportioned figure (SC starts from federal taxable income with modifications
+    and single-sales-factor apportionment); the caller supplies it. SC's annual
+    license fee (0.1% of capital + paid-in surplus, $25 min) is a SEPARATE levy,
+    not an income tax, and is not computed here.
+    """
+    taxable = max(state_taxable_income_cents, 0)
+    tax = _cents(Decimal(taxable) * config.corporate_rate)
+    return StateCorporateResult(
+        state=config.state, state_taxable_income_cents=taxable,
+        state_corporate_tax_cents=tax, marginal_rate=config.corporate_rate,
+    )
+
+
 def calculate_corporate_tax(
     inputs: CorporateTaxInput, config: CorporateConfig
 ) -> CorporateTaxResult:

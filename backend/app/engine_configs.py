@@ -10,10 +10,24 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from app.engines.corporate import CorporateConfig
+from app.engines.corporate import CorporateConfig, StateCorporateConfig
 from app.engines.qbi import QBIConfig, QBIThreshold
 from app.engines.scorp import SCorpConfig
 from app.engines.se_tax import SETaxConfig
+
+# State C-corp income-tax rates (flat-rate states), keyed by state. SC = 5.0% on
+# SC taxable income (SC Dept. of Revenue, C-Corporation). The license fee is a
+# separate non-income levy and is not represented here. Extend as states are added.
+STATE_CORPORATE_RATES: dict[str, str] = {"SC": "0.05"}
+
+
+def state_corporate_config(state: str, tax_year: int) -> StateCorporateConfig | None:
+    rate = STATE_CORPORATE_RATES.get((state or "").upper())
+    if rate is None:
+        return None
+    return StateCorporateConfig(
+        state=state.upper(), tax_year=tax_year, corporate_rate=Decimal(rate)
+    )
 
 
 def ty2025_corporate_config() -> CorporateConfig:

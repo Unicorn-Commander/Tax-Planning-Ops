@@ -6,12 +6,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
-import { Command } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Command, LogOut, Settings, UserRound } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { useWorkspace } from "@/components/workspace-provider";
+import api from "@/lib/api";
+import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { useClientOverview } from "@/components/client-overview";
 import { usePosture } from "@/lib/posture";
+import { clearWorkspaceStorage } from "@/lib/workspace";
 import { Wordmark, Cavatar, Omnibar, Panel, MicroLabel } from "@/components/kit";
 import { hueForClient } from "@/components/kit";
 
@@ -32,19 +34,14 @@ function active(pathname: string, href: string) {
 export function V3Topbar() {
   const pathname = usePathname();
   const posture = usePosture();
-  const { activeWorkspace } = useWorkspace();
   const nav = posture === "firm" ? FIRM_NAV : SOLO_NAV;
 
   return (
     <div className="topbar">
       <div className="topbar-inner">
         <Wordmark href="/" />
-        {activeWorkspace?.displayName ? (
-          <button className="workspace-chip" type="button">
-            <span className="sw" />
-            {activeWorkspace.displayName}
-          </button>
-        ) : null}
+        {/* Workspace switcher: GET /me memberships · POST/PATCH /workspaces */}
+        <WorkspaceSwitcher />
         <nav className="nav ml-2">
           {nav.map((n) => (
             <Link key={n.href} href={n.href} className={cn(active(pathname, n.href) && "on")}>
@@ -59,6 +56,7 @@ export function V3Topbar() {
           <span className="kbd inline-flex items-center gap-1">
             <Command className="h-3 w-3" /> K
           </span>
+          <AccountMenu />
         </div>
       </div>
     </div>
@@ -105,8 +103,119 @@ export function FileTopbar({ clientId }: { clientId: string }) {
           <span className="kbd inline-flex items-center gap-1">
             <Command className="h-3 w-3" /> K
           </span>
+          <AccountMenu />
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The account menu — the signed-in identity + a way out. Reads identity from
+ * GET /me claims (the SSO is the source of truth for who you are); offers the
+ * Settings surface and Sign out (clears the local token + workspace cache and
+ * returns to the login screen). Mounted in both topbars.
+ */
+function AccountMenu() {
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState<string | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // GET /me → claims for the signed-in identity (email/preferred_username/sub).
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get("/me")
+      .then((res) => {
+        if (cancelled) return;
+        const claims = (res.data?.claims ?? {}) as Record<string, unknown>;
+        const ident =
+          (claims.email as string | undefined) ||
+          (claims.preferred_username as string | undefined) ||
+          (claims.name as string | undefined) ||
+          (res.data?.sub as string | undefined) ||
+          null;
+        setEmail(ident);
+      })
+      .catch(() => {
+        /* identity is best-effort chrome; the menu still works for Sign out */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  function signOut() {
+    if (typeof window === "undefined") return;
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("user");
+    clearWorkspaceStorage();
+    window.location.href = "/auth/login";
+  }
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Account"
+        title="Account"
+        onClick={() => setOpen((v) => !v)}
+        className="grid h-[32px] w-[32px] place-items-center rounded-full border border-[var(--g-hairline)] bg-[var(--g-surface)] text-[var(--g-ink-2)] hover:bg-[var(--g-bg-2)] hover:text-[var(--g-ink)]"
+      >
+        <UserRound className="h-4 w-4" />
+      </button>
+
+      {open ? (
+        <div
+          role="menu"
+          className="absolute right-0 top-[calc(100%+8px)] z-[300] w-[240px] overflow-hidden rounded-[12px] border border-[var(--g-hairline)] bg-[var(--g-surface)] shadow-[var(--shadow-panel)]"
+        >
+          <div className="border-b border-[var(--g-hairline-soft)] px-3 py-2.5">
+            <div className="microlabel">Signed in</div>
+            <div className="mt-0.5 truncate text-[13px] text-[var(--g-ink)]" title={email ?? undefined}>
+              {email ?? "—"}
+            </div>
+          </div>
+          <div className="p-1">
+            <Link
+              href="/settings"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2.5 rounded-[8px] px-2.5 py-2 text-[13px] text-[var(--g-ink-2)] hover:bg-[var(--wash)] hover:text-[var(--g-ink)]"
+            >
+              <Settings className="h-4 w-4" />
+              Settings
+            </Link>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={signOut}
+              className="flex w-full items-center gap-2.5 rounded-[8px] px-2.5 py-2 text-left text-[13px] text-[var(--g-ink-2)] hover:bg-[var(--wash)] hover:text-[var(--cliff)]"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

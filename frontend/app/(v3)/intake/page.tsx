@@ -24,9 +24,12 @@
 // The interactive question flow itself (useState index + answers) IS real local
 // form state — not a mock — but the numbers it produces are illustrative only.
 
-import { useState, useCallback } from "react";
+import { Suspense, useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { Check, Edit2 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Check, Edit2, FileText, Sparkles, ChevronRight } from "lucide-react";
+import { isAxiosError } from "axios";
+import api from "@/lib/api";
 import { cn } from "@/lib/cn";
 import {
   MicroLabel,
@@ -34,6 +37,44 @@ import {
   Button,
   Omnibar,
 } from "@/components/kit";
+
+// ---------------------------------------------------------------------------
+// Entity-aware document checklist (the core new value)
+// ---------------------------------------------------------------------------
+// [live] GET /intake/document-checklist?entity_type=<key>  → the planning docs
+//        for the chosen entity, split required vs. beneficial, each with a `why`.
+// [live] GET /intake/entity-types → {key,label,description}[] for the inline
+//        picker shown when the user arrives without an ?entity= selection.
+// The checklist is real server data (the static catalog in
+// app/document_checklists.py); honest loading / error / empty states throughout.
+
+interface DocItem {
+  name: string;
+  form_or_source: string;
+  why: string;
+}
+interface Checklist {
+  entity_type: string;
+  label: string;
+  required: DocItem[];
+  beneficial: DocItem[];
+}
+interface EntityTypeOption {
+  key: string;
+  label: string;
+  description: string;
+}
+
+// The entity keys the backend catalog plans for (excludes the not_sure
+// affordance, which has no checklist). Used to validate the ?entity= param.
+const PLANNING_ENTITY_KEYS = [
+  "individual",
+  "sole_prop",
+  "partnership",
+  "s_corp",
+  "c_corp",
+  "multi_entity",
+];
 
 // ---------------------------------------------------------------------------
 // The adaptive question graph (static design content, not API data)
@@ -247,10 +288,225 @@ function buildQueue(answers: Record<string, string>): string[] {
 }
 
 // ---------------------------------------------------------------------------
+// "Documents you'll need" — the entity-aware orienting surface
+// ---------------------------------------------------------------------------
+
+/** One document row: name, where it comes from, and the plain-English why. */
+function DocRow({ doc, required }: { doc: DocItem; required: boolean }) {
+  return (
+    <li className="flex gap-3 border-t border-[var(--g-hairline-soft)] px-4 py-3 first:border-t-0">
+      <span
+        className={cn(
+          "mt-0.5 grid h-5 w-5 flex-none place-items-center rounded-full",
+          required ? "bg-[var(--agent-soft)] text-[var(--agent)]" : "border border-[var(--g-hairline)] text-[var(--g-ink-3)]",
+        )}
+      >
+        {required ? <FileText className="h-3 w-3" /> : <Sparkles className="h-3 w-3" />}
+      </span>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <span className="text-[13.5px] font-semibold text-[var(--g-ink)]">{doc.name}</span>
+          <span className="font-mono text-[10.5px] text-[var(--g-ink-3)]">{doc.form_or_source}</span>
+        </div>
+        <p className="mt-0.5 text-[12.5px] leading-snug text-[var(--g-ink-2)]">{doc.why}</p>
+      </div>
+    </li>
+  );
+}
+
+/** The required/beneficial checklist for a chosen entity (calm, not a wall). */
+function DocumentChecklist({ entity }: { entity: string }) {
+  const [data, setData] = useState<Checklist | null>(null);
+  const [status, setStatus] = useState<"loading" | "ok" | "error" | "unavailable">("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+    setStatus("loading");
+    api
+      .get<Checklist>("/intake/document-checklist", { params: { entity_type: entity } })
+      .then((r) => {
+        if (cancelled) return;
+        setData(r.data);
+        setStatus("ok");
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        // A 404/405 means the endpoint isn't deployed on this node yet — degrade
+        // quietly rather than alarm the user; the questions below still work.
+        if (isAxiosError(err) && (err.response?.status === 404 || err.response?.status === 405)) {
+          setStatus("unavailable");
+        } else {
+          setStatus("error");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [entity]);
+
+  if (status === "unavailable") return null;
+
+  return (
+    <section className="rise mb-6 rounded-[16px] border border-[var(--g-hairline)] bg-[var(--g-surface)] p-[22px] shadow-[var(--shadow-panel)]">
+      <div className="flex items-center gap-2.5">
+        <span className="grid h-7 w-7 place-items-center rounded-[8px] bg-[var(--agent-soft)] text-[var(--agent)]">
+          <FileText className="h-4 w-4" />
+        </span>
+        <div className="min-w-0">
+          <MicroLabel>Documents you&apos;ll need</MicroLabel>
+          <div className="text-[15px] font-semibold leading-tight text-[var(--g-ink)]">
+            {data ? `Planning a ${data.label.toLowerCase()}` : "Gathering your checklist…"}
+          </div>
+        </div>
+      </div>
+      <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--g-ink-2)]">
+        Here&apos;s what sharpens a plan for your situation. You don&apos;t need it all to start — the
+        questions below get you a rough picture now, and these make it exact.
+      </p>
+
+      {status === "loading" && (
+        <div className="mt-4 space-y-2">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="skeleton h-12 w-full rounded-[10px]" />
+          ))}
+        </div>
+      )}
+
+      {status === "error" && (
+        <div className="mt-4 rounded-[10px] border border-[var(--g-hairline)] bg-[var(--g-bg-2)] px-4 py-3 text-[12.5px] text-[var(--cliff)]">
+          Couldn&apos;t load the document checklist right now. The questions below still work — you can
+          add documents later.
+        </div>
+      )}
+
+      {status === "ok" && data && (
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          {/* required */}
+          <div className="overflow-hidden rounded-[12px] border border-[var(--g-hairline)]">
+            <div className="flex items-center justify-between bg-[var(--g-bg-2)] px-4 py-2.5">
+              <span className="text-[12.5px] font-semibold text-[var(--g-ink)]">Bring these</span>
+              <span className="rounded-full bg-[var(--agent-soft)] px-2 py-0.5 font-mono text-[10px] text-[var(--agent)]">
+                {data.required.length} essential
+              </span>
+            </div>
+            <ul>
+              {data.required.map((d) => (
+                <DocRow key={d.name} doc={d} required />
+              ))}
+            </ul>
+          </div>
+
+          {/* beneficial */}
+          <div className="overflow-hidden rounded-[12px] border border-[var(--g-hairline)]">
+            <div className="flex items-center justify-between bg-[var(--g-bg-2)] px-4 py-2.5">
+              <span className="text-[12.5px] font-semibold text-[var(--g-ink)]">Helpful if you have them</span>
+              <span className="rounded-full border border-[var(--g-hairline)] px-2 py-0.5 font-mono text-[10px] text-[var(--g-ink-3)]">
+                {data.beneficial.length} extra
+              </span>
+            </div>
+            <ul>
+              {data.beneficial.map((d) => (
+                <DocRow key={d.name} doc={d} required={false} />
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {status === "ok" && data && (
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-[var(--g-ink-3)]">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="grid h-4 w-4 place-items-center rounded-full bg-[var(--agent-soft)] text-[var(--agent)]">
+              <FileText className="h-2.5 w-2.5" />
+            </span>
+            Essential — we plan from these
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="grid h-4 w-4 place-items-center rounded-full border border-[var(--g-hairline)] text-[var(--g-ink-3)]">
+              <Sparkles className="h-2.5 w-2.5" />
+            </span>
+            Beneficial — they sharpen it
+          </span>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Inline entity picker — shown when the user lands without an ?entity= choice.
+ *  Fetches the live entity-type list; selecting one reveals its checklist. */
+function EntityPicker({ onPick }: { onPick: (key: string) => void }) {
+  const [options, setOptions] = useState<EntityTypeOption[] | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get<EntityTypeOption[]>("/intake/entity-types")
+      .then((r) => {
+        if (!cancelled) setOptions(Array.isArray(r.data) ? r.data : []);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Quietly degrade if the endpoint isn't deployed — the questions still work.
+  if (failed) return null;
+
+  // Only offer the planning entity types here (skip not_sure — its descriptions
+  // are the help text on each row already).
+  const rows = (options ?? []).filter((o) => PLANNING_ENTITY_KEYS.includes(o.key));
+
+  return (
+    <section className="rise mb-6 rounded-[16px] border border-[var(--g-hairline)] bg-[var(--g-surface)] p-[22px] shadow-[var(--shadow-panel)]">
+      <MicroLabel>First, what are we planning?</MicroLabel>
+      <p className="mt-1.5 text-[12.5px] leading-relaxed text-[var(--g-ink-2)]">
+        Pick the one that fits and we&apos;ll show the short list of documents a plan for it needs.
+      </p>
+      {options === null ? (
+        <div className="mt-3 space-y-2">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="skeleton h-12 w-full rounded-[10px]" />
+          ))}
+        </div>
+      ) : (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {rows.map((o) => (
+            <button
+              key={o.key}
+              type="button"
+              onClick={() => onPick(o.key)}
+              className="group flex items-center gap-3 rounded-[12px] border border-[var(--g-hairline)] bg-[var(--g-surface)] px-4 py-3 text-left transition-colors hover:border-[color-mix(in_srgb,var(--agent)_45%,transparent)] hover:bg-[var(--agent-soft)]"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="text-[13.5px] font-semibold text-[var(--g-ink)]">{o.label}</div>
+                <div className="mt-0.5 text-[11.5px] leading-snug text-[var(--g-ink-3)]">{o.description}</div>
+              </div>
+              <ChevronRight className="h-4 w-4 flex-none text-[var(--g-ink-3)] transition-colors group-hover:text-[var(--agent)]" />
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // The page
 // ---------------------------------------------------------------------------
 
-export default function IntakePage() {
+function IntakeInner() {
+  // The chosen entity drives the document checklist. It arrives from /start as
+  // ?entity=<key>; if absent, an inline picker lets the user choose here.
+  const searchParams = useSearchParams();
+  const entityParam = searchParams.get("entity");
+  const initialEntity = entityParam && PLANNING_ENTITY_KEYS.includes(entityParam) ? entityParam : null;
+  const [entity, setEntity] = useState<string | null>(initialEntity);
+
   // answers: { [questionId]: choiceKey }
   const [answers, setAnswers] = useState<Record<string, string>>({});
   // the question queue (may grow as answers unlock conditional questions)
@@ -338,6 +594,30 @@ export default function IntakePage() {
           <span className="kbd">⌘K</span>
         </div>
       </div>
+
+      {/* ---- entity-aware "Documents you'll need" (the orienting surface) ----
+           When an entity is chosen we show its required/beneficial checklist;
+           otherwise an inline picker lets the user choose, which reveals it.
+           Either way the question flow below is unchanged. */}
+      {entity ? (
+        <>
+          <DocumentChecklist entity={entity} />
+          <div className="mb-6 -mt-2 flex items-center justify-between text-[12px] text-[var(--g-ink-3)]">
+            <span>
+              You don&apos;t need these yet — a few quick questions get you a rough plan now.
+            </span>
+            <button
+              type="button"
+              onClick={() => setEntity(null)}
+              className="underline-offset-4 hover:text-[var(--agent)] hover:underline"
+            >
+              change
+            </button>
+          </div>
+        </>
+      ) : (
+        <EntityPicker onPick={setEntity} />
+      )}
 
       {/* ---- progress bar ---- */}
       {!isDone && (
@@ -619,5 +899,22 @@ export default function IntakePage() {
         <Omnibar placeholder="Ask about any of these questions…" />
       </div>
     </div>
+  );
+}
+
+// useSearchParams (for the ?entity= selection) must be inside a Suspense
+// boundary in Next 15; the fallback mirrors the page's calm top frame.
+export default function IntakePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-[660px] px-5 pb-24 pt-8">
+          <div className="skeleton h-8 w-40 rounded-[10px]" />
+          <div className="skeleton mt-6 h-40 w-full rounded-[16px]" />
+        </div>
+      }
+    >
+      <IntakeInner />
+    </Suspense>
   );
 }

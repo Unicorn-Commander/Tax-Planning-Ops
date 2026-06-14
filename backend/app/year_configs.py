@@ -16,13 +16,14 @@ from __future__ import annotations
 from decimal import Decimal
 
 from app.engine_configs import (
+    state_corporate_config,
     ty2025_corporate_config,
     ty2025_qbi_config,
     ty2025_scorp_config,
     ty2025_se_tax_config,
 )
 from app.engines.amt import AMTBracketParams, AMTConfig, ty2025_amt_config
-from app.engines.corporate import CorporateConfig
+from app.engines.corporate import CorporateConfig, StateCorporateConfig
 from app.engines.ctc import CTCConfig, ty2025_ctc_config
 from app.engines.form2210 import Form2210Config, ty2025_form2210_config
 from app.engines.irmaa import IRMAAConfig, ty2025_irmaa_config
@@ -140,6 +141,11 @@ def ss_config_for(year: int) -> SSConfig:  # statutory fixed bases
 
 def corporate_config_for(year: int) -> CorporateConfig:  # unchanged for 2026
     return ty2025_corporate_config()
+
+
+def state_corporate_config_for(state: str, year: int) -> StateCorporateConfig | None:
+    # SC's 5% corporate rate is flat and unchanged across the modeled years.
+    return state_corporate_config(state, year)
 
 
 def scorp_config_for(year: int) -> SCorpConfig:

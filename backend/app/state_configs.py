@@ -14,9 +14,43 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from app.engines.form1040 import RateBracket
 from app.engines.state_tax import StateSurtax, StateTaxConfig
 
 NO_INCOME_TAX = ["TX", "FL", "WA", "NV", "SD", "WY", "AK", "TN", "NH"]
+
+
+def _sc_config(tax_year: int) -> StateTaxConfig:
+    """South Carolina — graduated 0% / 3% / top, SAME brackets for every filing
+    status, applied to FEDERAL TAXABLE INCOME (SC's starting point already nets
+    the federal standard deduction, so no separate SC deduction is subtracted —
+    the 0% bracket is SC's exemption). Brackets are inflation-indexed annually.
+
+    The top marginal rate was reduced from 6.2% (TY2024) to 6.0% (TY2025, by
+    budget proviso). Bracket thresholds and the 6% subtraction-method tax were
+    verified row-for-row against the official SC1040TT 2025 table (Rev. 6/17/25).
+    SS is fully exempt; SC's age-gated retirement deduction is NOT modeled (the
+    engine flags unmodeled subtractions), so retirement income is taxed here.
+    """
+    if tax_year >= 2025:
+        rows = [(0, 3_560, "0"), (3_560, 17_830, "0.03"), (17_830, None, "0.06")]
+    else:  # TY2024 and earlier: 6.2% top rate, lower thresholds
+        rows = [(0, 3_460, "0"), (3_460, 17_330, "0.03"), (17_330, None, "0.062")]
+    brackets = [
+        RateBracket(
+            lower_bound_cents=lo * 100,
+            upper_bound_cents=(None if up is None else up * 100),
+            rate=Decimal(rate),
+        )
+        for lo, up, rate in rows
+    ]
+    return StateTaxConfig(
+        state="SC",
+        brackets_by_status={"single": brackets, "mfj": brackets},
+        standard_deduction_by_status={"single": 0, "mfj": 0},
+        taxes_social_security=False, taxes_retirement_income=True,
+        starts_from="federal_taxable_income",
+    )
 
 
 def _flat(
@@ -59,6 +93,8 @@ def get_state_config(state: str, tax_year: int = 2025) -> StateTaxConfig | None:
     if s == "AZ":  # flat 2.5%; std matches federal $15,750/$31,500; SS exempt
         return _flat("AZ", "0.025", std_single=1_575_000, std_mfj=3_150_000,
                      taxes_ss=False, taxes_retirement=True)
+    if s == "SC":  # graduated 0/3/6% (6.2% pre-2025); year-aware, on federal taxable income
+        return _sc_config(tax_year)
 
     # CA / NY / NJ / VA / OH — bracketed, added from BRACKETED_STATES below.
     return _BRACKETED.get(s)

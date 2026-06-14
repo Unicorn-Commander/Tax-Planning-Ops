@@ -10,9 +10,11 @@ from app.api.admin import router as admin_router
 from app.api.agents import router as agents_router
 from app.api.auth import router as auth_router
 from app.api.clients import router as clients_router
+from app.api.demo import router as demo_router
 from app.api.engagement import router as engagement_router
 from app.api.entities import router as entities_router
 from app.api.health import router as health_router
+from app.api.intake import router as intake_router
 from app.api.journal import router as journal_router
 from app.api.lifecycle import router as lifecycle_router
 from app.api.matrix import router as matrix_router
@@ -71,6 +73,8 @@ def create_app() -> FastAPI:
     app.include_router(clients_router, prefix="/api/v1")
     app.include_router(profile_router, prefix="/api/v1")
     app.include_router(entities_router, prefix="/api/v1")
+    # Entity-aware intake: the static "what documents do I need" guidance.
+    app.include_router(intake_router, prefix="/api/v1")
     app.include_router(returns_router, prefix="/api/v1")
     app.include_router(plans_router, prefix="/api/v1")
     app.include_router(strategies_router, prefix="/api/v1")
@@ -91,8 +95,10 @@ def create_app() -> FastAPI:
     app.include_router(matrix_router, prefix="/api/v1")
     app.include_router(engagement_router, prefix="/api/v1")
     app.include_router(stream_router, prefix="/api/v1")
-    # Phase 10: real multi-workspace tenancy (a user's named workspaces + switch).
+    # Phase 10: real multi-workspace tenancy (a user's named workspaces + switch)
+    # + opt-in demo data (a dedicated 'Sample Firm (demo)' workspace).
     app.include_router(workspaces_router, prefix="/api/v1")
+    app.include_router(demo_router, prefix="/api/v1")
     return app
 
 
