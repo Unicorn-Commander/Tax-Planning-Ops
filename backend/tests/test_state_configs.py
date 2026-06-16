@@ -17,10 +17,10 @@ ALL_JURISDICTIONS = [
     "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA",
     "WV", "WI", "WY",
 ]
-# OH grades from statutory base amounts the bracket engine can't yet model, so
-# it intentionally resolves to None (flagged not-yet-modeled, like the docstring
-# in state_configs.py / state_brackets.py says). Not a coverage gap.
-MODELED_AS_NONE = {"OH"}
+# Every jurisdiction now resolves (Ohio added with a 0% first bracket per HB 96).
+# Kept as an empty set so the coverage test still documents the mechanism for any
+# future state whose mechanics the engine can't yet represent.
+MODELED_AS_NONE: set[str] = set()
 
 
 def _tax(state: str, agi: int, *, fti: int = 0, ss: int = 0, retirement: int = 0,
@@ -129,8 +129,8 @@ def test_every_income_tax_state_computes_nonzero() -> None:
     for code in ALL_JURISDICTIONS:
         if code in NO_INCOME_TAX or code in MODELED_AS_NONE:
             continue
-        # $200k for both starting points so FTI-based states (CO/ID/ME/MT/ND/OR)
-        # also see income above their zero brackets.
+        # $200k for both starting points so FTI-based states (CO/ID/MT/ND) also
+        # see income above their zero brackets.
         tax = _tax(code, 20_000_000, fti=20_000_000)
         assert tax > 0, f"{code} returned {tax}"
 
@@ -159,6 +159,36 @@ def test_mt_single_fti_graduated() -> None:
     assert _tax("MT", 4_000_000, fti=4_000_000) == 210_700
 
 
+def test_oh_single_graduated() -> None:
+    # NEW (federal_agi, std 0). $120k AGI: 0% to $26,050 / 2.75% to $100k / 3.125%
+    # above → 2.75%·73,950 + 3.125%·20,000 = 2,033.63 + 625 = $2,658.63 → $2,659.
+    assert _tax("OH", 12_000_000) == 265_900
+
+
+def test_oh_low_income_zero() -> None:
+    # Ohio's 0% first bracket zeroes tax at/below $26,050 of taxable income.
+    assert _tax("OH", 2_500_000) == 0
+
+
+def test_ks_single_corrected_std() -> None:
+    # std FIXED to $3,605 (was a wrong $9,765). $50k AGI → taxable $46,395:
+    # 5.2%·23,000 + 5.58%·23,395 = 1,196 + 1,305.44 = $2,501.44 → $2,501.
+    assert _tax("KS", 5_000_000) == 250_100
+
+
+def test_ms_single_zero_bracket_and_exemption() -> None:
+    # NEW bracketed: std+exemption $8,300; 0% first $10k, 4.4% above.
+    # $50k AGI → taxable $41,700 → 4.4%·31,700 = $1,394.80 → $1,395.
+    assert _tax("MS", 5_000_000) == 139_500
+
+
+def test_or_single_no_double_deduction() -> None:
+    # FIXED to federal_agi + $2,835 std (was FTI + std = double-counted).
+    # $50k AGI → taxable $47,165: 4.75%·4,400 + 6.75%·6,650 + 8.75%·36,115 =
+    # 209 + 448.88 + 3,160.06 = $3,817.94 → $3,818.
+    assert _tax("OR", 5_000_000) == 381_800
+
+
 # --- Corporate-rate coverage -----------------------------------------------
 
 def test_corporate_rates_for_new_states() -> None:
@@ -167,6 +197,10 @@ def test_corporate_rates_for_new_states() -> None:
     # A graded-rate state (top marginal used) and a flat-rate state.
     assert state_corporate_config("MN", 2025).corporate_rate == Decimal("0.098")
     assert state_corporate_config("CO", 2025).corporate_rate == Decimal("0.044")
+    # TY2025 corrections + the income-taxing fill (NJ = base 9%, not the surtax).
+    assert state_corporate_config("ID", 2025).corporate_rate == Decimal("0.053")
+    assert state_corporate_config("CA", 2025).corporate_rate == Decimal("0.0884")
+    assert state_corporate_config("NJ", 2025).corporate_rate == Decimal("0.09")
     # No-corporate-income-tax jurisdictions stay None (TX margin tax, OH CAT, WY).
     for code in ("TX", "OH", "WY", "SD", "NV", "WA"):
         assert state_corporate_config(code, 2025) is None, code

@@ -4,15 +4,15 @@ NJ-1040 schedules, Virginia Tax, and each state's DOR 2025 rate schedule) and
 verified to reproduce the adversarially-checked golden vectors.
 
 Original four (CA, NY, NJ, VA) are followed by the TY2025 graduated-state fill
-(AL AR CT DE DC HI KS MD ME MN MO MT NE NM ND OK OR RI VT WI WV) so all 50 states
-+ DC resolve. Most graduated states start from federal AGI; ME/MT/ND/OR start
-from federal TAXABLE income (std deduction therefore 0 for MT/ND/OR, which net
-the federal standard deduction at their starting point).
+(AL AR CT DE DC HI KS MD ME MN MO MS MT NE NM ND OH OK OR RI VT WI WV) so all 50
+states + DC resolve. Most graduated states start from federal AGI; MT and ND
+start from federal TAXABLE income (std deduction therefore 0, netting the federal
+standard deduction at their starting point).
 
 NY note: NY imposes a mandatory tax-benefit recapture above ~$107,650 NYAGI that
 this base-bracket model does NOT apply, so NY tax is UNDERSTATED for high earners
-(flagged at runtime). OH is not here — it uses statutory base amounts the
-bracket engine can't yet represent.
+(flagged at runtime). Ohio is modeled with a 0% first bracket up to $26,050
+(TY2025 rates per HB 96); Mississippi with a 0% first bracket up to $10,000.
 """
 
 from __future__ import annotations
@@ -179,7 +179,8 @@ _KS_MFJ = _brk([(0,46000,"0.052"),(46000,None,"0.0558")])
 KS = StateTaxConfig(
     state="KS",
     brackets_by_status={"single": _KS_SINGLE, "mfj": _KS_MFJ},
-    standard_deduction_by_status={"single":976_500,"mfj":2_654_000},
+    # KS standard deduction TY2025: $3,605 single / $8,240 MFJ (HoH $6,180).
+    standard_deduction_by_status={"single":360_500,"mfj":824_000},
     taxes_social_security=False, taxes_retirement_income=True,
 )
 
@@ -303,8 +304,10 @@ _OR_MFJ = _brk([
 OR = StateTaxConfig(
     state="OR",
     brackets_by_status={"single": _OR_SINGLE, "mfj": _OR_MFJ},
-    standard_deduction_by_status={"single":280_000,"mfj":560_000},
-    taxes_social_security=False, taxes_retirement_income=True, starts_from="federal_taxable_income",
+    # OR taxable income = federal AGI − OR std deduction ($2,835/$5,670 TY2025).
+    # (NOT federal taxable income — that would double-count the std deduction.)
+    standard_deduction_by_status={"single":283_500,"mfj":567_000},
+    taxes_social_security=False, taxes_retirement_income=True,
 )
 
 _RI_BRACKETS = _brk([(0,79900,"0.0375"),(79900,181650,"0.0475"),(181650,None,"0.0599")])
@@ -352,9 +355,36 @@ WV = StateTaxConfig(
     taxes_social_security=False, taxes_retirement_income=True,
 )
 
+# Ohio: 0% on the first $26,050 of Ohio taxable income, 2.75% to $100,000, 3.125%
+# above (TY2025 per HB 96; a flat 2.75% begins TY2026). Same schedule for every
+# filing status. Ohio's official "$2,033.13 + 3.125% of the excess over $100,000"
+# top tier IS the cumulative bracket walk, so the marginal table reproduces it.
+# SS is exempt; Ohio's ~$2,400–$2,600 personal exemption is not modeled (the 0%
+# bracket is the dominant low-income shelter) → OH taxable income slightly high.
+_OH_BRACKETS = _brk([(0, 26050, "0"), (26050, 100000, "0.0275"), (100000, None, "0.03125")])
+OH = StateTaxConfig(
+    state="OH",
+    brackets_by_status={"single": _OH_BRACKETS, "mfj": _OH_BRACKETS},
+    standard_deduction_by_status={"single": 0, "mfj": 0},
+    taxes_social_security=False, taxes_retirement_income=True,
+)
+
+# Mississippi: 0% on the first $10,000 of MS taxable income, 4.4% above (TY2025;
+# phasing toward 4.0% by 2026). MS grants BOTH a standard deduction ($2,300/
+# $4,600) AND a personal exemption ($6,000/$12,000) — combined here as the
+# subtraction ($8,300/$16,600). SS + qualified retirement are exempt.
+_MS_BRACKETS = _brk([(0, 10000, "0"), (10000, None, "0.044")])
+MS = StateTaxConfig(
+    state="MS",
+    brackets_by_status={"single": _MS_BRACKETS, "mfj": _MS_BRACKETS},
+    standard_deduction_by_status={"single": 830_000, "mfj": 1_660_000},
+    taxes_social_security=False, taxes_retirement_income=False,
+)
+
 register_bracketed({
     "CA": CA, "NY": NY, "NJ": NJ, "VA": VA,
     "AL": AL, "AR": AR, "CT": CT, "DE": DE, "DC": DC, "HI": HI, "KS": KS,
-    "MD": MD, "ME": ME, "MN": MN, "MO": MO, "MT": MT, "NE": NE, "NM": NM,
-    "ND": ND, "OK": OK, "OR": OR, "RI": RI, "VT": VT, "WI": WI, "WV": WV,
+    "MD": MD, "ME": ME, "MN": MN, "MO": MO, "MS": MS, "MT": MT, "NE": NE,
+    "NM": NM, "ND": ND, "OH": OH, "OK": OK, "OR": OR, "RI": RI, "VT": VT,
+    "WI": WI, "WV": WV,
 })

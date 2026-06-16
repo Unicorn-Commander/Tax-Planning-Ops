@@ -112,9 +112,6 @@ def get_state_config(state: str, tax_year: int = 2025) -> StateTaxConfig | None:
     if s == "MI":  # flat 4.25% (2025); personal exemption $5,800/$11,600; SS exempt
         return _flat("MI", "0.0425", std_single=580_000, std_mfj=1_160_000,
                      taxes_ss=False, taxes_retirement=True)
-    if s == "MS":  # flat 4.4% (2025); std $2,300/$4,600; SS + retirement exempt
-        return _flat("MS", "0.044", std_single=230_000, std_mfj=460_000,
-                     taxes_ss=False, taxes_retirement=False)
     if s == "UT":  # flat 4.5% (2025); std matches federal; taxes SS + retirement (credit relief)
         return _flat("UT", "0.045", std_single=1_575_000, std_mfj=3_150_000,
                      taxes_ss=True, taxes_retirement=True)
@@ -133,9 +130,8 @@ def get_state_config(state: str, tax_year: int = 2025) -> StateTaxConfig | None:
             taxes_social_security=False, taxes_retirement_income=True,
             starts_from="federal_taxable_income")
 
-    # Graduated/bracketed states (CA, NY, NJ, VA + the TY2025 fill) registered
-    # from app/state_brackets.py. OH still uses statutory base amounts the
-    # bracket engine can't yet represent → returns None (not-yet-modeled).
+    # Graduated/bracketed states (CA, NY, NJ, VA, OH, MS + the TY2025 fill)
+    # registered from app/state_brackets.py.
     return _BRACKETED.get(s)
 
 

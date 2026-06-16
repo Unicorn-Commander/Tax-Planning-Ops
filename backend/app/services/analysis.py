@@ -152,7 +152,16 @@ async def get_client_analysis(
                 comp.total_tax_cents + agg.corporate_tax_cents + agg.state_corporate_tax_cents
             ),
             "has_c_corp": agg.has_c_corp,
-            "assumptions": comp.assumptions,
+            "assumptions": comp.assumptions + (
+                [
+                    "C-corp state corporate tax is a flat-rate planning approximation on "
+                    "post-NOL corporate taxable income (assumes it is fully apportioned to "
+                    f"{client.primary_state if client and client.primary_state else 'its state'}"
+                    "; state modifications/apportionment not modeled)."
+                ]
+                if agg.has_c_corp and agg.state_corporate_tax_cents > 0
+                else []
+            ),
         }
 
         # State income tax (from the client's primary state).
