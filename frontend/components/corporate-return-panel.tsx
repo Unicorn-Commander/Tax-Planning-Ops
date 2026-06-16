@@ -35,6 +35,7 @@ import {
 
 interface CorporateReturn {
   pre_nol_taxable_income_cents: number;
+  book_to_tax_adjustment_cents: number;
   nol_applied_cents: number;
   nol_carryforward_remaining_cents: number;
   corporate_taxable_income_cents: number;
@@ -91,6 +92,13 @@ interface Optimization {
   assumptions: string[];
 }
 
+interface CorporateSource {
+  from_accounting_ops: boolean;
+  synced_at: string | null;
+  period: string | null;
+  book_net_income_cents: number | null;
+}
+
 interface CorporateAnalysis {
   available: boolean;
   reason?: string | null;
@@ -104,6 +112,7 @@ interface CorporateAnalysis {
   aet: AETWatch | null;
   double_tax: DoubleTax | null;
   optimization: Optimization | null;
+  source?: CorporateSource | null;
   assumptions: string[];
 }
 
@@ -235,6 +244,34 @@ export function CorporateReturnPanel({ taxYearId }: { taxYearId: string }) {
             effective corporate rate {percent(cr.effective_corporate_rate)}
           </span>
         </div>
+
+        {/* source provenance — the "honest notes": a synced figure is BOOK net
+            income (a snapshot), reconciled to taxable income by the M-1 adjustment */}
+        {data.source?.from_accounting_ops ? (
+          <div className="mt-2 rounded-[8px] border border-[var(--g-hairline-soft)] bg-[var(--wash)] px-3 py-2 text-[11px] leading-relaxed text-[var(--g-ink-2)]">
+            <span className="font-medium text-[var(--g-ink)]">Sourced from Accounting-Ops</span>
+            {data.source.book_net_income_cents != null ? (
+              <> · book net income {centsToUSD(data.source.book_net_income_cents)}</>
+            ) : null}
+            {cr.book_to_tax_adjustment_cents ? (
+              <>
+                {" "}
+                {cr.book_to_tax_adjustment_cents > 0 ? "+" : "−"} M-1 adj{" "}
+                {centsToUSD(Math.abs(cr.book_to_tax_adjustment_cents))} = taxable{" "}
+                {centsToUSD(cr.pre_nol_taxable_income_cents)}
+              </>
+            ) : (
+              <> · used as-is — no M-1 book-to-tax adjustment set (book income ≠ taxable income)</>
+            )}
+            {data.source.synced_at ? (
+              <span className="text-[var(--g-ink-3)]">
+                {" "}
+                · synced {data.source.synced_at.slice(0, 10)}
+                {data.source.period ? ` · period ${data.source.period}` : ""}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
 
         {/* ===================================================== corporate stack */}
         <div className="mt-3 grid grid-cols-2 gap-0 divide-x divide-[var(--g-hairline-soft)] rounded-[10px] border border-[var(--g-hairline-soft)] md:grid-cols-4">

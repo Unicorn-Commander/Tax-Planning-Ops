@@ -48,6 +48,7 @@ from app.schemas.corporate import (
     AETWatch,
     CorporateAnalysis,
     CorporateReturn,
+    CorporateSource,
     DoubleTax,
     SalaryDividendOptimization,
     SplitPoint,
@@ -290,11 +291,17 @@ def build_corporate_analysis(
     current_dividends_total = 0
     pre_salary_operating_income_total = 0
     nol_available_total = 0
+    book_income_total = 0  # raw synced BOOK net income (AO-linked entities)
+    adjustment_total = 0  # net Schedule M-1 book-to-tax adjustment
+    ao_synced_ats: list[Any] = []
     for e in c_corps:
+        # amount_cents is BOOK net income when synced from AO; the M-1 adjustment
+        # reconciles it to corporate taxable income (pre-NOL).
+        pre_nol = e.amount_cents + (e.book_to_tax_adjustment_cents or 0)
         fed, state_tax, corp_ti, nol_applied, nol_rem = _corporate_tax_for(
-            e.amount_cents, e.nol_available_cents, corp_cfg, state_corp_cfg
+            pre_nol, e.nol_available_cents, corp_cfg, state_corp_cfg
         )
-        pre_nol_total += max(e.amount_cents, 0)
+        pre_nol_total += max(pre_nol, 0)
         corp_ti_total += corp_ti
         fed_total += fed
         state_total += state_tax
@@ -302,10 +309,15 @@ def build_corporate_analysis(
         nol_remaining_total += nol_rem
         current_salary_total += e.shareholder_w2_wages_cents
         current_dividends_total += e.dividends_cents
-        # amount_cents is the corp taxable income AFTER the owner's salary
-        # deduction, so pre-salary operating income adds the salary back.
-        pre_salary_operating_income_total += e.amount_cents + e.shareholder_w2_wages_cents
+        # pre-NOL taxable income is AFTER the owner's salary deduction, so
+        # pre-salary operating income adds the salary back.
+        pre_salary_operating_income_total += pre_nol + e.shareholder_w2_wages_cents
         nol_available_total += e.nol_available_cents
+        adjustment_total += e.book_to_tax_adjustment_cents or 0
+        if e.accounting_ops_workspace_id:
+            book_income_total += e.amount_cents
+            if e.accounting_ops_synced_at is not None:
+                ao_synced_ats.append(e.accounting_ops_synced_at)
 
     total_corp_tax = fed_total + state_total
     eff_rate = (
@@ -315,6 +327,7 @@ def build_corporate_analysis(
     )
     corporate_return = CorporateReturn(
         pre_nol_taxable_income_cents=pre_nol_total,
+        book_to_tax_adjustment_cents=adjustment_total,
         nol_applied_cents=nol_applied_total,
         nol_carryforward_remaining_cents=nol_remaining_total,
         corporate_taxable_income_cents=corp_ti_total,
@@ -400,6 +413,38 @@ def build_corporate_analysis(
             f"State '{state}' has no modelled corporate income tax (federal-only corporate tax)."
         )
 
+    # --- Source/provenance: book-vs-tax + freshness ("the honest notes") -----
+    ao_linked = [e for e in c_corps if e.accounting_ops_workspace_id]
+    source: CorporateSource | None = None
+    if ao_linked:
+        latest = max(ao_synced_ats) if ao_synced_ats else None
+        source = CorporateSource(
+            from_accounting_ops=True,
+            synced_at=latest.isoformat() if latest is not None else None,
+            period=str(tax_year),
+            book_net_income_cents=book_income_total,
+        )
+        if adjustment_total:
+            assumptions.append(
+                "Corporate taxable income = the BOOK net income sourced from "
+                "Accounting-Ops PLUS your Schedule M-1 book-to-tax adjustment. Book-tax "
+                "differences beyond that net adjustment (50% meals, federal tax per books, "
+                "book-vs-tax depreciation, tax-exempt income) are not auto-computed."
+            )
+        else:
+            assumptions.append(
+                "Corporate taxable income here is the BOOK net income sourced from "
+                "Accounting-Ops, used AS-IS — no Schedule M-1 book-to-tax adjustment is "
+                "set yet. Book income ≠ taxable income (50% meals, federal tax per books, "
+                "book-vs-tax depreciation, …); enter the net M-1 adjustment to reconcile."
+            )
+        if source.synced_at:
+            assumptions.append(
+                f"Books synced from Accounting-Ops on {source.synced_at[:10]} for period "
+                f"{source.period}; they are maintained externally and may still be in "
+                "reconciliation — re-sync to refresh the figure."
+            )
+
     return CorporateAnalysis(
         available=True,
         client_tax_year_id=str(client_tax_year_id),
@@ -412,6 +457,7 @@ def build_corporate_analysis(
         aet=aet,
         double_tax=double_tax,
         optimization=optimization,
+        source=source,
         assumptions=assumptions,
     )
 

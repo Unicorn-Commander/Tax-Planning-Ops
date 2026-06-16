@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, ForeignKey, Index, String, Text
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -49,3 +50,14 @@ class BusinessEntity(IdMixin, WorkspaceScopedMixin, TimestampMixin, Base):
     # Optional: scope the P&L pull to ONE entity within that AO workspace (a
     # workspace can hold several books). Unset → workspace-level consolidated.
     accounting_ops_entity_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # When the AO figure was last pulled (a synced figure is a snapshot of
+    # externally-maintained, possibly-in-progress books → show "as-of" + re-sync).
+    accounting_ops_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Net Schedule M-1 book-to-tax adjustment. A synced amount_cents is BOOK net
+    # income; corporate taxable income = amount_cents + this. Default 0 (book
+    # used as-is, flagged as an estimate).
+    book_to_tax_adjustment_cents: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )

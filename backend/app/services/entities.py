@@ -9,6 +9,7 @@ Schedule-1 income, QBI deduction).
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -131,6 +132,7 @@ async def sync_entity_from_accounting_ops(
     )
     previous = entity.amount_cents
     entity.amount_cents = summary.net_income_cents
+    entity.accounting_ops_synced_at = datetime.now(UTC)
     await db.flush()
     await append_audit_event(
         db,
@@ -153,6 +155,43 @@ async def sync_entity_from_accounting_ops(
         "previous_amount_cents": previous,
         "amount_cents": summary.net_income_cents,
         "period": summary.period,
+    }
+
+
+async def set_book_to_tax_adjustment(
+    db: AsyncSession,
+    *,
+    workspace_id: UUID,
+    actor_uc_uid: str,
+    entity_id: UUID,
+    adjustment_cents: int,
+) -> dict[str, Any]:
+    """Set the net Schedule M-1 book-to-tax adjustment on a C-corp entity — the
+    delta that reconciles book net income (``amount_cents``) to corporate taxable
+    income. Audited. Raises LookupError if the entity is missing."""
+    entity = await db.get(BusinessEntity, entity_id)
+    if entity is None:
+        raise LookupError("business entity not found")
+    previous = entity.book_to_tax_adjustment_cents
+    entity.book_to_tax_adjustment_cents = adjustment_cents
+    await db.flush()
+    await append_audit_event(
+        db,
+        workspace_id=workspace_id,
+        actor_uc_uid=actor_uc_uid,
+        event_type="business_entity_book_to_tax_adjustment_set",
+        aggregate_type="business_entity",
+        aggregate_id=entity.id,
+        payload={
+            "previous_cents": previous,
+            "book_to_tax_adjustment_cents": adjustment_cents,
+        },
+    )
+    return {
+        "entity_id": str(entity.id),
+        "book_to_tax_adjustment_cents": adjustment_cents,
+        "amount_cents": entity.amount_cents,
+        "corporate_taxable_income_cents": entity.amount_cents + adjustment_cents,
     }
 
 
@@ -243,7 +282,9 @@ def aggregate_for_comprehensive(
         agg.owner_qualified_dividends_cents += e.dividends_cents
         corp = calculate_corporate_tax(
             CorporateTaxInput(
-                pre_nol_taxable_income_cents=e.amount_cents,
+                # amount_cents is book income when synced from AO; the M-1
+                # adjustment reconciles it to corporate taxable income.
+                pre_nol_taxable_income_cents=e.amount_cents + (e.book_to_tax_adjustment_cents or 0),
                 nol_available_cents=e.nol_available_cents,
             ),
             cfg,

@@ -20,6 +20,9 @@ class CorporateReturn(BaseModel):
     pre-NOL taxable income, as a string (Decimal-faithful)."""
 
     pre_nol_taxable_income_cents: int
+    # Net Schedule M-1 book-to-tax adjustment folded into pre-NOL taxable income
+    # (relevant when the base is book net income sourced from Accounting-Ops).
+    book_to_tax_adjustment_cents: int = 0
     nol_applied_cents: int
     nol_carryforward_remaining_cents: int
     corporate_taxable_income_cents: int
@@ -97,6 +100,20 @@ class SalaryDividendOptimization(BaseModel):
     assumptions: list[str] = Field(default_factory=list)
 
 
+class CorporateSource(BaseModel):
+    """Provenance for a corporate figure that was sourced, not hand-entered.
+
+    When the C-corp's income is pulled from Accounting-Ops it is BOOK net income
+    as of ``synced_at`` for ``period`` — a snapshot of externally-maintained,
+    possibly-in-progress books. ``book_net_income_cents`` is that raw figure,
+    before the Schedule M-1 adjustment that reconciles it to taxable income."""
+
+    from_accounting_ops: bool = False
+    synced_at: str | None = None
+    period: str | None = None
+    book_net_income_cents: int | None = None
+
+
 class CorporateAnalysis(BaseModel):
     """The integrated 1120 planning picture for the C-corp(s) on a tax year.
 
@@ -117,4 +134,5 @@ class CorporateAnalysis(BaseModel):
     aet: AETWatch | None = None
     double_tax: DoubleTax | None = None
     optimization: SalaryDividendOptimization | None = None
+    source: CorporateSource | None = None
     assumptions: list[str] = Field(default_factory=list)

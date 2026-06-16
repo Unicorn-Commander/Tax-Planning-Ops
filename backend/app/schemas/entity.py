@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -24,6 +25,9 @@ class BusinessEntityIn(BaseModel):
     nol_available_cents: int = 0  # C-corp only — NOL carryforward available
     accounting_ops_workspace_id: str | None = None  # link to AO workspace P&L
     accounting_ops_entity_id: str | None = None  # scope the pull to one AO entity
+    # Net Schedule M-1 book-to-tax adjustment applied to a (book) synced figure
+    # to reach corporate taxable income. 0 → book used as-is (flagged estimate).
+    book_to_tax_adjustment_cents: int = 0
 
 
 class BusinessEntityOut(BusinessEntityIn):
@@ -32,3 +36,10 @@ class BusinessEntityOut(BusinessEntityIn):
     id: UUID
     workspace_id: UUID
     client_tax_year_id: UUID
+    accounting_ops_synced_at: datetime | None = None  # set by the AO sync
+
+
+class BookToTaxAdjustmentIn(BaseModel):
+    """Set the net Schedule M-1 book-to-tax adjustment (cents) on a C-corp entity."""
+
+    book_to_tax_adjustment_cents: int = 0

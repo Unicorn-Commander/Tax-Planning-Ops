@@ -66,6 +66,8 @@ interface BusinessEntity {
   is_sstb: boolean;
   is_qbi: boolean;
   accounting_ops_workspace_id: string | null;
+  accounting_ops_synced_at: string | null;
+  book_to_tax_adjustment_cents: number;
 }
 
 interface QbiPerBusiness {
@@ -142,6 +144,8 @@ export default function EntitiesPage() {
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [entLoading, setEntLoading] = useState(true);
   const [scorpOpt, setScorpOpt] = useState<ScorpOptimize | null>(null);
+  const [m1Draft, setM1Draft] = useState<Record<string, string>>({});
+  const [savingM1, setSavingM1] = useState<string | null>(null);
   const [syncing, setSyncing] = useState<string | null>(null); // entity id being synced
 
   const planYear = useMemo(() => {
@@ -197,6 +201,28 @@ export default function EntitiesPage() {
         // ignore — surface-level feedback in the AO panel
       } finally {
         setSyncing(null);
+      }
+    },
+    [taxYearId, loadEntities],
+  );
+
+  // Save the net Schedule M-1 book-to-tax adjustment (entered in dollars) that
+  // reconciles a synced BOOK figure to corporate taxable income.
+  const saveM1 = useCallback(
+    async (entityId: string, dollars: string) => {
+      if (!taxYearId) return;
+      const cents = Math.round((parseFloat(dollars) || 0) * 100);
+      setSavingM1(entityId);
+      try {
+        await api.post(
+          `/clients/tax-years/${taxYearId}/business-entities/${entityId}/book-to-tax-adjustment`,
+          { book_to_tax_adjustment_cents: cents },
+        );
+        loadEntities();
+      } catch {
+        // ignore — surface-level feedback in the AO panel
+      } finally {
+        setSavingM1(null);
       }
     },
     [taxYearId, loadEntities],
@@ -710,11 +736,11 @@ export default function EntitiesPage() {
                           {e.accounting_ops_workspace_id}
                         </code>
                       </AoRow>
-                      <AoRow label="plan amount">
+                      <AoRow label="book net income">
                         <ProvFigure
                           cents={e.amount_cents}
                           prov={{
-                            label: `${e.name} net income (plan)`,
+                            label: `${e.name} BOOK net income (from Accounting-Ops)`,
                             engine: "business-entities",
                             source: "books",
                             auditRef: e.accounting_ops_workspace_id ?? undefined,
@@ -722,9 +748,48 @@ export default function EntitiesPage() {
                           className="!text-[11.5px]"
                         />
                       </AoRow>
+                      <AoRow label="M-1 → taxable">
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-mono text-[10.5px] text-[var(--g-ink-3)]">$</span>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            placeholder="0"
+                            defaultValue={
+                              e.book_to_tax_adjustment_cents
+                                ? (e.book_to_tax_adjustment_cents / 100).toString()
+                                : ""
+                            }
+                            onChange={(ev) => setM1Draft((d) => ({ ...d, [e.id]: ev.target.value }))}
+                            title="Net Schedule M-1 book-to-tax adjustment (book → taxable)"
+                            className="h-6 w-24 rounded-[6px] border border-[var(--g-hairline)] bg-[var(--g-bg)] px-1.5 text-[11px] text-[var(--g-ink)] outline-none focus:border-[var(--agent)]"
+                          />
+                          <MiniButton
+                            onClick={() =>
+                              void saveM1(
+                                e.id,
+                                m1Draft[e.id] ?? ((e.book_to_tax_adjustment_cents || 0) / 100).toString(),
+                              )
+                            }
+                            disabled={savingM1 === e.id}
+                          >
+                            {savingM1 === e.id ? "…" : "Set"}
+                          </MiniButton>
+                          <span className="font-mono text-[10.5px] text-[var(--g-ink-3)]">
+                            = {centsToUSD(e.amount_cents + (e.book_to_tax_adjustment_cents || 0))} taxable
+                          </span>
+                        </span>
+                      </AoRow>
+                      <AoRow label="as-of">
+                        <span className="font-mono text-[10.5px] text-[var(--g-ink-3)]">
+                          {e.accounting_ops_synced_at
+                            ? new Date(e.accounting_ops_synced_at).toLocaleDateString()
+                            : "not synced yet"}
+                        </span>
+                      </AoRow>
                       <AoRow label="path">
                         <code className="font-mono text-[10.5px] text-[var(--g-ink-3)]">
-                          KC mint → Brigade RFC-8693 → AO P&amp;L
+                          KC mint → AO P&amp;L (direct M2M · shared KC)
                         </code>
                       </AoRow>
                     </div>

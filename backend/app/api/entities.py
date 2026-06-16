@@ -16,11 +16,12 @@ from app.integrations.accounting_ops import (
 )
 from app.models.entity import BusinessEntity
 from app.schemas.auth import AuthContext
-from app.schemas.entity import BusinessEntityIn, BusinessEntityOut
+from app.schemas.entity import BookToTaxAdjustmentIn, BusinessEntityIn, BusinessEntityOut
 from app.services.entities import (
     create_entity,
     delete_entity,
     list_entities,
+    set_book_to_tax_adjustment,
     sync_entity_from_accounting_ops,
 )
 
@@ -100,3 +101,26 @@ async def sync_entity_accounting_ops(
         ) from exc
     except (AccountingOpsAuthError, AccountingOpsUnavailableError) as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
+
+@router.post("/{tax_year_id}/business-entities/{entity_id}/book-to-tax-adjustment")
+async def set_entity_book_to_tax(
+    tax_year_id: UUID,
+    entity_id: UUID,
+    payload: BookToTaxAdjustmentIn,
+    ctx: AuthContext = Depends(require_scopes(("taxplan:advisor",))),
+    db: AsyncSession = Depends(get_tenant_db),
+) -> dict[str, object]:
+    """Set the net Schedule M-1 book-to-tax adjustment (book net income →
+    corporate taxable income) on a C-corp entity — reconciles a synced book
+    figure to taxable income."""
+    try:
+        return await set_book_to_tax_adjustment(
+            db,
+            workspace_id=ctx.workspace_id,
+            actor_uc_uid=ctx.uc_uid,
+            entity_id=entity_id,
+            adjustment_cents=payload.book_to_tax_adjustment_cents,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
