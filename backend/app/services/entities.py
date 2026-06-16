@@ -35,6 +35,7 @@ from app.engines.qbi import QBIBusiness, calculate_qbi_aggregate
 from app.engines.se_tax import SETaxInput, calculate_se_tax
 from app.integrations.accounting_ops import fetch_pl
 from app.models.entity import BusinessEntity
+from app.models.tax_year import ClientTaxYear
 from app.schemas.entity import BusinessEntityIn
 from app.services.audit import append_audit_event
 from app.year_configs import state_corporate_config_for
@@ -118,7 +119,16 @@ async def sync_entity_from_accounting_ops(
     if not entity.accounting_ops_workspace_id:
         raise ValueError("entity is not linked to an Accounting-Ops workspace")
 
-    summary = await fetch_pl(entity.accounting_ops_workspace_id, settings)
+    # Scope the pull to the linked AO entity (if set, so a multi-book workspace
+    # doesn't bleed across) and to the client's tax year, so a C-corp's plan
+    # year matches the books period it sources.
+    tax_year = await db.get(ClientTaxYear, entity.client_tax_year_id)
+    summary = await fetch_pl(
+        entity.accounting_ops_workspace_id,
+        settings,
+        entity_id=entity.accounting_ops_entity_id,
+        period=str(tax_year.tax_year) if tax_year else None,
+    )
     previous = entity.amount_cents
     entity.amount_cents = summary.net_income_cents
     await db.flush()
@@ -131,6 +141,7 @@ async def sync_entity_from_accounting_ops(
         aggregate_id=entity.id,
         payload={
             "accounting_ops_workspace_id": entity.accounting_ops_workspace_id,
+            "accounting_ops_entity_id": entity.accounting_ops_entity_id,
             "previous_amount_cents": previous,
             "amount_cents": summary.net_income_cents,
             "period": summary.period,

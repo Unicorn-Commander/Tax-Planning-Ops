@@ -23,6 +23,7 @@ class BusinessEntityIn(BaseModel):
     dividends_cents: int = 0  # C-corp only — distributed to owner (qualified dividends)
     nol_available_cents: int = 0  # C-corp only — NOL carryforward available
     accounting_ops_workspace_id: str | None = None  # link to AO workspace P&L
+    accounting_ops_entity_id: str | None = None  # scope the pull to one AO entity
 
 
 class BusinessEntityOut(BusinessEntityIn):

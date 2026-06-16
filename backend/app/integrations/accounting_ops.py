@@ -216,8 +216,19 @@ async def _get_federation_token(settings: Settings, workspace_id: str) -> str:
     return token
 
 
-async def fetch_pl(accounting_ops_workspace_id: str, settings: Settings) -> PLSummary:
-    """Read the linked AO workspace's P&L and return its net income in cents."""
+async def fetch_pl(
+    accounting_ops_workspace_id: str,
+    settings: Settings,
+    *,
+    entity_id: str | None = None,
+    period: str | None = None,
+) -> PLSummary:
+    """Read the linked AO workspace's P&L and return its net income in cents.
+
+    ``entity_id`` scopes the report to a single entity within the workspace
+    (otherwise AO returns the workspace's consolidated P&L — which would mix
+    several books). ``period`` selects the reporting period AO computes over
+    (e.g. a tax year ``"2025"``); unset → AO's own default (currently YTD)."""
     if not settings.ACCOUNTING_OPS_ENABLED or not settings.ACCOUNTING_OPS_URL:
         raise AccountingOpsDisabledError("Accounting-Ops integration is not enabled")
 
@@ -226,9 +237,16 @@ async def fetch_pl(accounting_ops_workspace_id: str, settings: Settings) -> PLSu
         f"{settings.ACCOUNTING_OPS_URL.rstrip('/')}"
         f"/api/workspaces/{accounting_ops_workspace_id}/reports/pl"
     )
+    params: dict[str, str] = {}
+    if entity_id:
+        params["entity_id"] = entity_id
+    if period:
+        params["period"] = period
     try:
         async with httpx.AsyncClient(timeout=settings.ACCOUNTING_OPS_TIMEOUT_SECONDS) as client:
-            resp = await client.get(url, headers={"Authorization": f"Bearer {token}"})
+            resp = await client.get(
+                url, params=params or None, headers={"Authorization": f"Bearer {token}"}
+            )
     except httpx.HTTPError as exc:
         raise AccountingOpsUnavailableError(f"could not reach Accounting-Ops: {exc}") from exc
 
