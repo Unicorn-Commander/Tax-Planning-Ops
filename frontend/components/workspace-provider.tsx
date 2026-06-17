@@ -33,6 +33,7 @@ const WorkspaceContext = createContext<WorkspaceContextValue | undefined>(undefi
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const ready = useAuthStore((state) => state.ready);
   const [workspaces, setWorkspaces] = useState<WorkspaceMembership[]>(() => getStoredWorkspaces());
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(() =>
     getStoredWorkspaceId(),
@@ -40,6 +41,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    // Wait for the auth provider to settle. Before it has read the token from
+    // localStorage, `isAuthenticated` is transiently false — reacting to it here
+    // would call clearWorkspaceStorage() and wipe the just-selected workspace,
+    // so after the switcher's reload every selection fell back to the token's
+    // home workspace. Only act once `ready` is true (a real sign-in decision).
+    if (!ready) return;
     let cancelled = false;
     if (!isAuthenticated) {
       setWorkspaces([]);
@@ -90,7 +97,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, ready]);
 
   const switchWorkspace = useCallback(
     (workspaceId: string) => {
