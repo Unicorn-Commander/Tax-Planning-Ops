@@ -111,6 +111,10 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         "/livez",
         "/api/v1/livez",
         "/api/v1/auth/keycloak",
+        # The refresh token IS the credential here; this path mints a new access
+        # token precisely when the old one has expired, so it can't require a
+        # valid bearer.
+        "/api/v1/auth/refresh",
     )
 
     def __init__(

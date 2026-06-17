@@ -18,6 +18,10 @@ function CallbackInner() {
       return;
     }
     localStorage.setItem("access_token", token);
+    // Keep the refresh token so the access token can be renewed silently
+    // (see lib/api.ts) instead of bouncing to /auth/login when it expires.
+    const refreshToken = searchParams.get("refresh_token");
+    if (refreshToken) localStorage.setItem("refresh_token", refreshToken);
     api
       .get("/me", { headers: { Authorization: `Bearer ${token}` } })
       .then((response) => {
