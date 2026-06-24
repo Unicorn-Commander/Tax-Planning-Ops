@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import api from "@/lib/api";
+import { useAuthStore } from "@/lib/store";
 
 export interface Snapshot {
   total_income_cents: number;
@@ -68,19 +69,40 @@ interface Ctx {
 const OverviewContext = createContext<Ctx | undefined>(undefined);
 
 export function ClientOverviewProvider({ clientId, children }: { clientId: string; children: ReactNode }) {
+  const ready = useAuthStore((s) => s.ready);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
+  const retries = useRef(0);
 
   const reload = useCallback(() => {
     setLoading(true);
     api
       .get(`/clients/${clientId}/overview`)
-      .then((r) => setOverview(r.data))
-      .catch(() => setOverview(null))
+      .then((r) => {
+        setOverview(r.data);
+        retries.current = 0;
+      })
+      .catch(() => {
+        setOverview(null);
+        // A cold load (full navigation / refresh / direct link) can fire this
+        // before the auth token has hydrated; retry a few times with backoff so
+        // the file chrome never gets stuck on a permanent "Loading…".
+        if (retries.current < 4) {
+          retries.current += 1;
+          setTimeout(reload, 500 * retries.current);
+        }
+      })
       .finally(() => setLoading(false));
   }, [clientId]);
 
-  useEffect(reload, [reload]);
+  // Only fetch once auth has settled. Fetching on the first paint of a cold load
+  // races the token hydration and 401s into a silently-null overview, which the
+  // file topbar renders as a permanent "Loading…" — the same hydration-settled
+  // rule the workspace provider already follows.
+  useEffect(() => {
+    if (!ready) return;
+    reload();
+  }, [ready, reload]);
 
   return <OverviewContext.Provider value={{ clientId, overview, loading, reload }}>{children}</OverviewContext.Provider>;
 }
