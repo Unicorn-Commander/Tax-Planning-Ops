@@ -2,7 +2,6 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import api from "@/lib/api";
-import { useAuthStore } from "@/lib/store";
 
 export interface Snapshot {
   total_income_cents: number;
@@ -69,40 +68,36 @@ interface Ctx {
 const OverviewContext = createContext<Ctx | undefined>(undefined);
 
 export function ClientOverviewProvider({ clientId, children }: { clientId: string; children: ReactNode }) {
-  const ready = useAuthStore((s) => s.ready);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const retries = useRef(0);
 
   const reload = useCallback(() => {
     setLoading(true);
+    // Bound the request. On a cold load the first call can race token hydration
+    // (401) or STALL inside the axios auth-refresh interceptor (which has no
+    // timeout) — either way the file chrome must never stick on "Loading…". A
+    // per-request timeout turns a stall into a rejection; we then retry with
+    // backoff until the session settles and the call returns 200.
     api
-      .get(`/clients/${clientId}/overview`)
+      .get(`/clients/${clientId}/overview`, { timeout: 7000 })
       .then((r) => {
         setOverview(r.data);
         retries.current = 0;
       })
       .catch(() => {
         setOverview(null);
-        // A cold load (full navigation / refresh / direct link) can fire this
-        // before the auth token has hydrated; retry a few times with backoff so
-        // the file chrome never gets stuck on a permanent "Loading…".
-        if (retries.current < 4) {
+        if (retries.current < 6) {
           retries.current += 1;
-          setTimeout(reload, 500 * retries.current);
+          setTimeout(reload, 700 * retries.current);
         }
       })
       .finally(() => setLoading(false));
   }, [clientId]);
 
-  // Only fetch once auth has settled. Fetching on the first paint of a cold load
-  // races the token hydration and 401s into a silently-null overview, which the
-  // file topbar renders as a permanent "Loading…" — the same hydration-settled
-  // rule the workspace provider already follows.
   useEffect(() => {
-    if (!ready) return;
     reload();
-  }, [ready, reload]);
+  }, [reload]);
 
   return <OverviewContext.Provider value={{ clientId, overview, loading, reload }}>{children}</OverviewContext.Provider>;
 }
