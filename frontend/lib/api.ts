@@ -3,17 +3,6 @@ import { WORKSPACE_HEADER_NAME, getStoredWorkspaceId } from "@/lib/workspace";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
-// [OVDBG] temporary cold-load instrumentation — REMOVE in the fix commit.
-function OVDBG(tag: string, data: Record<string, unknown>): void {
-  if (typeof window === "undefined") return;
-  // eslint-disable-next-line no-console
-  console.log(`[OVDBG] ${tag}`, JSON.stringify(data));
-}
-function ovWatched(url: unknown): boolean {
-  const u = String(url || "");
-  return u.includes("/overview") || u.includes("/me") || u.includes("/auth/refresh");
-}
-
 export const api = axios.create({
   baseURL: API_BASE_URL,
   headers: { "Content-Type": "application/json" },
@@ -35,15 +24,6 @@ api.interceptors.request.use((config) => {
     if (workspaceId && !config.headers[WORKSPACE_HEADER_NAME]) {
       config.headers[WORKSPACE_HEADER_NAME] = workspaceId;
     }
-    if (ovWatched(config.url)) {
-      OVDBG("request.out", {
-        url: config.url,
-        hasToken: Boolean(token),
-        tokenLen: token ? token.length : 0,
-        ws: workspaceId,
-        retried: Boolean((config as { _retried?: boolean })._retried),
-      });
-    }
   }
   return config;
 });
@@ -60,29 +40,31 @@ let refreshInFlight: Promise<string | null> | null = null;
 async function refreshAccessToken(): Promise<string | null> {
   const refreshToken =
     typeof window !== "undefined" ? localStorage.getItem("refresh_token") : null;
-  OVDBG("refresh.start", { hasRefreshToken: Boolean(refreshToken) });
   if (!refreshToken) return null;
   try {
     // Bare axios (not `api`) so this request bypasses the interceptors below and
     // can't recurse if it 401s itself.
-    const res = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-      refresh_token: refreshToken,
-    });
+    //
+    // Bound the round-trip. The data fetch that triggered this refresh set its
+    // own per-request timeout, but that timeout does NOT cover the time the
+    // response interceptor below spends `await`-ing THIS call — so an
+    // unbounded, hung /auth/refresh would freeze the awaiting request forever:
+    // the file chrome sticks on "Loading…" with no 401 and no redirect (the
+    // interceptor never reaches either branch). A finite timeout turns a hung
+    // refresh into a definitive failure (returns null) so the caller's
+    // retry-with-backoff / re-auth path actually runs.
+    const res = await axios.post(
+      `${API_BASE_URL}/auth/refresh`,
+      { refresh_token: refreshToken },
+      { timeout: 8000 },
+    );
     const accessToken: string | undefined = res.data?.access_token;
     const rotated: string | undefined = res.data?.refresh_token;
-    OVDBG("refresh.ok", {
-      status: res.status,
-      hasAccess: Boolean(accessToken),
-      accessLen: accessToken ? accessToken.length : 0,
-      rotated: Boolean(rotated),
-    });
     if (!accessToken) return null;
     localStorage.setItem("access_token", accessToken);
     if (rotated) localStorage.setItem("refresh_token", rotated);
     return accessToken;
-  } catch (e) {
-    const err = e as { response?: { status?: number }; code?: string; message?: string };
-    OVDBG("refresh.FAIL", { status: err?.response?.status, code: err?.code, msg: err?.message });
+  } catch {
     return null;
   }
 }
@@ -105,26 +87,11 @@ function clearSessionAndRedirect(): void {
 }
 
 api.interceptors.response.use(
-  (response) => {
-    if (ovWatched(response.config?.url)) {
-      OVDBG("response.ok", { url: response.config?.url, status: response.status });
-    }
-    return response;
-  },
+  (response) => response,
   async (error) => {
     const original = error.config;
     const status = error.response?.status;
-    if (ovWatched(original?.url)) {
-      OVDBG("response.err", {
-        url: original?.url,
-        status,
-        code: error?.code,
-        msg: error?.message,
-        retried: Boolean(original?._retried),
-      });
-    }
     if (status !== 401 || typeof window === "undefined" || !original) {
-      OVDBG("interceptor.reject-no-redirect", { url: original?.url, status, code: error?.code });
       return Promise.reject(error);
     }
     // Never try to refresh the refresh call itself, and retry a given request
@@ -133,31 +100,14 @@ api.interceptors.response.use(
     if (!isRefreshCall && !original._retried) {
       original._retried = true;
       const newToken = await getRefreshedToken();
-      OVDBG("interceptor.afterRefresh", { url: original?.url, gotToken: Boolean(newToken) });
       if (newToken) {
         // Request interceptor will re-stamp Authorization from localStorage,
         // but set it here too so the retry is self-contained.
         original.headers = original.headers ?? {};
         original.headers.Authorization = `Bearer ${newToken}`;
-        OVDBG("interceptor.retry.start", { url: original?.url });
-        return api(original).then(
-          (r) => {
-            OVDBG("interceptor.retry.RESOLVED", { url: original?.url, status: r.status });
-            return r;
-          },
-          (e) => {
-            OVDBG("interceptor.retry.REJECTED", {
-              url: original?.url,
-              status: e?.response?.status,
-              code: e?.code,
-              msg: e?.message,
-            });
-            throw e;
-          },
-        );
+        return api(original);
       }
     }
-    OVDBG("interceptor.clearSessionAndRedirect", { url: original?.url, isRefreshCall, retried: Boolean(original?._retried) });
     clearSessionAndRedirect();
     return Promise.reject(error);
   },
