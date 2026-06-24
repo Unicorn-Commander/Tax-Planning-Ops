@@ -30,6 +30,15 @@ class ClientTaxYear(IdMixin, WorkspaceScopedMixin, TimestampMixin, Base):
     finalized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     pinned_bracket_config: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Source documents pulled from Accounting-Ops for THIS tax year — a per-year
+    # manifest of the structured extractions (classification + verbatim fields).
+    # AO owns the OCR; this is a synced snapshot the strategist/intake read. The
+    # sync replaces the whole list each run (idempotent). Null until first synced;
+    # source_documents_synced_at gives the "as-of" for an honest staleness note.
+    source_documents: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
+    source_documents_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class Document(IdMixin, WorkspaceScopedMixin, TimestampMixin, Base):

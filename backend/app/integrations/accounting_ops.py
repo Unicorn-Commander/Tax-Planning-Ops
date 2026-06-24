@@ -279,3 +279,121 @@ async def fetch_pl(
         period=str(payload.get("period")) if payload.get("period") is not None else None,
         available_keys=sorted(payload.keys()),
     )
+
+
+# ---------------------------------------------------------------------------
+# Tax-document extractions (the OCR consumer side)
+# ---------------------------------------------------------------------------
+#
+# AO owns the document vault + OCR; TPO reads the structured results over the
+# SAME federation rail as the P&L pull (GET /api/workspaces/{ws}/tax-documents).
+# These are the income/source forms a 1040 is built from (1099-R, SSA-1099,
+# 1095, W-2, K-1, IRS/state notices) — overwhelmingly scanned PDFs that AO
+# classified + transcribed. TPO never re-runs the vision model; it consumes.
+
+
+class TaxDocumentExtraction(BaseModel):
+    """One structured tax document AO extracted (classification + verbatim fields).
+
+    Mirrors a row of the AO federation payload. ``fields`` is the model's
+    verbatim transcription of the form's labeled boxes — AO never computes or
+    sums, so e.g. an OPM CSA-1099-R "2a Taxable amount" may be the literal string
+    "UNKNOWN". Consumers (the strategist, the intake UI) must treat values as
+    printed, never as math.
+    """
+
+    id: str
+    entity_id: str | None = None
+    receipt_id: str | None = None
+    doc_type: str = "other"
+    tax_year: int | None = None
+    payer_name: str | None = None
+    recipient_name: str | None = None
+    fields: dict[str, Any] = {}
+    confidence: float | None = None
+    status: str = "extracted"
+    model: str | None = None
+    extracted_at: str | None = None
+
+
+class TaxDocumentSet(BaseModel):
+    accounting_ops_workspace_id: str
+    entity_id: str | None = None
+    tax_year: int | None = None
+    documents: list[TaxDocumentExtraction] = []
+
+
+async def fetch_tax_documents(
+    accounting_ops_workspace_id: str,
+    settings: Settings,
+    *,
+    entity_id: str | None = None,
+    tax_year: int | None = None,
+) -> TaxDocumentSet:
+    """Read an AO entity's structured tax-document extractions over federation.
+
+    The consumer side of AO's OCR: TPO reads ``document_extraction`` rows by
+    (entity_id, tax_year) instead of re-running the vision model. Same token rail
+    as ``fetch_pl`` (``_get_federation_token``: mint TPO's KC service token →
+    raw-KC by default, or Brigade-exchange when ``BRIGADE_TOKEN_URL`` is set).
+    The AO endpoint floors the caller to viewer and refuses HIPAA workspaces.
+
+    ``entity_id`` scopes to a single AO entity (personal income docs live under
+    the personal entity); ``tax_year`` filters to one year. Both optional. Raises
+    the same AccountingOps* hierarchy as ``fetch_pl`` so the API maps them to the
+    same status codes.
+    """
+    if not settings.ACCOUNTING_OPS_ENABLED or not settings.ACCOUNTING_OPS_URL:
+        raise AccountingOpsDisabledError("Accounting-Ops integration is not enabled")
+
+    token = await _get_federation_token(settings, accounting_ops_workspace_id)
+    url = (
+        f"{settings.ACCOUNTING_OPS_URL.rstrip('/')}"
+        f"/api/workspaces/{accounting_ops_workspace_id}/tax-documents"
+    )
+    params: dict[str, str] = {}
+    if entity_id:
+        params["entity_id"] = entity_id
+    if tax_year is not None:
+        params["tax_year"] = str(tax_year)
+    try:
+        async with httpx.AsyncClient(timeout=settings.ACCOUNTING_OPS_TIMEOUT_SECONDS) as client:
+            resp = await client.get(
+                url, params=params or None, headers={"Authorization": f"Bearer {token}"}
+            )
+    except httpx.HTTPError as exc:
+        raise AccountingOpsUnavailableError(f"could not reach Accounting-Ops: {exc}") from exc
+
+    if resp.status_code in (401, 403):
+        raise AccountingOpsAuthError(
+            "Accounting-Ops rejected the service token — the federation trust for "
+            "Tax-Planning-Ops is not yet authorized on the Accounting-Ops side."
+        )
+    if resp.status_code == 404:
+        raise AccountingOpsWorkspaceNotFoundError(
+            f"Accounting-Ops workspace '{accounting_ops_workspace_id}' not found or not active"
+        )
+    if resp.status_code >= 400:
+        raise AccountingOpsUnavailableError(f"Accounting-Ops returned {resp.status_code}")
+
+    try:
+        payload = dict(resp.json())
+    except ValueError as exc:
+        raise AccountingOpsUnavailableError(
+            "Accounting-Ops tax-documents response was not valid JSON"
+        ) from exc
+
+    raw = payload.get("extractions")
+    if not isinstance(raw, list):
+        raise AccountingOpsUnavailableError(
+            "Accounting-Ops tax-documents response had no 'extractions' list"
+        )
+    documents = [
+        TaxDocumentExtraction.model_validate(d) for d in raw if isinstance(d, dict)
+    ]
+    return TaxDocumentSet(
+        accounting_ops_workspace_id=accounting_ops_workspace_id,
+        entity_id=entity_id,
+        tax_year=tax_year,
+        documents=documents,
+    )
