@@ -83,6 +83,63 @@ def _finding(
     }
 
 
+# Box labels (case-insensitive substring) worth surfacing verbatim from a source
+# form's `fields` map — the money/identifying lines an advisor would key on. Used
+# only to PICK which boxes to echo; values are passed through untouched.
+_SOURCE_DOC_KEY_TERMS = (
+    "gross", "taxable", "withh", "distribution", "benefit", "wages", "income",
+    "compensation", "contribution", "interest", "dividend", "rent", "royalt",
+    "proceeds", "basis", "code", "amount", "premium",
+)
+_SOURCE_DOC_MAX_FIELDS = 6
+
+
+def _source_documents_block(tax_year: ClientTaxYear) -> str:
+    """Format the synced Accounting-Ops source documents as a grounded, read-only
+    facts block for the strategist prompt.
+
+    Verbatim OCR — values (including the literal string ``"UNKNOWN"``) are echoed
+    exactly; nothing is computed or summed. Returns ``""`` when there are no
+    documents, and never raises (a malformed manifest yields whatever lines parse).
+    """
+    docs = tax_year.source_documents
+    if not docs:
+        return ""
+    lines: list[str] = []
+    for doc in docs:
+        if not isinstance(doc, dict):
+            continue
+        fields = doc.get("fields")
+        pairs: list[str] = []
+        if isinstance(fields, dict):
+            # Prefer the money/identifying boxes (in keyword priority), then fall
+            # back to remaining boxes in stored order — deterministic, capped.
+            preferred = [
+                k for k in fields
+                if isinstance(k, str) and any(t in k.lower() for t in _SOURCE_DOC_KEY_TERMS)
+            ]
+            ordered = preferred + [k for k in fields if k not in preferred]
+            for key in ordered[:_SOURCE_DOC_MAX_FIELDS]:
+                pairs.append(f"{key}={fields[key]}")
+        doc_type = doc.get("doc_type") or "document"
+        year = doc.get("tax_year")
+        payer = doc.get("payer_name")
+        head = f"{doc_type}"
+        if year is not None:
+            head += f" (TY{year}"
+            head += f", payer {payer})" if payer else ")"
+        elif payer:
+            head += f" (payer {payer})"
+        lines.append(f"{head}: {'; '.join(pairs)}" if pairs else head)
+    if not lines:
+        return ""
+    return (
+        "SOURCE DOCUMENTS (verbatim OCR from Accounting-Ops — treat values exactly "
+        "as printed; some may be the literal string 'UNKNOWN'; do NOT invent, "
+        "compute, or sum any number):\n" + "\n".join(lines)
+    )
+
+
 async def _author_memo(
     client_name: str,
     situation: str,
@@ -92,6 +149,7 @@ async def _author_memo(
     objectives_block: str,
     trajectory_summary: str | None,
     return_block: str,
+    source_documents_block: str = "",
 ) -> str | None:
     if not llm_enabled(settings) or not findings:
         return None
@@ -111,6 +169,8 @@ async def _author_memo(
         ]
     if trajectory_summary:
         context_sections += ["", "INCOME TRAJECTORY:", trajectory_summary]
+    if source_documents_block:
+        context_sections += ["", source_documents_block]
     prompt = (
         f"You are a tax-planning advisor writing a concise working memo for {client_name}.\n"
         + "\n".join(context_sections)
@@ -398,6 +458,7 @@ async def generate_strategist_memo(
         objectives_block=objectives_block,
         trajectory_summary=trajectory.get("summary") if trajectory.get("available") else None,
         return_block=return_block,
+        source_documents_block=_source_documents_block(tax_year),
     )
 
     return {

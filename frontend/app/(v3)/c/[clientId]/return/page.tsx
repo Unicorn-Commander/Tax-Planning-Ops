@@ -43,6 +43,7 @@ import {
   type Provenance,
 } from "@/components/kit";
 import { WaterfallSVG, type WaterfallStep, ChartLegend } from "@/components/kit";
+import { SourceDocumentsPanel } from "@/components/source-documents-panel";
 
 /* ---- API shapes --------------------------------------------------- */
 
@@ -559,6 +560,12 @@ export default function ReturnPage() {
         </Panel>
       </div>
 
+      {/* ============================================================= SOURCE DOCUMENTS
+          The OCR'd income / coverage source forms (1099-R, SSA-1099, 1095-B, W-2,
+          K-1, notices) synced from Accounting-Ops for this tax year — verbatim box
+          values, with a (re)sync button. Renders once the year has an id. */}
+      {baseYear?.id ? <SourceDocumentsPanel taxYearId={baseYear.id} /> : null}
+
       {/* omnibar */}
       <div className="mt-7">
         <Omnibar placeholder="Ask the strategist about this return…" />
@@ -682,6 +689,9 @@ function ConfirmedBaseline({
           </p>
         </Panel>
       </div>
+
+      {/* Source documents synced from Accounting-Ops for this confirmed year. */}
+      {baseYear.id ? <SourceDocumentsPanel taxYearId={baseYear.id} /> : null}
 
       <div className="mt-7">
         <Omnibar placeholder="Ask the strategist about this return…" />

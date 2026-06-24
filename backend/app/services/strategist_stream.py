@@ -52,6 +52,7 @@ from app.services.strategist import (
     _latest_snapshot,
     _objectives_block,
     _return_block,
+    _source_documents_block,
 )
 from app.services.strategist_context import build_trajectory, goal_aware_findings
 from app.services.tax_config import resolve_bracket_set, to_engine_config
@@ -380,6 +381,7 @@ async def stream_strategist_run(
         objectives_block=objectives_block,
         trajectory_summary=trajectory.get("summary") if trajectory.get("available") else None,
         return_block=return_block,
+        source_documents_block=_source_documents_block(tax_year),
     )
     if memo is not None:
         yield {"type": "memo", "text": memo}
