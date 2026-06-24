@@ -2,6 +2,14 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import api from "@/lib/api";
+import { useAuthStore } from "@/lib/store";
+
+// [OVDBG] temporary cold-load instrumentation — REMOVE in the fix commit.
+function OVDBG(tag: string, data: Record<string, unknown>): void {
+  if (typeof window === "undefined") return;
+  // eslint-disable-next-line no-console
+  console.log(`[OVDBG] ${tag}`, JSON.stringify(data));
+}
 
 export interface Snapshot {
   total_income_cents: number;
@@ -74,6 +82,12 @@ export function ClientOverviewProvider({ clientId, children }: { clientId: strin
 
   const reload = useCallback(() => {
     setLoading(true);
+    OVDBG("provider.reload.fire", {
+      clientId,
+      retries: retries.current,
+      ready: useAuthStore.getState().ready,
+      authed: useAuthStore.getState().isAuthenticated,
+    });
     // Bound the request. On a cold load the first call can race token hydration
     // (401) or STALL inside the axios auth-refresh interceptor (which has no
     // timeout) — either way the file chrome must never stick on "Loading…". A
@@ -82,10 +96,17 @@ export function ClientOverviewProvider({ clientId, children }: { clientId: strin
     api
       .get(`/clients/${clientId}/overview`, { timeout: 7000 })
       .then((r) => {
+        OVDBG("provider.then.OK", { status: r.status, name: r.data?.client?.display_name });
         setOverview(r.data);
         retries.current = 0;
       })
-      .catch(() => {
+      .catch((e) => {
+        OVDBG("provider.catch.FAIL", {
+          status: e?.response?.status,
+          code: e?.code,
+          msg: e?.message,
+          retries: retries.current,
+        });
         setOverview(null);
         if (retries.current < 6) {
           retries.current += 1;
