@@ -1,0 +1,220 @@
+[
+  {
+    "name": "create_client",
+    "route": "POST /api/v1/clients",
+    "scope": "taxplan:advisor",
+    "description": "Create a new tax-planning client in the active workspace.",
+    "params": "body: client fields (name, entity_type, etc.)"
+  },
+  {
+    "name": "upload_return_document",
+    "route": "POST /api/v1/client-tax-years/{id}/documents/form-1040",
+    "scope": "taxplan:advisor",
+    "description": "Attach/ingest a Form 1040 source document to a client tax year for OCR extraction.",
+    "params": "path: id (client_tax_year_id); body: document reference/metadata"
+  },
+  {
+    "name": "get_extracted_return",
+    "route": "GET /api/v1/extracted-returns/{id}",
+    "scope": "taxplan:advisor",
+    "description": "Retrieve the extracted (OCR/parsed) return and its fields for review.",
+    "params": "path: id (extracted_return_id)"
+  },
+  {
+    "name": "correct_extracted_field",
+    "route": "PATCH /api/v1/extracted-fields/{id}",
+    "scope": "taxplan:advisor",
+    "description": "Correct a single extracted field value before confirming the return.",
+    "params": "path: id (field_id); body: {value, ...}"
+  },
+  {
+    "name": "confirm_return",
+    "route": "POST /api/v1/extracted-returns/{id}/confirm",
+    "scope": "taxplan:advisor",
+    "description": "Confirm an extracted return, promoting it to the engine truth substrate.",
+    "params": "path: id (extracted_return_id)"
+  },
+  {
+    "name": "create_tax_plan",
+    "route": "POST /api/v1/plans",
+    "scope": "taxplan:advisor",
+    "description": "Create a tax plan (scenario container) for a client tax year.",
+    "params": "body: plan fields (client_tax_year_id, name, ...)"
+  },
+  {
+    "name": "update_scenario_assumptions",
+    "route": "PATCH /api/v1/plans/{id}/assumptions",
+    "scope": "taxplan:advisor",
+    "description": "Update the scenario assumptions on a plan, triggering recomputation by the engine.",
+    "params": "path: id (plan_tax_year_id); body: assumption fields"
+  },
+  {
+    "name": "list_strategy_library",
+    "route": "GET /api/v1/strategy-library",
+    "scope": "taxplan:advisor",
+    "description": "List the catalog of available tax strategies.",
+    "params": "query (optional filters)"
+  },
+  {
+    "name": "add_client_strategy",
+    "route": "POST /api/v1/plans/{id}/strategies",
+    "scope": "taxplan:advisor",
+    "description": "Add a strategy from the library to a client's plan.",
+    "params": "path: id (plan_tax_year_id); body: {strategy_id, ...}"
+  },
+  {
+    "name": "compute_quarterly",
+    "route": "POST /api/v1/quarterly/{id}/compute",
+    "scope": "taxplan:advisor",
+    "description": "Compute estimated quarterly tax payments for a plan via the engine.",
+    "params": "path: id (plan_tax_year_id)"
+  },
+  {
+    "name": "generate_plan_pdf",
+    "route": "POST /api/v1/plans/{id}/pdf",
+    "scope": "taxplan:advisor",
+    "description": "Generate a PDF document for the plan.",
+    "params": "path: id (plan_tax_year_id); body: optional render options"
+  },
+  {
+    "name": "upsert_strategy_library",
+    "route": "PUT /api/v1/admin/strategy-library",
+    "scope": "taxplan:admin",
+    "description": "Admin: create or update an entry in the strategy library catalog.",
+    "params": "body: strategy library entry"
+  },
+  {
+    "name": "upsert_tax_bracket_set",
+    "route": "PUT /api/v1/admin/tax-bracket-sets",
+    "scope": "taxplan:admin",
+    "description": "Admin: create or update a tax bracket set (constants) used by the engine.",
+    "params": "body: tax bracket set"
+  },
+  {
+    "name": "scan_book",
+    "route": "GET /api/v1/agents/scan-book",
+    "scope": "taxplan:advisor",
+    "description": "Agent: scan the book of clients for planning opportunities/flags.",
+    "params": "query (optional filters)"
+  },
+
+  {
+    "name": "run_strategist",
+    "route": "POST /api/v1/clients/tax-years/{tax_year_id}/strategist/run",
+    "scope": "taxplan:advisor",
+    "description": "Run the AI tax-strategist over a client tax year to produce situation-aware findings and a draft memo.",
+    "params": "path: tax_year_id; body: optional run options"
+  },
+  {
+    "name": "get_memo",
+    "route": "GET /api/v1/clients/tax-years/{tax_year_id}/memo",
+    "scope": "taxplan:advisor",
+    "description": "Get the current advisory memo state for a client tax year.",
+    "params": "path: tax_year_id"
+  },
+  {
+    "name": "save_memo",
+    "route": "PUT /api/v1/clients/tax-years/{tax_year_id}/memo",
+    "scope": "taxplan:advisor",
+    "description": "Save/replace the advisory memo body (markdown) for a client tax year.",
+    "params": "path: tax_year_id; body: {body_md}"
+  },
+  {
+    "name": "sign_memo",
+    "route": "POST /api/v1/memos/{memo_id}/sign",
+    "scope": "taxplan:advisor",
+    "description": "Sign and seal a memo, locking it as a finalized advisory document.",
+    "params": "path: memo_id"
+  },
+  {
+    "name": "list_pending_memos",
+    "route": "GET /api/v1/memos/pending",
+    "scope": "taxplan:advisor",
+    "description": "List memos pending review/signature across the workspace.",
+    "params": "query (optional filters)"
+  },
+  {
+    "name": "recompute_scenario",
+    "route": "POST /api/v1/agents/clients/tax-years/{tax_year_id}/scenario",
+    "scope": "taxplan:advisor",
+    "description": "Agent: recompute a what-if scenario for a tax year by setting and/or delta-adjusting engine input fields.",
+    "params": "path: tax_year_id; body: {set_fields, delta_fields}"
+  },
+  {
+    "name": "emr_sweep",
+    "route": "POST /api/v1/agents/clients/tax-years/{tax_year_id}/emr-sweep",
+    "scope": "taxplan:advisor",
+    "description": "Agent: sweep the effective marginal rate (EMR) across income to find brackets/cliffs for a tax year.",
+    "params": "path: tax_year_id; body: optional sweep options"
+  },
+  {
+    "name": "optimize_roth",
+    "route": "POST /api/v1/agents/clients/tax-years/{tax_year_id}/optimize/roth",
+    "scope": "taxplan:advisor",
+    "description": "Agent: optimize a Roth conversion amount for a tax year against bracket/EMR constraints.",
+    "params": "path: tax_year_id; body: optional constraints"
+  },
+  {
+    "name": "optimize_scorp",
+    "route": "POST /api/v1/agents/clients/tax-years/{tax_year_id}/optimize/scorp",
+    "scope": "taxplan:advisor",
+    "description": "Agent: optimize reasonable-compensation / S-corp salary split for a tax year.",
+    "params": "path: tax_year_id; body: optional constraints"
+  },
+  {
+    "name": "list_tasks",
+    "route": "GET /api/v1/plans/{client_tax_year_id}/tasks",
+    "scope": "taxplan:advisor",
+    "description": "List implementation tasks for a client tax year's plan.",
+    "params": "path: client_tax_year_id"
+  },
+  {
+    "name": "create_task",
+    "route": "POST /api/v1/plans/{client_tax_year_id}/tasks",
+    "scope": "taxplan:advisor",
+    "description": "Create an implementation task on a client tax year's plan.",
+    "params": "path: client_tax_year_id; body: task fields (title, owner, due_date, ...)"
+  },
+  {
+    "name": "update_task",
+    "route": "PATCH /api/v1/tasks/{task_id}",
+    "scope": "taxplan:advisor",
+    "description": "Update an implementation task (status, owner, due date, etc.).",
+    "params": "path: task_id; body: fields to update"
+  },
+  {
+    "name": "list_statutory_deadlines",
+    "route": "GET /api/v1/statutory-deadlines",
+    "scope": "taxplan:advisor",
+    "description": "List statutory filing/payment deadlines, optionally for a given tax year.",
+    "params": "query: {tax_year}"
+  },
+  {
+    "name": "list_realized",
+    "route": "GET /api/v1/plans/{client_tax_year_id}/realized",
+    "scope": "taxplan:advisor",
+    "description": "List realized (actual) outcomes reconciled against a plan.",
+    "params": "path: client_tax_year_id"
+  },
+  {
+    "name": "reconcile_realized",
+    "route": "POST /api/v1/plans/{client_tax_year_id}/realized",
+    "scope": "taxplan:advisor",
+    "description": "Reconcile a realized outcome against the plan for a client tax year.",
+    "params": "path: client_tax_year_id; body: realized outcome fields"
+  },
+  {
+    "name": "realized_rollup",
+    "route": "GET /api/v1/agents/realized-rollup",
+    "scope": "taxplan:advisor",
+    "description": "Agent: roll up realized outcomes vs plan across the book.",
+    "params": "query (optional filters)"
+  },
+  {
+    "name": "read_journal",
+    "route": "GET /api/v1/lifecycle/journal",
+    "scope": "taxplan:advisor",
+    "description": "Read the lifecycle audit journal (append-only event log).",
+    "params": "query: {tail}"
+  }
+]

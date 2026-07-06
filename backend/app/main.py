@@ -19,8 +19,10 @@ from app.api.intake import router as intake_router
 from app.api.journal import router as journal_router
 from app.api.lifecycle import router as lifecycle_router
 from app.api.matrix import router as matrix_router
+from app.api.mcp import router as mcp_router
 from app.api.me import router as me_router
 from app.api.memo import router as memo_router
+from app.api.pats import router as pats_router
 from app.api.pdf import router as pdf_router
 from app.api.plans import router as plans_router
 from app.api.profile import router as profile_router
@@ -67,6 +69,10 @@ def create_app() -> FastAPI:
     app.add_middleware(JWTAuthMiddleware, settings=settings)
     app.include_router(agents_router, prefix="/api/v1")
     app.include_router(auth_router, prefix="/api/v1")
+    # Durable-token self-service (mint/list/revoke tpo_pat_*) + the HTTP MCP
+    # door (POST /api/v1/mcp). Both sit behind JWTAuthMiddleware.
+    app.include_router(pats_router, prefix="/api/v1")
+    app.include_router(mcp_router, prefix="/api/v1")
     app.include_router(lifecycle_router, prefix="/api/v1")
     app.include_router(admin_router, prefix="/api/v1")
     app.include_router(health_router, prefix="/api/v1")

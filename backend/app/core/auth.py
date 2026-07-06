@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable, Iterable
 from typing import Any
 from uuid import UUID, uuid5
@@ -10,9 +11,15 @@ from starlette.responses import JSONResponse, Response
 
 from app.core.config import Settings
 from app.core.request_context import current_door, normalize_door
+from app.db.session import async_session_maker
 from app.integrations.control_plane import check_entitlement
 from app.integrations.keycloak import KeycloakVerifier
 from app.schemas.auth import AuthContext
+from app.security.pat import (
+    find_active_pat_by_token,
+    looks_like_pat,
+    touch_last_used,
+)
 from app.services.workspaces import is_workspace_member
 
 DOOR_HEADER = "X-UC-Door"
@@ -103,6 +110,17 @@ def resolve_workspace_id(
     return selected, authorized
 
 
+async def _touch_pat_last_used(pat_id: UUID) -> None:
+    """Best-effort last_used_at bump in its own committed session. Fire-and-
+    forget: any failure is swallowed so auth is never blocked on telemetry."""
+    try:
+        async with async_session_maker() as session:
+            await touch_last_used(session, pat_id)
+            await session.commit()
+    except Exception:  # noqa: S110  # pragma: no cover - never block auth on telemetry
+        pass
+
+
 class JWTAuthMiddleware(BaseHTTPMiddleware):
     SKIP_PREFIXES = (
         "/docs",
@@ -153,7 +171,37 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="missing bearer token",
                 )
-            claims = await self.verifier.verify(auth_header.removeprefix("Bearer ").strip())
+            token = auth_header.removeprefix("Bearer ").strip()
+            if looks_like_pat(token):
+                # Durable-token path: a `tpo_pat_*` bearer authenticates WITHOUT
+                # a Keycloak round-trip. A token of this shape is unambiguously a
+                # PAT, so a lookup miss 401s here (no fall-through to Keycloak).
+                async with async_session_maker() as session:
+                    pat = await find_active_pat_by_token(session, token)
+                if pat is None:
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="invalid or revoked token",
+                    )
+                owner = pat.owner_uc_uid
+                # Synthesize minimal claims so the SAME downstream flow
+                # (resolve_workspace_id + _scopes_from_claims + self-serve +
+                # entitlement) fences a PAT caller identically to a browser.
+                claims: dict[str, Any] = {
+                    "sub": owner,
+                    "uc_uid": owner,
+                    "scope": " ".join(pat.scopes),
+                }
+                if pat.workspace_scope:
+                    # An explicit workspace claim => managed (non-self-serve)
+                    # path, exactly like a Keycloak token carrying workspace_id.
+                    claims["workspace_id"] = str(pat.workspace_scope[0])
+                # Let the mint endpoint 403 a PAT-mints-PAT attempt.
+                request.state.auth_via_pat = True
+                # Fire-and-forget last_used bump; never block auth on it.
+                asyncio.create_task(_touch_pat_last_used(pat.id))
+            else:
+                claims = await self.verifier.verify(token)
             header_ws = request.headers.get(WORKSPACE_HEADER)
             uc_uid = str(claims.get("uc_uid") or claims.get("sub") or "")
             try:
