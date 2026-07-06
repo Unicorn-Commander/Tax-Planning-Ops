@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     )
 
     APP_NAME: str = "Tax-Planning-Ops"
-    APP_VERSION: str = "0.1.0"
+    APP_VERSION: str = "0.2.0"
     ENV: Literal["dev", "test", "staging", "prod"] = "dev"
     DEBUG: bool = False
 

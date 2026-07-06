@@ -20,7 +20,15 @@ Distinct from tax *prep* (Drake/Lacerte) and from **Accounting-Ops** (bookkeepin
 5. **Trust-by-design pricing** — no per-household hikes, no billing lock-in.
 6. **Agent-first** — Brigade agents scan the whole book, build scenarios, quantify strategies, draft quarterly estimates (advisor approves).
 
+## MCP / API — the third door
+TPO exposes **three co-equal doors over one engine**: the GUI, the language Console, and an **MCP/API** surface (NO WRAPPERS — every tool proxies the same `/api/v1` REST endpoint, so agents get the identical auth / RLS / entitlement fence as a browser). Two transports share one 31-tool registry:
+- **HTTP + durable PAT** (now available) — `POST /api/v1/mcp` (JSON-RPC 2.0) authenticated with a `tpo_pat_` Personal Access Token. This is the path for persistent clients like Claude Code; no stdio child process required.
+- **stdio** — `mcp/server.py` with `TPO_API_URL` / `TPO_MCP_TOKEN` / `TPO_WORKSPACE_ID` env vars.
+
+See **[`docs/MCP.md`](docs/MCP.md)** for the full tool catalog, PAT lifecycle (mint/list/revoke), and Claude Code install snippets.
+
 ## Docs
+- [`docs/MCP.md`](docs/MCP.md) — the MCP/API surface: transports, `tpo_pat_` tokens, and the 31-tool catalog.
 - `docs/PRD.md` — full product requirements (data model, 5 engines, substrate reuse map, phased roadmap).
 - `docs/CODING-AGENT-PROMPT.md` — paste-ready build prompt for a coding agent.
 - `docs/RESEARCH-FINDINGS.md` — the wedge + the client-portal-vs-Wealth roadmap finding.

@@ -22,9 +22,11 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   Building2,
   Check,
+  KeyRound,
   Moon,
   Palette,
   Pencil,
+  Plug,
   Plus,
   RefreshCw,
   ShieldCheck,
@@ -157,6 +159,7 @@ export default function SettingsPage() {
         <WorkspacesSection />
         <BrandingSection />
         <AppearanceSection />
+        <IntegrationsSection />
         <DemoSection />
       </div>
     </div>
@@ -682,6 +685,76 @@ function AppearanceSection() {
             </button>
           );
         })}
+      </div>
+    </Section>
+  );
+}
+
+/* ========================= MCP / API ACCESS ========================= */
+// Static help surface — how to drive TPO from an external agent (Claude Code,
+// Cursor, ...) via the MCP "third door". No data fetch: the PAT-management UI is
+// not built yet, so this documents the durable-token path (mint via the API) and
+// points at docs/MCP.md. Every tool proxies the same /api/v1 endpoints, so an
+// agent caller gets the identical auth / RLS / entitlement fence as this browser.
+function IntegrationsSection() {
+  return (
+    <Section
+      icon={<Plug className="h-4 w-4" />}
+      title="Connect via MCP / API"
+      desc="Drive TPO from an agent client (Claude Code, Cursor) — the third door over the same engine"
+      aside={
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--g-hairline)] px-2.5 py-1 text-[11px] text-[var(--g-ink-3)]">
+          <KeyRound className="h-3.5 w-3.5" />
+          durable token
+        </span>
+      }
+    >
+      <div className="space-y-4 p-5">
+        <p className="text-[13px] leading-relaxed text-[var(--g-ink-2)]">
+          TPO exposes an <b className="text-[var(--g-ink)]">MCP / API</b> surface alongside this GUI —
+          same engine, same rules. An agent authenticates with a{" "}
+          <code className="fig text-[12px] text-[var(--g-ink-2)]">tpo_pat_</code> Personal Access Token
+          and gets the <b className="text-[var(--g-ink)]">identical RLS, entitlement, and scope fence</b>{" "}
+          you have in the browser — it can only reach the workspaces and actions your own scopes allow.
+        </p>
+
+        <div>
+          <span className="microlabel">HTTP MCP endpoint</span>
+          <div className="mt-1.5 overflow-x-auto rounded-[10px] border border-[var(--g-hairline)] bg-[var(--g-bg-2)] px-3 py-2.5">
+            <code className="fig whitespace-pre text-[12px] text-[var(--g-ink-2)]">
+              POST https://api.taxplanningops.magicunicorn.dev/api/v1/mcp
+            </code>
+          </div>
+        </div>
+
+        <div>
+          <span className="microlabel">Mint a token</span>
+          <span className="mt-1 block text-[11.5px] text-[var(--g-ink-3)]">
+            A dedicated token manager is coming to Settings. Until then, mint one from the API with your
+            signed-in session (the raw secret is shown once):
+          </span>
+          <div className="mt-1.5 overflow-x-auto rounded-[10px] border border-[var(--g-hairline)] bg-[var(--g-bg-2)] px-3 py-2.5">
+            <code className="fig whitespace-pre text-[12px] text-[var(--g-ink-2)]">
+              POST /api/v1/auth/pats  {"{"} &quot;name&quot;: &quot;claude-code&quot;, &quot;ttl_days&quot;: 90 {"}"}
+            </code>
+          </div>
+        </div>
+
+        <div>
+          <span className="microlabel">Add to Claude Code</span>
+          <div className="mt-1.5 overflow-x-auto rounded-[10px] border border-[var(--g-hairline)] bg-[var(--g-bg-2)] px-3 py-2.5">
+            <code className="fig whitespace-pre text-[12px] text-[var(--g-ink-2)]">
+              claude mcp add --transport http tax-planning-ops \{"\n"}
+              {"  "}https://api.taxplanningops.magicunicorn.dev/api/v1/mcp \{"\n"}
+              {"  "}--header &quot;Authorization: Bearer tpo_pat_...&quot;
+            </code>
+          </div>
+        </div>
+
+        <p className="text-[11.5px] text-[var(--g-ink-3)]">
+          Full tool catalog, PAT lifecycle (mint / list / revoke), and the stdio transport are documented
+          in <code className="fig">docs/MCP.md</code>.
+        </p>
       </div>
     </Section>
   );
