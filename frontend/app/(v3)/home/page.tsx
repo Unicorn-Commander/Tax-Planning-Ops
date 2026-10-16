@@ -28,6 +28,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
 import { centsToUSD } from "@/lib/format";
+import { formatDateOnly } from "@/lib/time";
 import {
   PositionInstrument,
   CliffRow,
@@ -81,12 +82,7 @@ interface Overview {
 
 const FILING: Record<string, string> = { single: "single", mfj: "married filing jointly", mfs: "married filing separately", hoh: "head of household", qss: "surviving spouse" };
 
-const QUARTER_LABELS: Record<number, { label: string; dueLabel: string }> = {
-  1: { label: "Q1", dueLabel: "Apr 15" },
-  2: { label: "Q2", dueLabel: "Jun 15" },
-  3: { label: "Q3", dueLabel: "Sep 15" },
-  4: { label: "Q4", dueLabel: "Jan 15" },
-};
+const QUARTER_LABELS: Record<number, string> = { 1: "Q1", 2: "Q2", 3: "Q3", 4: "Q4" };
 
 export default function HomePage() {
   // [live] GET /clients — first client as "your file" for v1
@@ -573,12 +569,12 @@ export default function HomePage() {
             {quarterly.length > 0 ? (
               <>
                 {quarterly.map((q) => {
-                  const qinfo = QUARTER_LABELS[q.quarter] ?? { label: `Q${q.quarter}`, dueLabel: q.due_date };
+                  const qLabel = QUARTER_LABELS[q.quarter] ?? `Q${q.quarter}`;
                   const paid = q.payment_made_cents >= q.required_payment_cents;
                   const isEst = q.required_payment_cents > 0 && q.payment_made_cents === 0;
                   return (
                     <div key={q.quarter} className="flex justify-between border-t border-[var(--g-hairline-soft)] px-[18px] py-2 text-[12.5px] first:border-t-0">
-                      <span>{qinfo.label} · {qinfo.dueLabel}</span>
+                      <span>{qLabel} · {formatDateOnly(q.due_date, { includeYear: false })}</span>
                       <span className={`font-mono text-[10.5px] ${paid ? "tone-save" : isEst ? "text-[var(--g-ink-3)]" : "tone-cost"}`}>
                         {paid
                           ? `PAID ${centsToUSD(q.payment_made_cents)}`

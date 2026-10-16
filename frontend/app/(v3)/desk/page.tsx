@@ -21,6 +21,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
 import { centsToUSD } from "@/lib/format";
+import { currentBusinessQuarter } from "@/lib/time";
 import {
   Panel, PanelHead, MicroLabel, Annotation, Chip, Money, Cavatar, Aavatar, WorkingDots,
   MiniButton, Stamp, QueueItem, Ticker, Omnibar, PositionInstrument, hueForClient,
@@ -115,8 +116,6 @@ function lastDid(eventType: string | null): string {
 const Q_NODES = [
   { label: "APR 15", q: 1 }, { label: "JUN 15", q: 2 }, { label: "SEP 15", q: 3 }, { label: "JAN 15", q: 4 },
 ];
-function currentQuarter(): number { const m = new Date().getMonth() + 1; return m <= 4 ? 1 : m <= 6 ? 2 : m <= 9 ? 3 : 4; }
-
 export default function DeskPage() {
   const [clients, setClients] = useState<ClientRow[] | null>(null);
   const [scanOrder, setScanOrder] = useState<string[] | null>(null);
@@ -209,7 +208,7 @@ export default function DeskPage() {
   }, [clients, overviews, pendingMemos, clientForTaxYear]);
 
   /* ---- season: quarterly across the book ---- */
-  const qNum = currentQuarter();
+  const qNum = currentBusinessQuarter();
   const season = useMemo(() => {
     const rows: { name: string; status: string; tone: "save" | "cost" | "neutral"; amount: number }[] = [];
     let unfunded = 0;

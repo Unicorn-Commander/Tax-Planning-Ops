@@ -33,6 +33,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
 import { centsToUSD } from "@/lib/format";
+import { formatDateOnly } from "@/lib/time";
 import { useClientOverview, type QuarterRow, type StrategyRow } from "@/components/client-overview";
 import {
   Annotation,
@@ -132,12 +133,11 @@ function advanceVerb(status: TaskStatus): string | null {
   return null;
 }
 
-/** Render an ISO date/datetime as a short "MON D, YYYY" label. */
-function shortDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+/** Render an instant (such as an audit timestamp) in the viewer's local date. */
+function shortInstantDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 /** Build cumulative required-vs-paid arrays from quarterly rows (4 quarters).
@@ -174,9 +174,6 @@ function buildSafeHarborSeries(quarters: QuarterRow[]): {
 
   return { requiredCumCents, paidCumCents, penaltyCents };
 }
-
-/** Quarter label for the table rows — Q1 → "APR 15", etc. */
-const Q_LABELS: Record<number, string> = { 1: "APR 15", 2: "JUN 15", 3: "SEP 15", 4: "JAN 15" };
 
 /** Status-to-chip-tone */
 function quarterTone(status: string): "save" | "cost" | "neutral" {
@@ -502,7 +499,7 @@ export default function PlanPage() {
               ? "loading reconciled outcomes…"
               : realized.length === 0
                 ? "no outcomes reconciled yet · reconciles against the filed return"
-                : `${realized.length} reconciled${realizedReconciledAt ? ` · latest ${shortDate(realizedReconciledAt)}` : ""}`}
+                : `${realized.length} reconciled${realizedReconciledAt ? ` · latest ${shortInstantDate(realizedReconciledAt)}` : ""}`}
           </div>
         </div>
       </section>
@@ -533,7 +530,7 @@ export default function PlanPage() {
                   </span>
                   <span className="font-mono text-[10px] text-[var(--g-ink-3)]">
                     TY{r.realized_tax_year} · {r.basis}
-                    {r.reconciled_at ? ` · ${shortDate(r.reconciled_at)}` : ""}
+                    {r.reconciled_at ? ` · ${shortInstantDate(r.reconciled_at)}` : ""}
                   </span>
                   <span className="ml-auto flex items-center gap-[16px]">
                     <span className="text-right">
@@ -654,10 +651,10 @@ export default function PlanPage() {
                     className="flex items-center gap-3 border-t border-[var(--g-hairline-soft)] px-[20px] py-[10px] text-[12.5px] first:border-t-0"
                   >
                     <span className="w-[110px] font-mono text-[10px] text-[var(--g-ink-3)]">
-                      Q{q.quarter} · {Q_LABELS[q.quarter] ?? q.due_date}
+                      Q{q.quarter} · {formatDateOnly(q.due_date, { includeYear: false }).toUpperCase()}
                     </span>
                     <span className="flex-1 text-[12px] text-[var(--g-ink-2)]">
-                      {q.due_date}
+                      {formatDateOnly(q.due_date)}
                       {q.unpaid_rollforward_cents > 0 ? (
                         <span className="ml-1.5 font-mono text-[10.5px] text-[var(--cost)]">
                           +{centsToUSD(q.unpaid_rollforward_cents)} rolled
@@ -929,7 +926,7 @@ function ContractRow({
         <FieldBox label="deadline" warn={false}>
           {deadlineDate ? (
             <span className="text-[12px]">
-              {shortDate(deadlineDate)}
+              {formatDateOnly(deadlineDate)}
               {deadlineEntry ? (
                 <span className="mt-[2px] block font-mono text-[9px] text-[var(--g-ink-3)]">
                   {deadlineEntry.citation}
@@ -946,7 +943,7 @@ function ContractRow({
           {/* TODO(integration: evidence upload to Garage) — POST evidence_blob_key + PATCH task */}
           {task?.evidence_uploaded_at ? (
             <span className="inline-flex items-center gap-[5px] font-mono text-[9.5px] text-[var(--save)]">
-              ✓ filed {shortDate(task.evidence_uploaded_at)}
+              ✓ filed {shortInstantDate(task.evidence_uploaded_at)}
             </span>
           ) : statusDone || (!task && isSigned) ? (
             <span className="inline-flex items-center gap-[5px] font-mono text-[9.5px] text-[var(--save)]">
@@ -988,7 +985,7 @@ function ContractRow({
                       title={d.citation}
                     >
                       <span className="block font-medium">{d.label}</span>
-                      <span className="font-mono text-[9px] text-[var(--g-ink-3)]">{shortDate(d.due_date)} · {d.citation}</span>
+                      <span className="font-mono text-[9px] text-[var(--g-ink-3)]">{formatDateOnly(d.due_date)} · {d.citation}</span>
                     </button>
                   ))}
                 </div>

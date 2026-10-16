@@ -22,6 +22,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
 import { centsToUSD } from "@/lib/format";
+import { currentBusinessQuarter } from "@/lib/time";
 import {
   Panel,
   PanelHead,
@@ -68,15 +69,6 @@ interface Overview {
 }
 
 /* ---- helpers ------------------------------------------------------ */
-
-/** Current quarter index by today's date (0-indexed, 1-4 as returned by API). */
-function currentQuarter(): number {
-  const m = new Date().getMonth() + 1; // 1–12
-  if (m <= 4) return 1;
-  if (m <= 6) return 2;
-  if (m <= 9) return 3;
-  return 4;
-}
 
 // IRS estimated-payment due dates are statutory constants (Apr 15 / Jun 15 /
 // Sep 15 / Jan 15). The "· NOW" marker is NOT baked in here — it's derived from
@@ -209,7 +201,7 @@ export default function SeasonPage() {
   const [overviews, setOverviews] = useState<Record<string, Overview>>({});
   const overviewsRef = useRef<Record<string, Overview>>({});
 
-  const qNum = useMemo(() => currentQuarter(), []);
+  const qNum = useMemo(() => currentBusinessQuarter(), []);
 
   /* ---- initial fetch: client list ---- */
   useEffect(() => {

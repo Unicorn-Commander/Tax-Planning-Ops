@@ -32,6 +32,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import api from "@/lib/api";
 import { centsToUSD } from "@/lib/format";
+import { businessDate } from "@/lib/time";
 import { useClientOverview, type YearRow } from "@/components/client-overview";
 import {
   Letterhead,
@@ -742,7 +743,7 @@ function CalendarSteps({ findings }: { findings: Finding[]; taxYear: number }) {
   const steps =
     findings.length > 0
       ? findings.slice(0, 4).map((f, i) => ({
-          when: i === 0 ? `NOW · ${new Date().getFullYear()}` : `STEP ${i + 1}`,
+          when: i === 0 ? `NOW · ${businessDate().slice(0, 4)}` : `STEP ${i + 1}`,
           action: f.title,
           note: null as string | null,
         }))

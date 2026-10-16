@@ -23,6 +23,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Pencil, Check, X } from "lucide-react";
 import api from "@/lib/api";
 import { centsToUSD } from "@/lib/format";
+import { businessDate } from "@/lib/time";
 import { useAction } from "@/lib/useAction";
 import { useClientOverview } from "@/components/client-overview";
 import {
@@ -441,7 +442,7 @@ function Timeline({ profile }: { profile: Profile }) {
   // TODO(integration: GET /clients/{id}/timeline-shadows)
   // rendered as labeled placeholders until the engine provides the band boundaries.
 
-  const currentYear = new Date().getFullYear();
+  const currentYear = Number(businessDate().slice(0, 4));
   const events: TlEvent[] = [];
 
   events.push({ year: currentYear, label: "Today", sub: `${currentYear} plan year` });

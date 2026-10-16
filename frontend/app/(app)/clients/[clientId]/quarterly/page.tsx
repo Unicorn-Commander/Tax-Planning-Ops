@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CalendarClock, Calculator, ShieldCheck } from "lucide-react";
 import api from "@/lib/api";
 import { centsToUSD } from "@/lib/format";
+import { formatDateOnly } from "@/lib/time";
 import { useAction } from "@/lib/useAction";
 import { useClientOverview } from "@/components/client-overview";
 import { Card, CardHeader, Badge, Button, Field, MoneyInput, EmptyState, Disclaimer } from "@/components/ui";
@@ -63,7 +64,7 @@ export default function QuarterlyTab() {
                   <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-soft text-[12px] font-semibold text-primary-strong">Q{q.quarter}</span>
                   <Badge tone={STATUS_TONE[q.status] ?? "neutral"}>{q.status}</Badge>
                 </div>
-                <div className="mt-3 flex items-center gap-1.5 text-[12px] text-muted"><CalendarClock className="h-3.5 w-3.5" /> {q.due_date}</div>
+                <div className="mt-3 flex items-center gap-1.5 text-[12px] text-muted"><CalendarClock className="h-3.5 w-3.5" /> {formatDateOnly(q.due_date)}</div>
                 <div className="mt-1 text-[22px] font-semibold text-ink tabular">{centsToUSD(q.required_payment_cents)}</div>
                 {q.unpaid_rollforward_cents > 0 ? <div className="mt-1 text-[12px] text-warning">+{centsToUSD(q.unpaid_rollforward_cents)} rolled forward</div> : null}
               </div>
