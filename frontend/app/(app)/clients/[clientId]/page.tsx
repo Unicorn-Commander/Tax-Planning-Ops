@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import api from "@/lib/api";
 import { centsToUSD, percent } from "@/lib/format";
+import { formatDateOnly } from "@/lib/time";
 import { useAction } from "@/lib/useAction";
 import { useClientOverview } from "@/components/client-overview";
 import { Card, CardHeader, Badge, Button, Skeleton, EmptyState, Disclaimer } from "@/components/ui";
@@ -185,7 +186,7 @@ export default function ClientOverviewPage() {
                 {overview!.quarterly.map((q) => (
                   <div key={q.quarter} className="bg-surface p-4">
                     <div className="flex items-center gap-2 text-[12px] text-muted">
-                      <CalendarClock className="h-3.5 w-3.5" /> Q{q.quarter} · {q.due_date}
+                      <CalendarClock className="h-3.5 w-3.5" /> Q{q.quarter} · {formatDateOnly(q.due_date)}
                     </div>
                     <div className="mt-1.5 text-[18px] font-semibold text-ink tabular">{centsToUSD(q.required_payment_cents)}</div>
                   </div>
