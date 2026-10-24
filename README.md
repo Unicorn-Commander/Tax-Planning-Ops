@@ -29,9 +29,9 @@
 
 ## What is Tax-Planning-Ops?
 
-Tax-Planning-Ops is the planning desk for a firm that already has clients, entities, and a ledger. An advisor keeps a book of clients, confirms a filed return, and projects the current year against the next one — marginal rate, effective rate, and the assumptions the engine had to make. Strategies are priced, quarterly estimates are scheduled, and a plan document is stored for the client.
+Tax-Planning-Ops is the planning desk for a firm that already has clients, entities, and a ledger. An advisor keeps a book of clients, confirms a filed return as a base year, and creates a target-year plan with marginal and effective rates. Strategies are priced, quarterly estimates are scheduled, and plan documents can be rendered and stored through configured services.
 
-Agents draft the memo, the scenario, and the book-wide scan. A person signs the memo and chooses what goes on the plan. The app is self-hosted, and it is one module of [Unicorn Commander](https://unicorncommander.ai): the same Keycloak login as the rest of the suite, and an optional read of profit and loss from [Accounting-Ops](https://github.com/Unicorn-Commander/Accounting-Ops) when a business entity is linked.
+The strategist drafts memos, scenario tools recompute what-ifs, and the book scanner ranks opportunities. Memo signing and adding strategies to a plan are separate, scoped actions available through the API and MCP. The app is self-hosted, and it is one module of [Unicorn Commander](https://unicorncommander.ai): Keycloak login, and an optional read of profit and loss from [Accounting-Ops](https://github.com/Unicorn-Commander/Accounting-Ops) when a business entity is linked.
 
 > Planning estimate only. Not a filed tax return and not tax advice. Figures are projections based on advisor-entered assumptions and editable bracket tables.
 
@@ -39,14 +39,14 @@ That sentence is the disclaimer the plan document carries (`backend/app/engines/
 
 ## Highlights
 
-- **One household, including the businesses.** A client tax year can carry Schedule C, partnership K-1s, S corporation K-1s, and rentals (`backend/app/engines/passthrough.py`), plus a separate C corporation view (Form 1120, accumulated earnings tax, QSBS). Qualified business income is computed in the same projection as the 1040.
-- **Current year beside next year.** Federal brackets and standard deductions are seeded for 2025 (Rev. Proc. 2024-40, including the OBBBA standard deduction) and 2026 (Rev. Proc. 2025-32). Advisors can edit bracket sets per year. The 1040 engine returns marginal rate, effective rate, and an assumptions list when it had to guess (for example, treating an unsplit capital gain as long-term).
-- **Federal stack in one pass.** Ordinary tax, preferential long-term gains, NIIT, additional Medicare, AMT, the child tax credit, taxable Social Security, self-employment tax, and QBI. State income tax is modeled for all 50 states and the District of Columbia. IRMAA is part of the Roth conversion search.
-- **Strategy library with an explicit ROI method.** Each library row is `amount × effective rate`, `amount × custom rate`, or a manual dollar amount. Adding a strategy to a plan is a separate call from listing the catalog.
-- **Quarterly estimates with safe harbor.** The engine picks the smaller of 90% of the projected current-year tax, 100% of prior-year tax, and (when prior-year AGI is over the threshold) 110% of prior-year tax, then rolls an unpaid quarter forward. Even and annualized methods are both in the engine.
+- **One household, including the businesses.** A client tax year can carry Schedule C, partnership K-1s, S corporation K-1s, and rentals (`backend/app/engines/passthrough.py`), plus a separate C corporation view (Form 1120, accumulated earnings tax, QSBS). The comprehensive analysis computes QBI alongside the household 1040; stored plan snapshots and Lab scenarios use the simpler Form 1040 engine.
+- **Current year beside next year.** Federal brackets and standard deductions are seeded for 2025 (Rev. Proc. 2024-40, including the OBBBA standard deduction) and 2026 (Rev. Proc. 2025-32). Advisors with `taxplan:admin` can edit bracket sets per year. The 1040 engine returns marginal rate, effective rate, and an assumptions list when it had to guess (for example, treating an unsplit capital gain as long-term).
+- **Federal planning engines.** The Form 1040 engine handles ordinary tax, preferential long-term gains, NIIT, and additional Medicare. The comprehensive engine adds AMT, self-employment tax, and QBI. Child-tax-credit and Social Security taxability engines also exist, but the current API services do not supply their dependent and gross-benefit inputs. State planning configs cover all 50 states and the District of Columbia, mostly with 2025 data and simplified state rules. IRMAA is part of the Roth conversion search.
+- **Strategy library with an explicit ROI method.** Each library row uses `amount × effective rate`, `amount × custom rate`, or manual savings. Effective rate is total tax divided by total income, or zero when total income is nonpositive. Adding a strategy to a plan is a separate call from listing the catalog.
+- **Quarterly estimates with roll-forward.** The engine compares configured current-year and prior-year targets, credits withholding, and rolls unpaid amounts into the next quarter. Even and simplified annualized methods are implemented; the [quarterly notes](#quarterly-estimates) describe the current limits.
 - **Draft, then sign.** The plan proposer scores opportunities and writes no client strategy. The strategist authors a memo. `sign_memo` seals a content hash onto the audit journal. The book scanner only ranks; it does not write.
-- **A journal a later reader can check.** Every mutation is appended to a per-workspace hash chain (SHA-256 over the previous hash plus the event, actor, aggregate, timestamp, and payload). The runtime database role may `SELECT` and `INSERT` on that table, and the migration does not grant `UPDATE` or `DELETE`. `GET /api/v1/lifecycle/audit/verify` recomputes the chain.
-- **Workspace isolation in Postgres.** One database. Every tenant table has row-level security forced on. The API connects as `tax_planning_ops_app` (`NOBYPASSRLS`) and sets `app.current_workspace` for the transaction. Migrations run as `tax_planning_ops_owner`.
+- **A journal a later reader can check.** Audited actions, including return confirmation, plan updates, strategy selections, bracket/library edits, document generation, and memo signing, append to a per-workspace hash chain (SHA-256 over the previous hash plus the event, actor, aggregate, timestamp, and payload). Client creation, extracted-field corrections, branding edits, and draft memo saves are not journaled. The runtime database role may `SELECT` and `INSERT` on that table, and the migration does not grant `UPDATE` or `DELETE`. `GET /api/v1/lifecycle/audit/verify` recomputes the chain.
+- **Workspace isolation in Postgres.** One database. Every tenant table has row-level security forced on. The supplied deployment connects as `tax_planning_ops_app` (`NOBYPASSRLS`) and sets `app.current_workspace` for the transaction; `app.uc_uid` scopes workspace-membership rows. Its migrations run as `tax_planning_ops_owner`.
 
 ## Feature tour
 
@@ -56,9 +56,9 @@ That sentence is the disclaimer the plan document carries (`backend/app/engines/
   <img src="docs/screenshots/clients.webp" width="880" alt="The client book">
 </p>
 
-The book is the firm's roster. It loads clients, a book-wide scan ranked by the backend, each client's overview, and a clients-by-strategy matrix whose cells are engine-summed savings. A realized rollup shows planned amounts against amounts the firm has reconciled. The screenshot is the built-in **Sample Firm (demo)** workspace: six example clients and six library strategies, with every snapshot, ROI, and safe-harbor figure produced by the engine.
+The book is the firm's roster. It loads clients, a book-wide scan ranked by the backend, each client's overview, and a clients-by-strategy-category matrix whose cells sum stored strategy estimates. A realized rollup shows planned amounts against amounts the firm has reconciled. The built-in **Sample Firm (demo)** workspace has six example clients and six library strategies, with snapshots, ROI, and quarterly estimates produced by the engines from sample inputs.
 
-Load it from **Settings → Demo / sample data**. The demo workspace is separate from a firm's real workspaces. Reset clears and re-seeds only that workspace.
+Load it from **Settings → Demo / sample data**. The demo workspace is separate from a firm's real workspaces. Reset replaces the clients and strategy library in the workspace identified as **Sample Firm (demo)**; its audit history remains.
 
 ### A client's tax plan
 
@@ -66,9 +66,11 @@ Load it from **Settings → Demo / sample data**. The demo workspace is separate
   <img src="docs/screenshots/plan.webp" width="880" alt="A client's tax plan">
 </p>
 
-The plan is the working file for one client: strategies with engine-computed savings, implementation tasks (who, what, cash, deadline, proof), and the quarterly schedule. Deadlines resolve from a catalog of 15 federal dates (estimated-tax quarters, retirement contributions, the S corporation election, the extension, and others), each with a citation. Realized outcomes are recorded against the plan when the work is done.
+Upload a filed Form 1040 PDF, review or correct the extracted or hand-entered fields, then confirm to create a base snapshot and mark that tax year locked. Create a target-year plan from that base; saved assumption edits recompute a new snapshot and append an audit event. Tax years belong to individual clients.
 
-Generating a plan document assembles branding, the current-year and next-year figures, the strategies, the quarterlies, and the disclaimer. When `PDF_SERVICE_URL` is set, that service renders the bytes. When it is empty, the API stores the canonical JSON payload and its hash. Either way the row is versioned.
+The plan is the working file for one client: strategies with calculated or manually entered savings, implementation tasks (who, what, cash, deadline, proof), and the quarterly schedule. Deadlines resolve from a catalog of 15 federal planning dates (estimated-tax quarters, retirement contributions, the S corporation election, the extension, and others), each with a citation. The catalog uses fixed calendar rules without weekend or holiday adjustments. Realized outcomes are recorded against the plan when the work is done.
+
+Generating a plan document assembles branding, the latest plan snapshot's inputs and projected figures, the strategies, the quarterlies, and the disclaimer. When `PDF_SERVICE_URL` is set, the API posts the payload to that service's `/render` endpoint. When it is empty, the renderer returns sorted JSON bytes rather than a PDF. Both paths create a versioned database row with an object key and payload hash; bytes are uploaded only when both Garage credentials are set.
 
 ### The scenario lab
 
@@ -76,9 +78,9 @@ Generating a plan document assembles branding, the current-year and next-year fi
   <img src="docs/screenshots/lab.webp" width="880" alt="The scenario lab">
 </p>
 
-The lab recomputes through the same engine the rest of the app uses. Dragging a Roth conversion calls `POST /api/v1/agents/clients/tax-years/{id}/scenario` and shows the tax delta. The effective-marginal curve is an EMR sweep. The crossover chart is the Roth optimizer: a recommended conversion, its tax cost, and the IRMAA warning when the search hits a cliff. The baseline row is the stored snapshot. Scenario runs do not overwrite it.
+The lab uses the Form 1040 engine for federal what-ifs. Dragging a Roth conversion calls `POST /api/v1/agents/clients/tax-years/{tax_year_id}/scenario` and shows the tax delta. The effective-marginal curve is an EMR sweep. The crossover chart is the Roth optimizer: a recommended conversion, its tax cost, and the IRMAA warning when the search hits a cliff. The baseline row is the stored snapshot. Scenario runs do not overwrite it.
 
-`GET /api/v1/clients/tax-years/{id}/analysis` also rolls the return forward (default horizon five years), inflation-indexing the brackets the statute indexes and holding NIIT and additional Medicare thresholds fixed unless a seeded year config exists.
+`GET /api/v1/clients/tax-years/{tax_year_id}/analysis` also projects a baseline over five years by default, including the base year. It assumes 3% annual growth for selected income fields and 2.5% indexing for ordinary brackets, standard deductions, and long-term-gain breakpoints, while holding NIIT and additional Medicare thresholds fixed. The engine accepts future-year seeded configs, but this endpoint does not supply them.
 
 ### The strategy library
 
@@ -86,7 +88,7 @@ The lab recomputes through the same engine the rest of the app uses. Dragging a 
   <img src="docs/screenshots/strategies.webp" width="880" alt="The strategy library">
 </p>
 
-The playbook lists the workspace strategy catalog and the bracket sets for each seeded year, with a diff between years. An advisor with `taxplan:admin` can upsert library rows and replace a bracket set. Categories in the demo seed are retirement, charitable, entity, health, and investment. The catalog is data, not a hard-coded list: a firm adds the plays it actually uses.
+The playbook lists the workspace strategy catalog and compares 2025 and 2026 standard deductions fetched from bracket sets. Its other constants rows are labeled fixtures; the full bracket editor is at `/admin/brackets`. An advisor with `taxplan:admin` can upsert library rows and replace a bracket set. Categories in the demo seed are retirement, charitable, entity, health, and investment. The catalog is data, not a hard-coded list: a firm adds the plays it actually uses.
 
 ### Quarterly estimates
 
@@ -96,24 +98,26 @@ The playbook lists the workspace strategy catalog and the bracket sets for each 
 
 The season board aggregates each client's quarterly rows: required payment, amount paid, unpaid roll-forward, and the safe-harbor basis the engine chose. The same rows sit on the client's plan. Computing them is `POST /api/v1/quarterly/{plan_tax_year_id}/compute`, also exposed to agents as `compute_quarterly`.
 
+The current target calculation takes the minimum of 90% of projected tax, 100% of prior-year tax, and an additional 110% prior-year candidate above the configured AGI threshold. With the seeded rates and positive prior-year tax, 100% remains eligible and prevents 110% from winning. The annualized option is a simplified income-based allocation.
+
 A Form 2210 underpayment function lives in the engine package and has tests. The season board does not call it yet.
 
 ## Built for agents
 
-Three doors call one API. The advisor UI, the in-app console, and the MCP server all hit `/api/v1`. The console streams a strategist run over server-sent events (`POST /api/v1/agents/clients/tax-years/{id}/strategist/stream`): plan steps, the engine calls, the findings, and the memo. Dollar figures are computed on the server. If the language model is not configured, structured opportunities still return and the narrative is omitted.
+Three doors call one API. The advisor UI, the in-app console, and the MCP server all hit `/api/v1`. The console streams a strategist run over server-sent events (`POST /api/v1/agents/clients/tax-years/{tax_year_id}/strategist/stream`): plan steps, the engine calls, the findings, and the memo. Structured findings use server-computed figures; the language model is prompted to use them, but its narrative is not numerically validated. The stream does not save a memo; `run_strategist` is the separate persistence path. If the language model is not configured, structured opportunities still return and the narrative is omitted.
 
-The MCP server speaks Model Context Protocol over **stdio**. It is a thin client: `tools.json` maps each tool to an existing route, and the server forwards `Authorization: Bearer` and `X-Workspace-Id`. Auth, entitlement, row-level security, and scopes are enforced by the API. The server computes no tax. `manifest.json` (version **0.2.0**) lists the same **31** tools for Unicorn Brigade to discover. Journal writes record which door the request came through (`gui`, `console`, `mcp`, or `api`). The MCP server sends `X-UC-Door: mcp`.
+The MCP server speaks Model Context Protocol over **stdio**. It is a thin client: `tools.json` maps each tool to an existing route, and the server forwards `Authorization: Bearer` and `X-Workspace-Id`. Auth, entitlement, row-level security, and scopes are enforced by the API. The server computes no tax. `mcp/manifest.json` (version **0.2.0**) lists the same **31** registered tool names for Unicorn Brigade discovery. Journal writes record which door the request came through (`gui`, `console`, `mcp`, or `api`). The MCP server sends `X-UC-Door: mcp`.
 
 Scopes are `taxplan:advisor` for client work and `taxplan:admin` for the library, bracket sets, and branding. Admin includes advisor.
 
 | Tool | What an agent uses it for |
 |---|---|
 | `create_client` | Open a client in the active workspace |
-| `upload_return_document` | Attach a Form 1040 PDF to a tax year |
+| `upload_return_document` | Registered, but the JSON-only proxy cannot send the required multipart file; upload through the UI or REST API |
 | `correct_extracted_field` / `confirm_return` | Fix a line, then lock the return into a snapshot |
 | `create_tax_plan` / `add_client_strategy` | Open the next-year plan and attach a library strategy |
 | `compute_quarterly` | Run the safe-harbor schedule |
-| `generate_plan_pdf` | Store the plan document |
+| `generate_plan_pdf` | Create a versioned document record; rendering and byte storage depend on configuration |
 | `scan_book` | Rank the book. Read only |
 | `run_strategist` / `sign_memo` | Draft the memo, then seal it |
 | `recompute_scenario` / `emr_sweep` | Reprice a what-if and the marginal curve |
@@ -121,7 +125,7 @@ Scopes are `taxplan:advisor` for client work and `taxplan:admin` for the library
 | `list_statutory_deadlines` | Resolve the deadline catalog for a tax year |
 | `read_journal` | Read the hash-chained audit tail |
 
-The full map is [`mcp/tools.json`](mcp/tools.json). Run the server with the official Python `mcp` package installed (it is imported by `mcp/server.py` and is not pinned in `backend/requirements.in`):
+The full map is [`mcp/tools.json`](mcp/tools.json). Run the server with the Python `mcp` and `httpx` packages installed in the same environment (`mcp` is not listed in `backend/requirements.in`):
 
 ```bash
 python mcp/server.py
@@ -143,7 +147,7 @@ python mcp/server.py
 }
 ```
 
-There is no A2A agent card in this repository. Brigade's connection here is the manifest plus, when you enable the Accounting-Ops read, an RFC 8693 token exchange at `BRIGADE_TOKEN_URL`.
+There is no A2A agent card in this repository. The Brigade connection is a discovery manifest plus an optional RFC 8693 service-token exchange at `BRIGADE_TOKEN_URL` for Accounting-Ops reads. The app does not register itself with Brigade.
 
 The Staff screen reads `GET /api/v1/agents/registry`. The roster is five capabilities, and each one's status comes from the journal:
 
@@ -155,7 +159,7 @@ The Staff screen reads `GET /api/v1/agents/registry`. The roster is five capabil
 | Intake / OCR | service | 1040 upload and confirmation |
 | Quarterly | engine | The estimated-payment schedule |
 
-With `OCR_QWENVL_ENABLED` off, an upload still creates the canonical 1040 field set with status `missing`, and the advisor keys the lines. Confirming requires a value, or an explicit acknowledgement to compute anyway.
+With `OCR_QWENVL_ENABLED` off, an upload still creates the canonical 1040 field set with status `missing`, and the advisor keys the lines. Confirming requires at least one numeric field value, or an explicit `compute_anyway` acknowledgement; it does not require every field to be reviewed. With extraction enabled and an LLM gateway configured, the adapter tries PDF text, then a configured OCR service, then a configured vision model for scanned pages.
 
 ## Quick start
 
@@ -163,12 +167,12 @@ You can run the API and the UI on a laptop without Keycloak. The suite compose f
 
 ### Database
 
-The API expects Postgres 17, the same image as CI and `deploy/docker-compose.yml`.
+The examples below use the Postgres 17 image specified in `deploy/docker-compose.yml` and `.github/workflows/ci.yml`.
 
 ```bash
 docker run -d --name tax-planning-ops-postgres \
   -e POSTGRES_USER=tax_planning_ops_owner \
-  -e POSTGRES_PASSWORD=<owner-password> \
+  -e POSTGRES_PASSWORD='<owner-password>' \
   -e POSTGRES_DB=tax_planning_ops \
   -p 55432:5432 \
   postgres:17-alpine
@@ -180,7 +184,7 @@ Wait until `pg_isready` succeeds:
 docker exec tax-planning-ops-postgres pg_isready -U tax_planning_ops_owner -d tax_planning_ops
 ```
 
-Port **55432** matches the default `DATABASE_URL` in `backend/app/core/config.py` and the CI workflow.
+Port **55432** matches the default `DATABASE_URL` in `backend/app/core/config.py` and the CI workflow. Replace password placeholders in these examples; URL-encode passwords when embedding them in database URLs.
 
 ### Suite deploy
 
@@ -189,13 +193,15 @@ Port **55432** matches the default `DATABASE_URL` in `backend/app/core/config.py
 ```bash
 cd deploy
 cp .env.example .env
+# Edit .env: set your own DOMAIN, API_DOMAIN, database/Redis passwords,
+# and Keycloak client secret before starting the services.
 docker compose --env-file .env up -d --build
 ```
 
 Before that command will serve traffic you need:
 
 - The two external networks. `docker compose` fails if they are missing.
-- A Keycloak client `tax-planning-ops` in realm `uchub`, with access tokens that carry audience `tax-planning-ops` and the scopes `taxplan:advisor` and `taxplan:admin`. The client setup is in `docs/DEPLOY-KEYCLOAK.md`.
+- A Keycloak client matching `KEYCLOAK_CLIENT_ID` and `KEYCLOAK_ISSUER` (defaults: `tax-planning-ops` in realm `uchub`), with the API audience in its access tokens. Grant `taxplan:advisor` for advisor work and `taxplan:admin` for administration, as scopes or realm/client roles. Configure the backend callback URI `https://<API_DOMAIN>/api/v1/auth/keycloak/callback`. `docs/DEPLOY-KEYCLOAK.md` has setup notes; users without workspace claims get a derived personal workspace, and workspace membership can also authorize switching.
 - `ENVIRONMENT=production` in `.env`. The API maps that to `ENV=prod`, which turns off `/docs` and refuses `STANDALONE_MODE`.
 
 The backend health check requests `http://localhost:8000/api/v1/livez` inside the container. That route is unauthenticated and returns `{"ok":true}`.
@@ -209,9 +215,9 @@ cd backend
 python3 -m venv .venv
 ./.venv/bin/pip install -r requirements-dev.txt
 
-export MIGRATION_DATABASE_URL=postgresql+asyncpg://tax_planning_ops_owner:<owner-password>@localhost:55432/tax_planning_ops
-export RUNTIME_DB_PASSWORD=<runtime-password>
-export DATABASE_URL=postgresql+asyncpg://tax_planning_ops_app:<runtime-password>@localhost:55432/tax_planning_ops
+export MIGRATION_DATABASE_URL='postgresql+asyncpg://tax_planning_ops_owner:<owner-password>@localhost:55432/tax_planning_ops'
+export RUNTIME_DB_PASSWORD='<runtime-password>'
+export DATABASE_URL='postgresql+asyncpg://tax_planning_ops_app:<runtime-password>@localhost:55432/tax_planning_ops'
 
 ./.venv/bin/python -m app.db.bootstrap
 ```
@@ -236,15 +242,20 @@ npm ci
 NEXT_PUBLIC_DEV_AUTOLOGIN=1 npm run dev
 ```
 
-Open `http://localhost:3000`. The root route sends a firm posture to the desk. Go to **Settings**, load sample data, and switch to **Sample Firm (demo)**.
+Open `http://localhost:3000`. The default firm view opens `/desk`. Go to **Settings**, load sample data, and switch to **Sample Firm (demo)**.
 
 To exercise real RS256 verification instead of standalone mode, the repo includes a local JWKS stand-in. It is a development tool. Do not point a production issuer at it.
 
 ```bash
 cd backend
 ./.venv/bin/python scripts/dev_oidc.py serve --port 8765
+```
+
+Leave the JWKS server running. In a second shell, from `backend/`:
+
+```bash
 ./.venv/bin/python scripts/dev_oidc.py mint \
-  --workspace <workspace-uuid> \
+  --workspace '<workspace-uuid>' \
   --scopes "taxplan:advisor taxplan:admin" \
   --issuer http://localhost:8765
 ```
@@ -253,7 +264,7 @@ Run the API with `STANDALONE_MODE` unset, `KEYCLOAK_ISSUER=http://localhost:8765
 
 ## Configuration
 
-Names only. Set values in `deploy/.env` or the process environment. `backend/app/core/config.py` reads the API variables. The Next.js build bakes the `NEXT_PUBLIC_*` variables in. The MCP process reads the `TPO_*` variables.
+For source runs, `backend/app/core/config.py` reads API settings from the process environment or `.env` in the API working directory. For Compose, `deploy/.env` supplies only substitutions referenced by `deploy/docker-compose.yml`; additional settings must be passed explicitly to the backend service. In particular, the supplied Compose file does not forward `GARAGE_*` or `PDF_SERVICE_URL`, even though the example env file lists them. The Next.js build bakes the `NEXT_PUBLIC_*` variables in. The MCP process reads the `TPO_*` variables.
 
 | Variable | Meaning |
 |---|---|
@@ -268,11 +279,12 @@ Names only. Set values in `deploy/.env` or the process environment. `backend/app
 | `REDIS_PASSWORD` | Required by the Redis service in the compose file. The API does not read it. |
 | `STANDALONE_MODE` | Dev-only. Accepts any bearer and skips JWKS. Refused when `ENV=prod`. |
 | `KEYCLOAK_ISSUER` | Issuer claim the API requires. Default realm is `uchub` on the public Unicorn Commander auth host. |
-| `KEYCLOAK_CLIENT_ID` | Audience and OAuth client. Default `tax-planning-ops`. |
+| `KEYCLOAK_CLIENT_ID` | OAuth client and default API audience. Default `tax-planning-ops`. |
+| `KEYCLOAK_AUDIENCE` / `KEYCLOAK_JWKS_URL` | Optional API overrides for the expected audience and signing-key endpoint. |
+| `KEYCLOAK_REDIRECT_URI` / `FRONTEND_URL` / `CORS_ORIGINS` | API callback, browser redirect base, and allowed origins; Compose derives them from `API_DOMAIN` and `DOMAIN`. |
 | `KEYCLOAK_CLIENT_SECRET` | Confidential-client secret for the browser login and the service-account mint. |
-| `KEYCLOAK_URL` | Keycloak base URL baked into the frontend image. |
-| `KEYCLOAK_REALM` | Realm baked into the frontend image. Default `uchub`. |
-| `ENTITLEMENT_CHECK_ENABLED` | When true, each request asks Ops-Center whether the workspace has the `tax-planning-ops` entitlement. Default off, and the request is allowed. |
+| `KEYCLOAK_URL` / `KEYCLOAK_REALM` | Compose forwards these as frontend build arguments, but the current login flow uses the backend `KEYCLOAK_ISSUER`. |
+| `ENTITLEMENT_CHECK_ENABLED` | Enables the workspace `tax-planning-ops` entitlement check on authenticated requests. Results are cached for 60 seconds; a failed refresh can reuse a stale result. Default off skips this check, not authentication or scopes. |
 | `CONTROL_PLANE_BASE_URL` | Ops-Center base URL used by that check. |
 | `CONTROL_PLANE_TOKEN` | Bearer token for the entitlement request. |
 | `GARAGE_ENDPOINT` | S3 endpoint for return PDFs and plan documents. |
@@ -280,12 +292,15 @@ Names only. Set values in `deploy/.env` or the process environment. `backend/app
 | `GARAGE_BUCKET` | Bucket name. |
 | `OCR_QWENVL_ENABLED` | When false, uploads still open the canonical 1040 fields for hand entry. |
 | `LLM_GATEWAY_URL` / `LLM_API_KEY` | OpenAI-compatible gateway for OCR structuring and the planning narrative. |
+| `LLM_TEXT_MODEL` / `LLM_OCR_MODEL` | Model names for planning narrative and OCR field structuring. |
+| `LLM_VISION_MODEL` / `LLM_VISION_GATEWAY_URL` | Vision fallback for scanned pages; an empty vision gateway uses `LLM_GATEWAY_URL`. |
 | `OCR_SERVICE_URL` | Optional traditional OCR service. Page text is then structured by the LLM. |
-| `PDF_SERVICE_URL` | Optional renderer. Empty means the stored plan document is the canonical JSON payload. |
+| `PDF_SERVICE_URL` | Optional `/render` service. Empty returns sorted JSON bytes; storing either output requires Garage credentials. |
 | `ACCOUNTING_OPS_ENABLED` | Turns on the profit-and-loss read for a linked business entity. Default off. The sync route returns 503 while it is off. |
 | `ACCOUNTING_OPS_URL` | Accounting-Ops base URL. |
 | `ACCOUNTING_OPS_AUDIENCE` | Audience requested from the Brigade token exchange. |
-| `BRIGADE_TOKEN_URL` | RFC 8693 token endpoint. When set, the API exchanges its Keycloak token before calling Accounting-Ops. |
+| `BRIGADE_TOKEN_URL` | RFC 8693 token endpoint used by the Accounting-Ops adapter. If empty, the adapter sends its Keycloak service token directly. |
+| `ACCOUNTING_OPS_SERVICE_TOKEN` | Optional static bearer override that bypasses Keycloak minting and Brigade exchange. |
 | `NEXT_PUBLIC_API_URL` | API base the browser calls. Default `http://localhost:8000/api/v1`. |
 | `NEXT_PUBLIC_DEV_AUTOLOGIN` | Set to `1` for local screens against standalone mode. |
 | `TPO_API_URL` | API base the MCP server proxies to. |
@@ -312,17 +327,17 @@ flowchart TB
   API -.-> LLM[LLM gateway and OCR]
   API -.-> CP[Ops-Center entitlement]
   API -.-> BR[Unicorn Brigade token exchange]
-  BR -.-> AO[Accounting-Ops profit and loss]
+  API -.-> AO[Accounting-Ops profit and loss]
 ```
 
 Dotted arrows are optional. With standalone mode, an empty Garage config, OCR disabled, entitlement checks off, and Accounting-Ops disabled, the API and Postgres are enough to load the demo firm.
 
 - **Advisor UI.** Next.js 15.5 and React 19. The workbench covers the book, a client's plan, the lab, the playbook, the season board, the desk, the console, intake checklists, staff, and settings.
-- **API.** FastAPI on Python 3.12. Seventy-three routes under `/api/v1`. Money is integer cents. OpenAPI is served at `/docs` unless `ENV=prod`.
-- **Engines.** Twenty-one modules under `backend/app/engines/`. They are pure functions. The comprehensive return composes the 1040 with Social Security taxability, the child tax credit, AMT, QBI, and self-employment tax. State tax, IRMAA, quarterly estimates, the C corporation, charitable bunching, and the Roth and S corporation searches sit beside it.
-- **Postgres 17.** Nineteen migration files under `backend/alembic/versions/`. CI fails the build unless there is a single Alembic head. The runtime role cannot bypass row-level security.
+- **API.** FastAPI on Python 3.12. Seventy-three route operations under `/api/v1`. Engine money amounts use integer cents. Interactive docs are served at `/docs` and the OpenAPI schema at `/openapi.json` unless `ENV=prod`.
+- **Engines.** Twenty-one implementation modules under `backend/app/engines/`, excluding `__init__.py`. Tax calculations operate on supplied inputs and configs. The comprehensive engine can compose the 1040 with Social Security taxability, the child tax credit, AMT, QBI, and self-employment tax when their inputs and configs are provided. State tax, IRMAA, quarterly estimates, the C corporation, charitable bunching, and the Roth and S corporation searches sit beside it.
+- **Postgres 17.** Nineteen migration files under `backend/alembic/versions/`. A backend test checks for a single Alembic head. The runtime role cannot bypass row-level security.
 - **MCP server.** `mcp/server.py`, registry in `mcp/tools.json`, Brigade manifest in `mcp/manifest.json`.
-- **Intake.** Seven entity types (individual, sole prop, partnership, S corporation, C corporation, several entities, and "not sure") and a document checklist per type at `/api/v1/intake`.
+- **Intake.** Seven choices (individual, sole prop, partnership, S corporation, C corporation, several entities, and "not sure") at `/api/v1/intake/entity-types`. Six have document checklists at `/api/v1/intake/document-checklist`; "not sure" is guidance only.
 
 ## Part of Unicorn Commander
 
@@ -341,15 +356,15 @@ Dotted arrows are optional. With standalone mode, an empty Garage config, OCR di
 | [Security-Ops](https://github.com/Unicorn-Commander/Security-Ops) | Authorized security scanning with engagement and attestation gates |
 | **[Tax-Planning-Ops](https://github.com/Unicorn-Commander/Tax-Planning-Ops)** | **Tax plans, scenarios and statutory deadlines** |
 | [Brand-Ops](https://github.com/Unicorn-Commander/Brand-Ops) | Brand kits, marks, voices and rules |
-| [Podcast-Ops](https://github.com/Unicorn-Commander/Podcast-Ops) | Episodes, audio QA and publishing |
+| [Podcast-Ops](https://github.com/Unicorn-Commander/Podcast-Ops) | Episode production and audio QA |
 | [UUDA](https://github.com/Unicorn-Commander/UUDA) | The device agent for your fleet |
 | [fleet-map](https://github.com/Unicorn-Commander/fleet-map) | Fleet inventory and topology map |
 
-Tax-Planning-Ops checks an optional Ops-Center entitlement, discovers its tools to Unicorn Brigade through `mcp/manifest.json`, exchanges a Brigade token when the Accounting-Ops read is on, and stores bytes in Garage when credentials are set. It signs users in with Keycloak. It does not call the other suite apps.
+Tax-Planning-Ops checks an optional Ops-Center entitlement, supplies `mcp/manifest.json` for Brigade discovery, can exchange a service token through Brigade for Accounting-Ops reads, and stores bytes in Garage when credentials are set. It signs users in with Keycloak. It does not call the other suite apps. Accounting-Ops sync explicitly reads the linked workspace/entity P&L for the tax year and updates the business entity; the next comprehensive analysis uses that amount. There is no background ledger watcher or automatic rewrite of stored plan snapshots.
 
 ## Development
 
-CI (`.github/workflows/ci.yml`) runs the backend checks on Python 3.12 against Postgres 17, then the frontend on Node 22.
+The CI workflow (`.github/workflows/ci.yml`) specifies independent backend and frontend jobs: Python 3.12 with Postgres 17, and Node 22. An unindented heredoc in its Alembic-head check makes the workflow invalid YAML; the checks below can be run locally.
 
 ```bash
 cd backend
@@ -362,13 +377,13 @@ cd backend
 
 ```bash
 cd backend
-export MIGRATION_DATABASE_URL=postgresql+asyncpg://tax_planning_ops_owner:<owner-password>@localhost:55432/tax_planning_ops
-export RUNTIME_DB_PASSWORD=<runtime-password>
-export TPO_TEST_DATABASE_URL=postgresql://tax_planning_ops_app:<runtime-password>@localhost:55432/tax_planning_ops
+export MIGRATION_DATABASE_URL='postgresql+asyncpg://tax_planning_ops_owner:<owner-password>@localhost:55432/tax_planning_ops'
+export RUNTIME_DB_PASSWORD='<runtime-password>'
+export TPO_TEST_DATABASE_URL='postgresql://tax_planning_ops_app:<runtime-password>@localhost:55432/tax_planning_ops'
 ./.venv/bin/pytest -m integration
 ```
 
-The MCP tests stub HTTP. They are not on the backend pytest path. From the repository root, with `mcp` and `pytest` installed:
+The MCP tests stub HTTP. They are not on the backend pytest path. From the repository root, with `pytest` installed:
 
 ```bash
 pytest mcp/test_server.py
@@ -383,13 +398,13 @@ npm run lint
 npm run build
 ```
 
-Further reading in the repo: `docs/PRD.md`, `docs/RESEARCH-FINDINGS.md`, `docs/CODING-AGENT-PROMPT.md`, `docs/DEPLOY.md`, `docs/DEPLOY-KEYCLOAK.md`, and `mcp/README.md`.
+Further reading in the repo: `docs/PRD.md`, `docs/RESEARCH-FINDINGS.md`, `docs/CODING-AGENT-PROMPT.md`, `docs/DEPLOY.md`, `docs/DEPLOY-KEYCLOAK.md`, and `mcp/README.md`. The PRD, research, and build prompt date from the June 2026 design phase and include roadmap ideas; they are not a list of shipped features. Deployment notes also contain historical assumptions, so use the current code and Compose file for configuration.
 
 ## Security
 
 Report a vulnerability privately. The instructions are in [`SECURITY.md`](SECURITY.md). Please do not include a real tax return in a public issue.
 
-`STANDALONE_MODE` cannot boot when `ENV=prod`. Uploaded files must start with a PDF header and are capped at 25 MB. Tokens must carry `aud`, `exp`, `iat`, and `iss` unless standalone mode is on.
+`STANDALONE_MODE` cannot boot when `ENV=prod`. Form 1040 uploads must start with `%PDF` and are limited by `MAX_UPLOAD_BYTES` (25,000,000 bytes by default). Tokens must carry `aud`, `exp`, `iat`, and `iss` unless standalone mode is on.
 
 ## Licence
 
