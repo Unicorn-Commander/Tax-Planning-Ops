@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue" alt="License AGPL-3.0-or-later"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
   <img src="https://img.shields.io/badge/version-0.1.0-blue" alt="Application version 0.1.0">
   <img src="https://img.shields.io/badge/Python-3.12-blue" alt="Python 3.12">
   <img src="https://img.shields.io/badge/Next.js-15.5.19-black" alt="Next.js 15.5.19">
@@ -408,7 +408,7 @@ Report a vulnerability privately. The instructions are in [`SECURITY.md`](SECURI
 
 ## Licence
 
-[GNU Affero General Public License v3.0 or later](LICENSE). You can run it, change it, and sell services on it. If you offer the modified program as a network service, the people who use that service must be able to get the corresponding source. This repository is that source for the version it contains.
+Tax-Planning-Ops is licensed under the [Apache License 2.0](LICENSE). You can use, change and redistribute it, including commercially, under its terms. Our names and logos are covered by [TRADEMARKS.md](TRADEMARKS.md). PyMuPDF (`pymupdf`) is a dependency with its own licence (AGPL-3.0); using it brings its terms.
 
 ---
 
