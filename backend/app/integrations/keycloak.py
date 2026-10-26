@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from typing import Any
 
@@ -9,6 +10,45 @@ from fastapi import HTTPException, status
 from jose import jwt
 
 from app.core.config import Settings
+
+logger = logging.getLogger("tax_planning_ops.auth")
+
+
+def accepted_token_audiences(settings: Settings) -> set[str]:
+    """Audiences this process accepts on ``aud`` or ``azp``.
+
+    The set is the existing client audience (``KEYCLOAK_AUDIENCE``, default
+    ``KEYCLOAK_CLIENT_ID``) plus ``KEYCLOAK_CLIENT_ID`` plus
+    ``KEYCLOAK_EXPECTED_AUDIENCES``. Matching is fail-closed: an ``azp`` value
+    is accepted only when it is in this set.
+    """
+    configured = (
+        settings.KEYCLOAK_AUDIENCE,
+        settings.KEYCLOAK_CLIENT_ID,
+        *settings.KEYCLOAK_EXPECTED_AUDIENCES,
+    )
+    return {item.strip() for item in configured if isinstance(item, str) and item.strip()}
+
+
+def _audience_values(claims: dict[str, Any]) -> tuple[set[str], set[str]]:
+    """Return (aud-or-azp values, resource-style aud values)."""
+    aud = claims.get("aud")
+    if isinstance(aud, str):
+        aud_list = [aud]
+    elif isinstance(aud, list):
+        aud_list = [item for item in aud if isinstance(item, str)]
+    else:
+        aud_list = []
+    values = set(aud_list)
+    azp = claims.get("azp")
+    if isinstance(azp, str) and azp.strip():
+        values.add(azp.strip())
+    resource_style = {
+        item
+        for item in aud_list
+        if item.startswith("https://") or item.startswith("http://")
+    }
+    return values, resource_style
 
 
 class KeycloakVerifier:
@@ -38,28 +78,51 @@ class KeycloakVerifier:
         if key is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="unknown jwt key")
         try:
+            # Signature, issuer, exp, and iat stay strict. Audience is checked
+            # below: python-jose's audience= argument looks only at ``aud`` and
+            # rejects a token whose aud is ``account`` even when ``azp`` is this
+            # app's client id (what Keycloak stamps for a dynamic OAuth client).
             claims = jwt.decode(
                 token,
                 key,
                 algorithms=self.settings.JWT_ALLOWED_ALGORITHMS,
-                audience=self.settings.KEYCLOAK_AUDIENCE,
                 issuer=self.settings.KEYCLOAK_ISSUER,
                 options={
-                    # python-jose verifies claim VALUES but does not require the
-                    # claims to exist — force presence so a token missing aud/exp
-                    # (e.g. a never-expiring token) is rejected.
-                    "require_aud": True,
+                    "verify_aud": False,
                     "require_exp": True,
                     "require_iat": True,
                     "require_iss": True,
                 },
             )
-            return dict(claims)
         except Exception as exc:  # noqa: BLE001 - jose raises several auth exceptions
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="invalid bearer token",
             ) from exc
+        return self._require_audience(dict(claims))
+
+    def _require_audience(self, claims: dict[str, Any]) -> dict[str, Any]:
+        expected = accepted_token_audiences(self.settings)
+        presented, resource_style = _audience_values(claims)
+        if resource_style:
+            # A resource URL in ``aud`` (RFC 8707) must not by itself fail a
+            # token that also carries a configured audience. It also must not
+            # pass on its own until that URL is configured.
+            logger.info(
+                "resource-style audience present (not a rejection by itself): %s",
+                sorted(resource_style),
+            )
+        if not expected.intersection(presented):
+            logger.warning(
+                "token audience rejected: aud/azp=%s accepted=%s",
+                sorted(presented),
+                sorted(expected),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="invalid bearer token",
+            )
+        return claims
 
     async def _resolve_key(self, kid: str | None) -> dict[str, Any] | None:
         if self._jwks is None or time.time() >= self._expires_at:

@@ -14,6 +14,7 @@ from app.core.request_context import current_door, normalize_door
 from app.db.session import async_session_maker
 from app.integrations.control_plane import check_entitlement
 from app.integrations.keycloak import KeycloakVerifier
+from app.oauth_discovery import bearer_token_present, is_mcp_path, mcp_www_authenticate
 from app.schemas.auth import AuthContext
 from app.security.pat import (
     find_active_pat_by_token,
@@ -133,6 +134,9 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         # token precisely when the old one has expired, so it can't require a
         # valid bearer.
         "/api/v1/auth/refresh",
+        # RFC 9728 metadata is public. A bearer must not be required, and a
+        # rejected bearer must not turn discovery into a 401.
+        "/.well-known/oauth-protected-resource",
     )
 
     def __init__(
@@ -239,10 +243,21 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 scopes=scopes,
             )
         except HTTPException as exc:
+            headers = None
+            if exc.status_code == 401:
+                if is_mcp_path(request.url.path):
+                    headers = {
+                        "WWW-Authenticate": mcp_www_authenticate(
+                            request,
+                            token_present=bearer_token_present(request.headers),
+                        )
+                    }
+                else:
+                    headers = {"WWW-Authenticate": "Bearer"}
             return JSONResponse(
                 status_code=exc.status_code,
                 content={"detail": exc.detail},
-                headers={"WWW-Authenticate": "Bearer"} if exc.status_code == 401 else None,
+                headers=headers,
             )
         return await call_next(request)
 
