@@ -28,7 +28,10 @@ MCP_CORS_HEADERS = (
 )
 MCP_CORS_EXPOSE_HEADERS = "Mcp-Session-Id"
 MCP_RESOURCE_DOCUMENTATION = "https://unicorncommander.ai/platform/bring-your-own-ai"
-MCP_SCOPES = ("openid", "profile", "taxplan:advisor", "taxplan:admin")
+# Exactly what Keycloak's anonymous-DCR policy allows; the realm scope `mcp`
+# carries this app's audience + uc_uid. App/PAT scopes (taxplan:*) are not
+# OAuth scopes: advertising them makes DCR registration fail (403).
+MCP_SCOPES = ("openid", "profile", "email", "offline_access", "mcp")
 
 router = APIRouter(tags=["oauth-discovery"])
 

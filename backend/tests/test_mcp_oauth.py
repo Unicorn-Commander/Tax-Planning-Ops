@@ -180,8 +180,8 @@ def test_prm_documents_are_public_and_ring_aware(monkeypatch: pytest.MonkeyPatch
         }
         assert body["resource"] == f"{PUBLIC}/api/v1/mcp"
         assert body["authorization_servers"] == [ISSUER]
-        assert "taxplan:advisor" in body["scopes_supported"]
-        assert "taxplan:admin" in body["scopes_supported"]
+        # Clients request exactly these; Keycloak's DCR policy refuses any other scope, and `mcp` carries the audience.
+        assert body["scopes_supported"] == ["openid", "profile", "email", "offline_access", "mcp"]
         assert "fictional-rejected" not in response.text
 
     dogfood = _app(
