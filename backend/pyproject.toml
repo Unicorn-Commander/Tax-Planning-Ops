@@ -1,5 +1,7 @@
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# Make `app` importable for the plain `pytest` command too (CI runs it; `python -m pytest` adds cwd itself).
+pythonpath = ["."]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-v --tb=short --strict-markers"
