@@ -9,7 +9,10 @@ differs.
 
 Auth: this route is covered by ``JWTAuthMiddleware`` (NOT in SKIP_PREFIXES), so a
 valid ``tpo_pat_*`` (or Keycloak) bearer authenticates it and a bad/missing one
-401s before the handler runs. ``tools/call`` forwards the caller's own
+401s before the handler runs. The 401 carries ``WWW-Authenticate`` with the
+protected-resource metadata URL. Cookie or session headers are not credentials
+on this path. ``GET`` (and every non-POST method) returns 405: this door is one
+JSON-RPC response, not an SSE stream. ``tools/call`` forwards the caller's own
 ``Authorization`` + ``X-Workspace-Id`` headers to the loopback REST API, so the
 backend re-applies auth, entitlement, RLS and scope enforcement on every tool —
 this router adds no tax logic and no privilege of its own.
@@ -166,6 +169,16 @@ async def _dispatch(request: Request, message: dict[str, Any]) -> dict[str, Any]
         return _rpc_result(req_id, result)
 
     return _rpc_error(req_id, _METHOD_NOT_FOUND, f"method not found: {method}")
+
+
+@router.api_route("/mcp", methods=["GET", "PUT", "PATCH", "DELETE", "HEAD"])
+async def mcp_method_not_allowed() -> Response:
+    """Streamable HTTP allows a GET SSE stream. This server is POST-only.
+
+    A client that is already authenticated gets 405. An unauthenticated client
+    still gets 401 from the bearer gate, which runs first.
+    """
+    return Response(status_code=405, headers={"Allow": "POST"})
 
 
 @router.post("/mcp")

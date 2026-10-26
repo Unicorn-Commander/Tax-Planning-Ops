@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import json
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -43,8 +44,19 @@ class Settings(BaseSettings):
     KEYCLOAK_CLIENT_ID: str = "tax-planning-ops"
     KEYCLOAK_CLIENT_SECRET: str = ""
     KEYCLOAK_AUDIENCE: str | None = None
+    # Extra aud/azp values accepted in addition to KEYCLOAK_AUDIENCE and
+    # KEYCLOAK_CLIENT_ID. Empty keeps the check fail-closed on those two.
+    # Comma-separated. Used for dynamic OAuth client ids once they are known.
+    KEYCLOAK_EXPECTED_AUDIENCES: Annotated[list[str], NoDecode] = []
     KEYCLOAK_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/keycloak/callback"
     FRONTEND_URL: str = "http://localhost:3000"
+    # Public API origin (no path, no trailing slash). OAuth metadata uses it.
+    # Empty: derive from X-Forwarded-Proto and Host. Set per ring; do not
+    # hard-code a customer or dogfood hostname in code.
+    PUBLIC_BASE_URL: str = ""
+    # Browser origins allowed on /api/v1/mcp, added to CORS_ORIGINS and
+    # FRONTEND_URL. Comma-separated.
+    MCP_ALLOWED_ORIGINS: Annotated[list[str], NoDecode] = []
     JWKS_CACHE_TTL_SECONDS: int = 300
     JWT_ALLOWED_ALGORITHMS: list[str] = ["RS256"]
 
@@ -127,6 +139,36 @@ class Settings(BaseSettings):
     @classmethod
     def default_audience(cls, value: str | None, info) -> str:  # type: ignore[no-untyped-def]
         return value or info.data.get("KEYCLOAK_CLIENT_ID", "tax-planning-ops")
+
+    @field_validator("KEYCLOAK_EXPECTED_AUDIENCES", "MCP_ALLOWED_ORIGINS", mode="before")
+    @classmethod
+    def split_csv_list(cls, value: object) -> object:
+        """Accept a JSON list or a comma-separated env string."""
+        if value is None or value == "":
+            return []
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return []
+            if stripped.startswith("["):
+                parsed = json.loads(stripped)
+                if not isinstance(parsed, list):
+                    raise ValueError("expected a JSON list")
+                return [str(item).strip() for item in parsed if str(item).strip()]
+            return [item.strip() for item in stripped.split(",") if item.strip()]
+        return value
+
+    @field_validator("MCP_ALLOWED_ORIGINS")
+    @classmethod
+    def normalise_mcp_origins(cls, value: list[str]) -> list[str]:
+        return [item.strip().rstrip("/") for item in value if item.strip()]
+
+    @field_validator("PUBLIC_BASE_URL", mode="before")
+    @classmethod
+    def strip_public_base(cls, value: object) -> str:
+        if value is None:
+            return ""
+        return str(value).strip().rstrip("/")
 
     @model_validator(mode="after")
     def fail_closed_standalone(self) -> Settings:

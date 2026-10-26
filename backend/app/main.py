@@ -38,6 +38,8 @@ from app.api.workspaces import router as workspaces_router
 from app.core.auth import JWTAuthMiddleware
 from app.core.config import get_settings
 from app.db.session import close_db
+from app.oauth_discovery import MCPPathCORSMiddleware
+from app.oauth_discovery import router as oauth_discovery_router
 
 
 @asynccontextmanager
@@ -64,9 +66,23 @@ def create_app() -> FastAPI:
         allow_origins=settings.CORS_ORIGINS,
         allow_credentials=False,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "X-Workspace-Id"],
+        allow_headers=[
+            "Authorization",
+            "Content-Type",
+            "Accept",
+            "X-Workspace-Id",
+            "Mcp-Session-Id",
+            "Mcp-Protocol-Version",
+            "Last-Event-ID",
+        ],
+        expose_headers=["Mcp-Session-Id"],
     )
     app.add_middleware(JWTAuthMiddleware, settings=settings)
+    # Outermost: MCP preflight and disallowed Origin are answered before auth.
+    # Added last so Starlette runs it first.
+    app.add_middleware(MCPPathCORSMiddleware)
+    # Public OAuth metadata. JWTAuthMiddleware skips this prefix.
+    app.include_router(oauth_discovery_router)
     app.include_router(agents_router, prefix="/api/v1")
     app.include_router(auth_router, prefix="/api/v1")
     # Durable-token self-service (mint/list/revoke tpo_pat_*) + the HTTP MCP
