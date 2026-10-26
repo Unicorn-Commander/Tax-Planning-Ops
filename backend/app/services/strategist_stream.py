@@ -22,7 +22,7 @@ so a stream and a persisted run over the same snapshot agree to the cent.
 from __future__ import annotations
 
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from typing import Any
 from uuid import UUID
 
@@ -121,7 +121,7 @@ def _engine_done(name: str, summary: str) -> dict[str, Any]:
 
 async def stream_strategist_run(
     db: AsyncSession, *, workspace_id: UUID, tax_year_id: UUID, settings: Any
-) -> AsyncIterator[dict[str, Any]]:
+) -> AsyncGenerator[dict[str, Any], None]:
     """Run the strategist and yield event dicts in order (see module docstring).
 
     Raises ``LookupError`` BEFORE any event is yielded if the tax year, snapshot,

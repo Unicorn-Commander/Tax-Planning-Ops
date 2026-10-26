@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 DEFAULT_API_URL = "http://localhost:8000/api/v1"
 WORKSPACE_HEADER = "X-Workspace-Id"
@@ -43,7 +43,9 @@ def _tools_path() -> Path:
 
 def load_tools() -> list[dict[str, Any]]:
     """Load the tool->endpoint map from the vendored mcp_tools.json."""
-    return json.loads(_tools_path().read_text())
+    # The checked-in registry is the trusted list-of-objects boundary; retain
+    # json.loads' runtime behavior while giving the rest of the module its shape.
+    return cast(list[dict[str, Any]], json.loads(_tools_path().read_text()))
 
 
 def parse_route(route: str) -> tuple[str, str]:

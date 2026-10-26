@@ -68,6 +68,18 @@ def test_client_catalog_is_well_formed() -> None:
             assert CorrectFieldRequest(corrected_value_cents=cents).corrected_value_cents == cents
 
 
+def test_client_field_catalog_is_a_cents_mapping() -> None:
+    """The seeder's correction and quarterly paths consume fields as a mapping."""
+    assert all(
+        isinstance(spec["fields"], dict)
+        and all(
+            isinstance(key, str) and isinstance(value, int)
+            for key, value in spec["fields"].items()
+        )
+        for spec in CLIENTS
+    )
+
+
 def test_planned_clients_drive_the_plan_year_services() -> None:
     """Every client flagged make_plan must produce figures the plan/strategy/
     quarterly services accept — and at least one client exercises a plan."""

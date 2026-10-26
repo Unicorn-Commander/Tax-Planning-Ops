@@ -111,6 +111,7 @@ class _FakeSession:
 def _tax_year() -> SimpleNamespace:
     return SimpleNamespace(
         id=TY, client_id=CLIENT_ID, tax_year=2026, filing_status="mfj", role="planning",
+        source_documents=None,
     )
 
 
