@@ -42,19 +42,8 @@ jobs:
         run: |
           python -m app.db.bootstrap
           pytest -m integration
-      - run: test "$(python - <<'PY'
-from pathlib import Path
-heads=set(); parents=set()
-for p in Path('alembic/versions').glob('*.py'):
-    ns={}
-    exec(p.read_text(), ns)
-    heads.add(ns['revision'])
-    d=ns['down_revision']
-    if isinstance(d, str): parents.add(d)
-    elif isinstance(d, tuple): parents.update(d)
-print(len(heads - parents))
-PY
-)" = "1"
+      - name: exactly one alembic head
+        run: python scripts/check_alembic_heads.py
 
   frontend:
     runs-on: ubuntu-latest
