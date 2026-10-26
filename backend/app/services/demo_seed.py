@@ -21,13 +21,13 @@ the demo tenant.
 from __future__ import annotations
 
 import io
-from typing import Any
+from typing import Any, TypedDict
 from uuid import UUID
 
+from fastapi import UploadFile
 from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.datastructures import Headers
-from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from app.core.config import get_settings
 from app.db.session import async_session_maker, bind_session_context
@@ -119,10 +119,19 @@ STRATEGIES: tuple[dict[str, str], ...] = (
     },
 )
 
+
+class DemoClientSpec(TypedDict):
+    name: str
+    filing_status: str
+    state: str
+    fields: dict[str, int]
+    make_plan: bool
+
+
 # Each client: a display name, default filing status, home state, the filed
 # 1040 figures (canonical field key -> whole-cents), and whether to build a
 # forward plan (plan year + recommended strategies + quarterly estimates).
-CLIENTS: tuple[dict[str, Any], ...] = (
+CLIENTS: tuple[DemoClientSpec, ...] = (
     {
         "name": "Marcus Webb",
         "filing_status": "single",
@@ -202,9 +211,9 @@ CLIENTS: tuple[dict[str, Any], ...] = (
 )
 
 
-def _demo_pdf_upload() -> StarletteUploadFile:
+def _demo_pdf_upload() -> UploadFile:
     """A fresh in-memory PDF upload per call (the stream is read once)."""
-    return StarletteUploadFile(
+    return UploadFile(
         file=io.BytesIO(_DEMO_PDF),
         filename="1040.pdf",
         headers=Headers({"content-type": "application/pdf"}),
@@ -244,16 +253,16 @@ async def _seed_into(session: AsyncSession, *, workspace_id: UUID, uc_uid: str) 
     """
     # 1) Strategy library — workspace-scoped; client strategies reference these.
     strategy_ids: list[UUID] = []
-    for order, spec in enumerate(STRATEGIES):
+    for order, strategy_spec in enumerate(STRATEGIES):
         strategy = await upsert_strategy_library(
             session,
             workspace_id=workspace_id,
             actor_uc_uid=uc_uid,
             payload=StrategyLibraryIn(
-                name=spec["name"],
-                category=spec["category"],
-                description=spec["description"],
-                client_facing_copy=spec["client_facing_copy"],
+                name=strategy_spec["name"],
+                category=strategy_spec["category"],
+                description=strategy_spec["description"],
+                client_facing_copy=strategy_spec["client_facing_copy"],
                 savings_method="amount_x_effective_rate",
                 is_active=True,
                 sort_order=order,

@@ -11,6 +11,7 @@ cross-client aggregate shape of ``book_scan.scan_book``). Money is integer cents
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -116,7 +117,7 @@ async def reconcile(
     return outcome
 
 
-async def workspace_rollup(db: AsyncSession, *, workspace_id: UUID) -> dict:
+async def workspace_rollup(db: AsyncSession, *, workspace_id: UUID) -> dict[str, Any]:
     """The Book's realized counter: planned vs. realized across every reconciled
     outcome in the workspace (RLS-scoped), grouped by client-tax-year and joined
     to the client for the breakdown. Returns the ``RealizedRollupOut`` shape.
@@ -143,12 +144,12 @@ async def workspace_rollup(db: AsyncSession, *, workspace_id: UUID) -> dict:
         .order_by(Client.display_name, ClientTaxYear.tax_year)
     )
 
-    clients: list[dict] = []
+    clients: list[dict[str, Any]] = []
     total_planned = 0
     total_realized = 0
     for client_id, client_name, tax_year_id, tax_year, planned, realized, count in result.all():
-        planned = int(planned)
-        realized = int(realized)
+        planned = int(planned if planned is not None else 0)
+        realized = int(realized if realized is not None else 0)
         total_planned += planned
         total_realized += realized
         clients.append(
