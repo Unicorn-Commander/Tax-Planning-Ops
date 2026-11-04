@@ -47,6 +47,7 @@ That sentence is the disclaimer the plan document carries (`backend/app/engines/
 - **Draft, then sign.** The plan proposer scores opportunities and writes no client strategy. The strategist authors a memo. `sign_memo` seals a content hash onto the audit journal. The book scanner only ranks; it does not write.
 - **A journal a later reader can check.** Audited actions, including return confirmation, plan updates, strategy selections, bracket/library edits, document generation, and memo signing, append to a per-workspace hash chain (SHA-256 over the previous hash plus the event, actor, aggregate, timestamp, and payload). Client creation, extracted-field corrections, branding edits, and draft memo saves are not journaled. The runtime database role may `SELECT` and `INSERT` on that table, and the migration does not grant `UPDATE` or `DELETE`. `GET /api/v1/lifecycle/audit/verify` recomputes the chain.
 - **Workspace isolation in Postgres.** One database. Every tenant table has row-level security forced on. The supplied deployment connects as `tax_planning_ops_app` (`NOBYPASSRLS`) and sets `app.current_workspace` for the transaction; `app.uc_uid` scopes workspace-membership rows. Its migrations run as `tax_planning_ops_owner`.
+- **Workspace member sharing.** Owners can add known UC subjects or issue seven-day, single-use invitations; active members can read the roster, and invitation tokens are stored only as SHA-256 hashes.
 
 ## Feature tour
 
