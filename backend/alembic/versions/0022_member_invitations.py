@@ -1,6 +1,6 @@
 """workspace member management and single-use invitations
 
-Revision ID: 0022_workspace_member_invitations
+Revision ID: 0022_member_invitations
 Revises: 0021_personal_access_tokens
 Create Date: 2026-11-03
 
@@ -24,7 +24,7 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0022_workspace_member_invitations"
+revision: str = "0022_member_invitations"
 down_revision: str | None = "0021_personal_access_tokens"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
