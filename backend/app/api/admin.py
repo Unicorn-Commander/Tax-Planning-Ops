@@ -15,7 +15,10 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 @router.get("/tax-bracket-sets", response_model=list[TaxBracketSetOut])
 async def get_tax_bracket_sets(
-    _ctx: AuthContext = Depends(require_scopes(("taxplan:admin",))),
+    # Advisors render the position chart from these rows. Writing a set stays
+    # admin-only (PUT below). Suite-default seeds are workspace_id NULL and
+    # readable under RLS; a firm override is visible only inside its workspace.
+    _ctx: AuthContext = Depends(require_scopes(("taxplan:advisor",))),
     db: AsyncSession = Depends(get_tenant_db),
 ) -> list[TaxBracketSet]:
     return await list_bracket_sets(db)

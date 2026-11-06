@@ -33,6 +33,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useClientOverview, type YearRow } from "@/components/client-overview";
 import api from "@/lib/api";
+import { pickBracketSet } from "@/lib/brackets";
 
 import {
   Stamp,
@@ -104,14 +105,8 @@ interface Analysis {
 
 /** Build bracket segments the same way the Case File does. */
 function buildSegments(sets: BracketSet[], year: number, filingStatus: string): Segment[] {
-  if (!sets.length) return [];
-  const fed = sets.filter((s) => s.jurisdiction?.toLowerCase().includes("fed"));
-  const pool = fed.length ? fed : sets;
-  const set =
-    pool.find((s) => s.tax_year === year && s.filing_status === filingStatus) ??
-    pool.find((s) => s.filing_status === filingStatus) ??
-    pool[0];
-  if (!set) return [];
+  const set = pickBracketSet(sets, year, filingStatus);
+  if (!set?.rows?.length) return [];
   const rows = [...set.rows].sort((a, b) => a.lower_bound_cents - b.lower_bound_cents);
   const topLower = rows[rows.length - 1]?.lower_bound_cents ?? 0;
   const cap = topLower + 150_000_00;
@@ -410,8 +405,15 @@ export default function ExplainedPage() {
           <p className="m-0 text-[16.5px] leading-[1.62] text-[var(--g-ink)]">
             Your income isn&rsquo;t all taxed at one rate. It fills up{" "}
             <i>layers</i>: the first chunk at a low rate, the next at a slightly
-            higher rate, and so on. Most of yours sits at{" "}
-            <b>{(topFilledRate * 100).toFixed(0)}% or less</b>.
+            higher rate, and so on.{" "}
+            {segments.length > 0 ? (
+              <>
+                Most of yours sits at{" "}
+                <b>{(topFilledRate * 100).toFixed(0)}% or less</b>.
+              </>
+            ) : (
+              <>The bracket layers for {taxYear} aren&rsquo;t loaded yet.</>
+            )}
             {nextSeg ? (
               <>
                 {" "}Only your last dollars reach{" "}

@@ -29,6 +29,8 @@ import Link from "next/link";
 import api from "@/lib/api";
 import { centsToUSD } from "@/lib/format";
 import { formatDateOnly } from "@/lib/time";
+import { pickBracketSet } from "@/lib/brackets";
+import { BracketUnavailable } from "@/components/bracket-unavailable";
 import {
   PositionInstrument,
   CliffRow,
@@ -154,11 +156,7 @@ export default function HomePage() {
     const empty = { segments: [] as Segment[], pins: [] as Pin[], headroom: undefined };
     if (!sets || !planYear || !planYear.snapshot) return empty;
     const snap = planYear.snapshot;
-    const fed = sets.filter((s) => s.jurisdiction?.toLowerCase().includes("fed"));
-    const pool = fed.length ? fed : sets;
-    const set = pool.find((s) => s.tax_year === planYear.tax_year && s.filing_status === planYear.filing_status)
-      ?? pool.find((s) => s.filing_status === planYear.filing_status)
-      ?? pool[0];
+    const set = pickBracketSet(sets, planYear.tax_year, planYear.filing_status);
     if (!set) return empty;
     const rows = [...set.rows].sort((a, b) => a.lower_bound_cents - b.lower_bound_cents);
     const topLower = rows[rows.length - 1]?.lower_bound_cents ?? 0;
@@ -358,7 +356,7 @@ export default function HomePage() {
                 </div>
               </>
             ) : (
-              <p className="text-[13px] text-[var(--g-ink-3)]">Bracket set unavailable for {planYear.tax_year} {planYear.filing_status}.</p>
+              <BracketUnavailable year={planYear.tax_year} filingStatus={planYear.filing_status} />
             )}
           </Panel>
 
