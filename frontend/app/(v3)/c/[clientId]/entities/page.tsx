@@ -22,6 +22,7 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import api from "@/lib/api";
 import { centsToUSD } from "@/lib/format";
 import { useClientOverview } from "@/components/client-overview";
+import { DevOnly } from "@/components/dev-only";
 import {
   Panel,
   PanelHead,
@@ -395,7 +396,7 @@ export default function EntitiesPage() {
           {/* TODO(integration: POST /clients/tax-years/:id/entities/what-if) — C-corp what-if re-render */}
           <span
             className="chip cursor-default opacity-60"
-            title="C-corp what-if map requires the map-diff endpoint (spec §9.2, additive)"
+            title="C-corp what-if is not available on this file yet"
           >
             what-if · C-corp
           </span>
@@ -624,7 +625,7 @@ export default function EntitiesPage() {
                 <LedgerRow
                   label="payroll admin + state UI"
                   negative
-                  adornment={<span className="font-mono text-[10px] tone-cost">[additive]</span>}
+                  adornment={<DevOnly><span className="font-mono text-[10px] tone-cost">[additive]</span></DevOnly>}
                 >
                   <span className="font-mono text-[11.5px] text-[var(--g-ink-3)]">—</span>
                 </LedgerRow>

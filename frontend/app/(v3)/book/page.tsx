@@ -638,7 +638,7 @@ export default function BookPage() {
           value={
             <span className="block text-[22px] font-[750] leading-none tracking-[-0.02em] text-[var(--g-ink-3)]">—</span>
           }
-          label="signed · tracking to realized [additive]"
+          label="signed · tracking to realized"
         />
         {/* LIVE: GET /agents/realized-rollup — realized reconciliation (§9.7), gold treatment */}
         <RollupNum
@@ -806,7 +806,7 @@ function RosterRow({ clientId, scanRow, client, overview, sets }: RosterRowProps
       {/* TODO(integration: GET /clients/:id/analysis/emr) — true marginal (EMR sweep) */}
       <td className="r text-right fig">
         {nominalRate !== null ? (
-          <span title="nominal bracket rate — true next-dollar (EMR) is additive (spec §9.3)">
+          <span title="nominal bracket rate">
             {(nominalRate * 100).toFixed(0)}%
           </span>
         ) : (

@@ -32,6 +32,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
+import { DevOnly, SHOW_DEV_LABELS } from "@/components/dev-only";
 import { centsToUSD } from "@/lib/format";
 import { formatDateOnly } from "@/lib/time";
 import { useClientOverview, type QuarterRow, type StrategyRow } from "@/components/client-overview";
@@ -770,8 +771,8 @@ export default function PlanPage() {
                 title={`${s.name} — one-page explainer`}
                 meta={
                   <span>
-                    client&apos;s own numbers · built to be forwarded{" "}
-                    <span className="font-mono text-[9.5px] text-[var(--cost)]">[additive]</span>
+                    client&apos;s own numbers · built to be forwarded
+                    <DevOnly>{" "}<span className="font-mono text-[9.5px] text-[var(--cost)]">[additive]</span></DevOnly>
                   </span>
                 }
               >
@@ -786,8 +787,8 @@ export default function PlanPage() {
               title="Year-end letter to the preparer"
               meta={
                 <span>
-                  auto-builds from confirmed items (election, payroll, 401k, HSA, lots) · audience: CPA / client / internal{" "}
-                  <span className="font-mono text-[9.5px] text-[var(--cost)]">[additive]</span>
+                  auto-builds from confirmed items (election, payroll, 401k, HSA, lots) · audience: CPA / client / internal
+                  <DevOnly>{" "}<span className="font-mono text-[9.5px] text-[var(--cost)]">[additive]</span></DevOnly>
                 </span>
               }
             >
@@ -951,7 +952,7 @@ function ContractRow({
             </span>
           ) : (
             <span className="text-[var(--g-ink-3)] font-mono text-[10px]">
-              upload <span className="text-[var(--cost)]">[additive]</span>
+              {SHOW_DEV_LABELS ? <>upload <span className="text-[var(--cost)]">[additive]</span></> : "—"}
             </span>
           )}
         </FieldBox>

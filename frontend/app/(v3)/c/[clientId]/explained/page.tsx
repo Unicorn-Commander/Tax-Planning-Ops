@@ -34,6 +34,7 @@ import Link from "next/link";
 import { useClientOverview, type YearRow } from "@/components/client-overview";
 import api from "@/lib/api";
 import { pickBracketSet } from "@/lib/brackets";
+import { DevOnly } from "@/components/dev-only";
 
 import {
   Stamp,
@@ -680,17 +681,18 @@ export default function ExplainedPage() {
         This is planning, not a filed return.
       </p>
 
-      {/* ---- additive notice (Honesty Protocol) ---- */}
-      <div className="rise d5 mt-4 flex items-start gap-2 rounded-[8px] border border-dashed border-[var(--g-hairline)] bg-[var(--g-bg-2)] px-3 py-2.5 font-mono text-[10.5px] text-[var(--g-ink-3)]">
-        <span className="dot mt-0.5 flex-none" style={{ background: "var(--cost)" }} />
-        <span>
-          <b className="text-[var(--cost)]">[additive]</b> LLM narration &mdash; each chapter&rsquo;s
-          prose is today a template that interpolates live engine values. The NLP-rendered
-          version (plain narration that rewrites itself per client without changing a number)
-          lands with the explainer renderer endpoint (spec §7-16, §9). Numbers shown above
-          are ALL live from the engines; prose structure is the fixture.
-        </span>
-      </div>
+      <DevOnly>
+        <div className="rise d5 mt-4 flex items-start gap-2 rounded-[8px] border border-dashed border-[var(--g-hairline)] bg-[var(--g-bg-2)] px-3 py-2.5 font-mono text-[10.5px] text-[var(--g-ink-3)]">
+          <span className="dot mt-0.5 flex-none" style={{ background: "var(--cost)" }} />
+          <span>
+            <b className="text-[var(--cost)]">[additive]</b> LLM narration &mdash; each chapter&rsquo;s
+            prose is today a template that interpolates live engine values. The NLP-rendered
+            version (plain narration that rewrites itself per client without changing a number)
+            lands with the explainer renderer endpoint (spec §7-16, §9). Numbers shown above
+            are ALL live from the engines; prose structure is the fixture.
+          </span>
+        </div>
+      </DevOnly>
 
       {/* ---- omnibar (three-doors contract) ---- */}
       <div className="mt-7">

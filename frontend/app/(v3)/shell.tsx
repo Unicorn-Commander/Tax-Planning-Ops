@@ -15,6 +15,7 @@ import { useClientOverview } from "@/components/client-overview";
 import { usePosture } from "@/lib/posture";
 import { clearWorkspaceStorage } from "@/lib/workspace";
 import { Wordmark, Cavatar, Omnibar, Panel, MicroLabel } from "@/components/kit";
+import { DevOnly } from "@/components/dev-only";
 import { hueForClient } from "@/components/kit";
 
 const FIRM_NAV = [
@@ -253,17 +254,19 @@ export function SurfaceStub({
         </div>
       </div>
       {children}
-      <Panel className="mt-6 p-5">
-        <div className="flex items-center gap-2">
-          <span className="dot dot-live" />
-          <MicroLabel>Phase 1 target — being built by the swarm</MicroLabel>
-        </div>
-        <ul className="mt-3 space-y-1.5 text-[13px] text-[var(--g-ink-2)]">
-          <li><b>Mockup:</b> <code className="fig">design/mockups/{mockup}</code></li>
-          {live ? <li><b className="tone-agent">[live]</b> {live}</li> : null}
-          {additive ? <li><b className="tone-cost">[additive]</b> {additive}</li> : null}
-        </ul>
-      </Panel>
+      <DevOnly>
+        <Panel className="mt-6 p-5">
+          <div className="flex items-center gap-2">
+            <span className="dot dot-live" />
+            <MicroLabel>Phase 1 target — being built by the swarm</MicroLabel>
+          </div>
+          <ul className="mt-3 space-y-1.5 text-[13px] text-[var(--g-ink-2)]">
+            <li><b>Mockup:</b> <code className="fig">design/mockups/{mockup}</code></li>
+            {live ? <li><b className="tone-agent">[live]</b> {live}</li> : null}
+            {additive ? <li><b className="tone-cost">[additive]</b> {additive}</li> : null}
+          </ul>
+        </Panel>
+      </DevOnly>
       <div className="mt-6">
         <Omnibar />
       </div>

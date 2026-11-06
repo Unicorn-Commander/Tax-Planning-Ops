@@ -21,6 +21,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
+import { DevOnly } from "@/components/dev-only";
 import { centsToUSD } from "@/lib/format";
 import { currentBusinessQuarter } from "@/lib/time";
 import {
@@ -420,7 +421,6 @@ export default function SeasonPage() {
                 <button
                   type="button"
                   className="chip agent ml-auto"
-                  title="[additive] Agent-drafted reminder emails (spec §7-11)"
                 >
                   draft reminders for the unpaid · {openCount}
                 </button>
@@ -461,7 +461,7 @@ export default function SeasonPage() {
               className="mb-1 font-mono text-[10.5px] uppercase tracking-[0.08em]"
               style={{ color: "var(--agent)" }}
             >
-              Campaign · post-filing review <span className="chip ml-2 !text-[9px]">[additive] fixture</span>
+              Campaign · post-filing review <DevOnly><span className="chip ml-2 !text-[9px]">[additive] fixture</span></DevOnly>
             </div>
             <p className="my-3 text-[13px] leading-relaxed text-[var(--g-ink-2)]">
               <b>The spring loop that fills the year:</b> drop the book&apos;s just-filed returns in bulk →
@@ -475,7 +475,7 @@ export default function SeasonPage() {
               <Link href="/book" className="mini-btn">
                 Ranked results →
               </Link>
-              <span className="chip ml-auto">prospect upload links: [additive]</span>
+              <DevOnly><span className="chip ml-auto">prospect upload links: [additive]</span></DevOnly>
             </div>
           </Panel>
         </div>
@@ -487,17 +487,19 @@ export default function SeasonPage() {
           <Panel className="rise d3">
             <PanelHead>
               <MicroLabel>Surge prep · the cheat sheet</MicroLabel>
-              <span className="chip agent ml-auto">[additive] auto-drafted per meeting</span>
+              <DevOnly><span className="chip agent ml-auto">[additive] auto-drafted per meeting</span></DevOnly>
             </PanelHead>
             {/* TODO(integration: POST /agents/season/cheat-sheet) — compose from overview + analysis + plan */}
             <div className="px-[18px] py-4 text-[12.5px] leading-[1.7] text-[var(--g-ink-2)]">
-              <div
-                className="mb-3 rounded-[8px] border border-[var(--g-hairline)] px-3 py-2 font-mono text-[10px] text-[var(--g-ink-3)]"
-              >
-                [additive] The cheat sheet compiles from each client&apos;s overview + analysis + plan +
-                season state — agent work product, advisor sends. Wire via
-                POST /agents/season/cheat-sheet (spec §7-11).
-              </div>
+              <DevOnly>
+                <div
+                  className="mb-3 rounded-[8px] border border-[var(--g-hairline)] px-3 py-2 font-mono text-[10px] text-[var(--g-ink-3)]"
+                >
+                  [additive] The cheat sheet compiles from each client&apos;s overview + analysis + plan +
+                  season state — agent work product, advisor sends. Wire via
+                  POST /agents/season/cheat-sheet (spec §7-11).
+                </div>
+              </DevOnly>
               <b className="block text-[13.5px] text-[var(--g-ink)]">
                 {sortedQ[0]?.name ?? "First client"} — next surge
               </b>
@@ -550,22 +552,22 @@ export default function SeasonPage() {
                   // TODO(integration: GET /quarterly/penalty-exposure) — 2210 penalty check per client
                   <span className="money fig text-[var(--g-ink-3)]">—</span>
                 }
-                label="PENALTY EXPOSURE [additive]"
+                label="PENALTY EXPOSURE"
                 border="top"
-                note="2210 safe-harbor check — additive (spec §9)"
               />
             </div>
           </Panel>
 
-          {/* ---- spec note / provenance footer ---- */}
-          <div
-            className="rise d5 rounded-[10px] border border-[var(--g-hairline)] px-4 py-3 font-mono text-[10px] text-[var(--g-ink-3)]"
-          >
-            SPEC · board = quarterly engine per client (<Term k="safe-harbor">safe-harbor basis</Term> shown;
-            2210-AI when income is lumpy). Mini-bars: paid vs the cumulative-required tick. Reminder
-            drafts are agent work products — advisor sends. Cheat sheets compile from overview +
-            analysis + plan + season state.
-          </div>
+          <DevOnly>
+            <div
+              className="rise d5 rounded-[10px] border border-[var(--g-hairline)] px-4 py-3 font-mono text-[10px] text-[var(--g-ink-3)]"
+            >
+              SPEC · board = quarterly engine per client (<Term k="safe-harbor">safe-harbor basis</Term> shown;
+              2210-AI when income is lumpy). Mini-bars: paid vs the cumulative-required tick. Reminder
+              drafts are agent work products — advisor sends. Cheat sheets compile from overview +
+              analysis + plan + season state.
+            </div>
+          </DevOnly>
         </div>
       </div>
 
@@ -685,7 +687,6 @@ function SurgeRow({ cq }: { cq: ClientQ }) {
         <button
           type="button"
           className="mini-btn go"
-          title="[additive] Sends agent-drafted voucher reminder (spec §7-11)"
           onClick={() => {
             /* additive: POST /agents/season/draft-reminders */
           }}

@@ -21,6 +21,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
 import { pickBracketSet } from "@/lib/brackets";
+import { DevOnly } from "@/components/dev-only";
 import { centsToUSD } from "@/lib/format";
 import { currentBusinessQuarter } from "@/lib/time";
 import {
@@ -319,9 +320,11 @@ export default function DeskPage() {
                 />
               ))
             )}
-            <div className="border-t border-[var(--g-hairline-soft)] px-5 py-2 font-mono text-[10px] text-[var(--g-ink-3)]">
-              <span className="tone-seal">[live]</span> drafted memos (GET /memos/pending) · <span className="tone-cost">[additive]</span> low-confidence-extraction items join with the per-client extraction list.
-            </div>
+            <DevOnly>
+              <div className="border-t border-[var(--g-hairline-soft)] px-5 py-2 font-mono text-[10px] text-[var(--g-ink-3)]">
+                <span className="tone-seal">[live]</span> drafted memos (GET /memos/pending) · <span className="tone-cost">[additive]</span> low-confidence-extraction items join with the per-client extraction list.
+              </div>
+            </DevOnly>
           </Panel>
 
           {/* ===== book pulse ===== */}
@@ -394,7 +397,9 @@ export default function DeskPage() {
                 );
               })
             )}
-            <div className="border-t border-[var(--g-hairline-soft)] px-[18px] py-1.5 font-mono text-[10px] text-[var(--g-ink-3)]"><span className="tone-seal">[live]</span> presence + last activity from the agent registry (GET /agents/registry)</div>
+            <DevOnly>
+              <div className="border-t border-[var(--g-hairline-soft)] px-[18px] py-1.5 font-mono text-[10px] text-[var(--g-ink-3)]"><span className="tone-seal">[live]</span> presence + last activity from the agent registry (GET /agents/registry)</div>
+            </DevOnly>
           </Panel>
 
           {/* the season at a glance — real quarterly */}

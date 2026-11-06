@@ -28,6 +28,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Brain, Pencil, ArrowUpDown, EyeOff, Check, GitCompare } from "lucide-react";
 import api from "@/lib/api";
+import { DevOnly } from "@/components/dev-only";
 import { centsToUSD } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
 import { useClientOverview, type YearRow } from "@/components/client-overview";
@@ -276,9 +277,11 @@ export default function MemoPage() {
             ) : null}
             {runStrategist.error ? <p className="mt-3 text-[12.5px] text-[var(--cliff)]">{runStrategist.error}</p> : null}
             {load.error ? <p className="mt-3 text-[12.5px] text-[var(--cliff)]">{load.error}</p> : null}
-            <div className="mt-3 inline-flex items-center gap-2 rounded-[8px] border border-dashed border-[var(--g-hairline)] bg-[var(--g-bg-2)] px-3 py-1.5 font-mono text-[10px] text-[var(--g-ink-3)]">
-              <span className="dot" style={{ background: "var(--cost)" }} /> [additive] the literal engine-call trace + the priced-question rail stream with the run payload (spec §9.1).
-            </div>
+            <DevOnly>
+              <div className="mt-3 inline-flex items-center gap-2 rounded-[8px] border border-dashed border-[var(--g-hairline)] bg-[var(--g-bg-2)] px-3 py-1.5 font-mono text-[10px] text-[var(--g-ink-3)]">
+                <span className="dot" style={{ background: "var(--cost)" }} /> [additive] the literal engine-call trace + the priced-question rail stream with the run payload (spec §9.1).
+              </div>
+            </DevOnly>
           </div>
           <div className="grid place-items-center p-5">
             {run ? (

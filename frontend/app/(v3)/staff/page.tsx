@@ -27,6 +27,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
+import { DevOnly, SHOW_DEV_LABELS } from "@/components/dev-only";
 import {
   Panel,
   PanelHead,
@@ -225,20 +226,23 @@ export default function StaffPage() {
         {/* TODO(integration: GET /agents/registry/stats) — weekly actions, approval rate, inference cost */}
         <div className="ml-auto flex items-baseline gap-[20px] text-[12.5px] text-[var(--g-ink-3)]">
           <span>on duty <b className="text-[var(--g-ink)]">{agents ? agents.filter((a) => a.status === "available").length : "—"}</b></span>
-          <span className="opacity-70">actions this week <b className="text-[var(--g-ink)]">312</b></span>
-          <span className="opacity-70">approved <b className="text-[var(--g-ink)]">96%</b></span>
-          <span className="opacity-70">inference this month <b className="fig text-[var(--g-ink)]">$0.00 — local</b></span>
-          <span className="font-mono text-[10px] text-[var(--cost)]">[fixture]</span>
+          <span className="opacity-70">actions this week <b className="text-[var(--g-ink)]">{SHOW_DEV_LABELS ? "312" : "—"}</b></span>
+          <span className="opacity-70">approved <b className="text-[var(--g-ink)]">{SHOW_DEV_LABELS ? "96%" : "—"}</b></span>
+          <span className="opacity-70">inference this month <b className="fig text-[var(--g-ink)]">{SHOW_DEV_LABELS ? "$0.00 — local" : "—"}</b></span>
+          <DevOnly>
+            <span className="font-mono text-[10px] text-[var(--cost)]">[fixture]</span>
+          </DevOnly>
         </div>
       </section>
 
-      {/* ---- honesty banner (Honesty Protocol) ---- */}
-      <div className="rise d1 mt-3 rounded-[10px] border border-[color-mix(in_srgb,var(--save)_30%,transparent)] bg-[color-mix(in_srgb,var(--save)_6%,transparent)] px-4 py-2.5 font-mono text-[10.5px] text-[var(--g-ink-2)]">
-        <span className="tone-save">[live]</span> Agent cards (GET /agents/registry), door usage (GET /agents/door-stats),
-        {" "}the audit-chain chip (GET /lifecycle/audit/verify) and the MCP traffic feed (GET /lifecycle/journal?tail=20) all read real state.
-        {" "}<span className="tone-cost">[fixture]</span> The header&apos;s weekly-actions / approval / inference figures and the ops recommendations below
-        {" "}still await GET /agents/registry/stats + GET /agents/recommendations (spec §9.6).
-      </div>
+      <DevOnly>
+        <div className="rise d1 mt-3 rounded-[10px] border border-[color-mix(in_srgb,var(--save)_30%,transparent)] bg-[color-mix(in_srgb,var(--save)_6%,transparent)] px-4 py-2.5 font-mono text-[10.5px] text-[var(--g-ink-2)]">
+          <span className="tone-save">[live]</span> Agent cards (GET /agents/registry), door usage (GET /agents/door-stats),
+          {" "}the audit-chain chip (GET /lifecycle/audit/verify) and the MCP traffic feed (GET /lifecycle/journal?tail=20) all read real state.
+          {" "}<span className="tone-cost">[fixture]</span> The header&apos;s weekly-actions / approval / inference figures and the ops recommendations below
+          {" "}still await GET /agents/registry/stats + GET /agents/recommendations (spec §9.6).
+        </div>
+      </DevOnly>
 
       {/* ---- agent crew (2-column grid) — [live] GET /agents/registry ---- */}
       {agents === null ? (
@@ -292,9 +296,11 @@ export default function StaffPage() {
             );
           })}
         </div>
-        <div className="border-t border-[var(--g-hairline-soft)] px-5 py-1.5 font-mono text-[10px] text-[var(--g-ink-3)]">
-          <span className="tone-save">[live]</span> GET /agents/door-stats — counts <b>mutating</b> audit events (memo signs, confirms, plan writes…) stamped with their door, not all read traffic.
-        </div>
+        <DevOnly>
+          <div className="border-t border-[var(--g-hairline-soft)] px-5 py-1.5 font-mono text-[10px] text-[var(--g-ink-3)]">
+            <span className="tone-save">[live]</span> GET /agents/door-stats — counts <b>mutating</b> audit events (memo signs, confirms, plan writes…) stamped with their door, not all read traffic.
+          </div>
+        </DevOnly>
         {/* traffic feed — LIVE: GET /lifecycle/journal?tail=20 (hash-chained journal tail) */}
         <div className="font-mono text-[10.5px]">
           {journal === null ? (
@@ -336,17 +342,17 @@ export default function StaffPage() {
         ))}
       </div>
 
-      {/* ---- ops recommendations (FIXTURE) ---- */}
-      {/* TODO(integration: GET /agents/recommendations) — surface ops recommendations */}
-      <Panel className="rise d6 mt-[22px] px-5 py-4">
-        <MicroLabel className="text-[var(--g-ink-3)]">ops recommendations [fixture]</MicroLabel>
-        <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--g-ink-2)]">
-          2 clients are missing goals briefs — analyses will be weaker for them.{" "}
-          <Link href="/book" className="text-[var(--agent)] underline underline-offset-2">
-            Request intake →
-          </Link>
-        </p>
-      </Panel>
+      <DevOnly>
+        <Panel className="rise d6 mt-[22px] px-5 py-4">
+          <MicroLabel className="text-[var(--g-ink-3)]">ops recommendations [fixture]</MicroLabel>
+          <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--g-ink-2)]">
+            2 clients are missing goals briefs — analyses will be weaker for them.{" "}
+            <Link href="/book" className="text-[var(--agent)] underline underline-offset-2">
+              Request intake →
+            </Link>
+          </p>
+        </Panel>
+      </DevOnly>
 
       {/* ---- omnibar (the three-doors contract) ---- */}
       <div className="mt-7">

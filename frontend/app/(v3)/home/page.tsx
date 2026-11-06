@@ -31,6 +31,7 @@ import { centsToUSD } from "@/lib/format";
 import { formatDateOnly } from "@/lib/time";
 import { pickBracketSet } from "@/lib/brackets";
 import { BracketUnavailable } from "@/components/bracket-unavailable";
+import { DevOnly } from "@/components/dev-only";
 import {
   PositionInstrument,
   CliffRow,
@@ -395,9 +396,11 @@ export default function HomePage() {
                 return null;
               })()}
             </div>
-            <div className="border-t border-[var(--g-hairline-soft)] px-5 py-2.5 font-mono text-[10.5px] text-[var(--g-ink-3)]">
-              <span className="tone-cost">[additive]</span> NIIT · Add&apos;l-Medicare · QBI phase-in radar rows — from analysis sections + constants (spec §7-03).
-            </div>
+            <DevOnly>
+              <div className="border-t border-[var(--g-hairline-soft)] px-5 py-2.5 font-mono text-[10.5px] text-[var(--g-ink-3)]">
+                <span className="tone-cost">[additive]</span> NIIT · Add&apos;l-Medicare · QBI phase-in radar rows — from analysis sections + constants (spec §7-03).
+              </div>
+            </DevOnly>
           </Panel>
 
           {/* ---- your decisions: the sign-off queue reframed as YOUR calls ---- */}
@@ -466,9 +469,11 @@ export default function HomePage() {
               </div>
             ) : null}
 
-            <div className="border-t border-[var(--g-hairline-soft)] px-5 py-2.5 font-mono text-[10px] text-[var(--g-ink-3)]">
-              <span className="tone-cost">[additive]</span> full task model (5-field contracts, statutory deadlines, agent-drafted reminders) lands with spec §9.4.
-            </div>
+            <DevOnly>
+              <div className="border-t border-[var(--g-hairline-soft)] px-5 py-2.5 font-mono text-[10px] text-[var(--g-ink-3)]">
+                <span className="tone-cost">[additive]</span> full task model (5-field contracts, statutory deadlines, agent-drafted reminders) lands with spec §9.4.
+              </div>
+            </DevOnly>
           </Panel>
         </div>
 
@@ -532,7 +537,7 @@ export default function HomePage() {
                       </div>
                     </div>
                     {/* [additive: AO sync for YTD figure] */}
-                    <span className="font-mono text-[10px] text-[var(--g-ink-3)]">[AO sync: additive]</span>
+                    <span className="font-mono text-[10px] text-[var(--g-ink-3)]">—</span>
                   </div>
                 ))}
               </>
@@ -541,16 +546,20 @@ export default function HomePage() {
                 <p className="text-[12.5px] text-[var(--g-ink-3)]">
                   No entities detected on this file.
                 </p>
-                <p className="mt-1.5 font-mono text-[10px] text-[var(--g-ink-3)]">
-                  {/* TODO(integration: GET /clients/:id/business-entities + AO sync, spec §7-08) */}
-                  <span className="tone-cost">[additive]</span> the structure map (AO-synced YTD, salary curve) lands with spec §9.2 + §7-08.
-                </p>
+                <DevOnly>
+                  <p className="mt-1.5 font-mono text-[10px] text-[var(--g-ink-3)]">
+                    {/* TODO(integration: GET /clients/:id/business-entities + AO sync, spec §7-08) */}
+                    <span className="tone-cost">[additive]</span> the structure map (AO-synced YTD, salary curve) lands with spec §9.2 + §7-08.
+                  </p>
+                </DevOnly>
               </div>
             )}
             {myClientId ? (
-              <div className="border-t border-[var(--g-hairline-soft)] px-5 py-2.5 font-mono text-[10px] text-[var(--g-ink-3)]">
-                <span className="tone-cost">[additive]</span> YTD + books-pace flag from AO federation (spec §7-08).
-              </div>
+              <DevOnly>
+                <div className="border-t border-[var(--g-hairline-soft)] px-5 py-2.5 font-mono text-[10px] text-[var(--g-ink-3)]">
+                  <span className="tone-cost">[additive]</span> YTD + books-pace flag from AO federation (spec §7-08).
+                </div>
+              </DevOnly>
             ) : null}
           </Panel>
 
@@ -592,9 +601,11 @@ export default function HomePage() {
                 <div className="px-5 py-4 text-[12.5px] text-[var(--g-ink-3)]">
                   No quarterly estimates yet. The engine computes these from your confirmed return.
                 </div>
-                <div className="border-t border-[var(--g-hairline-soft)] px-5 py-2.5 font-mono text-[10px] text-[var(--g-ink-3)]">
-                  <span className="tone-cost">[additive]</span> quarterly from GET /clients/{myClientId ?? ":id"}/quarterly when available.
-                </div>
+                <DevOnly>
+                  <div className="border-t border-[var(--g-hairline-soft)] px-5 py-2.5 font-mono text-[10px] text-[var(--g-ink-3)]">
+                    <span className="tone-cost">[additive]</span> quarterly from GET /clients/{myClientId ?? ":id"}/quarterly when available.
+                  </div>
+                </DevOnly>
               </>
             )}
           </Panel>
@@ -632,7 +643,7 @@ export default function HomePage() {
           hot
           label={<Term k="marginal-rate">true next-dollar</Term>}
           value="—"
-          detail="EMR sweep — additive (spec §9.3)"
+          detail="see the Lab"
         />
         <RateCell
           label={<Term k="effective-rate">average rate</Term>}
@@ -651,11 +662,13 @@ export default function HomePage() {
         <Omnibar placeholder="Ask the strategist about your plan…" />
       </div>
 
-      <footer className="mt-8 font-mono text-[9.5px] text-[var(--g-ink-3)]">
-        Surface 14 — Your Plan (solo / company posture) · your file: {overview.client.display_name}
-        {/* TODO(integration: posture resolver spec §7-14 + workspace switcher) — v1 uses first client; full file selection additive */}
-        {" "}&nbsp;·&nbsp; <span className="tone-cost">[additive]</span> posture resolver (solo vs firm), workspace switcher (you / your company / a firm).
-      </footer>
+      <DevOnly>
+        <footer className="mt-8 font-mono text-[9.5px] text-[var(--g-ink-3)]">
+          Surface 14 — Your Plan (solo / company posture) · your file: {overview.client.display_name}
+          {/* TODO(integration: posture resolver spec §7-14 + workspace switcher) — v1 uses first client; full file selection additive */}
+          {" "}&nbsp;·&nbsp; <span className="tone-cost">[additive]</span> posture resolver (solo vs firm), workspace switcher (you / your company / a firm).
+        </footer>
+      </DevOnly>
     </div>
   );
 }

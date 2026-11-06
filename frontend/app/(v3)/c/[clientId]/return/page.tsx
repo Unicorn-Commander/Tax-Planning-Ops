@@ -26,6 +26,7 @@ import api from "@/lib/api";
 import { centsToUSD } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
 import { useClientOverview, type YearRow } from "@/components/client-overview";
+import { DevOnly } from "@/components/dev-only";
 import {
   Panel,
   PanelHead,
@@ -383,9 +384,11 @@ export default function ReturnPage() {
                     </div>
                   );
                 })}
-                <p className="font-mono text-[6.5px] text-[#8a8479] mt-3 text-center">
-                  OCR bounding boxes are [additive] — live overlays land with the extended extraction payload
-                </p>
+                <DevOnly>
+                  <p className="font-mono text-[6.5px] text-[#8a8479] mt-3 text-center">
+                    OCR bounding boxes are [additive] — live overlays land with the extended extraction payload
+                  </p>
+                </DevOnly>
               </div>
             </div>
           </div>
@@ -547,7 +550,7 @@ export default function ReturnPage() {
                 </tbody>
               </table>
               <p className="px-5 py-3 text-[11.5px] text-[var(--g-ink-3)] border-t border-[var(--g-hairline-soft)]">
-                <SourceDot source="doc" /> blue = read from the document (click → page region [additive]) &nbsp;
+                <SourceDot source="doc" /> blue = read from the document &nbsp;
                 <SourceDot source="eng" /> teal = engine-computed (click → trace) &nbsp;
                 <SourceDot source="adv" /> gold = advisor-entered. Negatives in parentheses — CPA dialect.
               </p>
