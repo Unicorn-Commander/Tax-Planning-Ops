@@ -45,6 +45,9 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
 import { centsToUSD } from "@/lib/format";
+import { pickBracketSet } from "@/lib/brackets";
+import { BracketUnavailable } from "@/components/bracket-unavailable";
+import { DevOnly } from "@/components/dev-only";
 import { useClientOverview, type YearRow } from "@/components/client-overview";
 import {
   PositionInstrument,
@@ -322,12 +325,7 @@ export default function LabPage() {
   const { segments, irmaaPin, irmaaCliffCents, fedRows } = useMemo(() => {
     const empty = { segments: [] as Segment[], irmaaPin: null as Pin | null, irmaaCliffCents: null as number | null, fedRows: [] as BracketRow[] };
     if (!sets || !planYear || !snap) return empty;
-    const fed = sets.filter((s) => s.jurisdiction?.toLowerCase().includes("fed"));
-    const pool = fed.length ? fed : sets;
-    const set =
-      pool.find((s) => s.tax_year === planYear.tax_year && s.filing_status === planYear.filing_status) ??
-      pool.find((s) => s.filing_status === planYear.filing_status) ??
-      pool[0];
+    const set = pickBracketSet(sets, planYear.tax_year, planYear.filing_status);
     if (!set) return empty;
     const rows = [...set.rows].sort((a, b) => a.lower_bound_cents - b.lower_bound_cents);
     const topLower = rows[rows.length - 1]?.lower_bound_cents ?? 0;
@@ -656,9 +654,7 @@ export default function LabPage() {
             </div>
           </div>
         ) : (
-          <p className="text-[13px] text-[var(--g-ink-3)]">
-            Bracket set unavailable for {planYear.tax_year} {planYear.filing_status}.
-          </p>
+          <BracketUnavailable year={planYear.tax_year} filingStatus={planYear.filing_status} />
         )}
 
         {/* Readout chips — REAL engine output (scenario endpoint) ---- */}
@@ -708,12 +704,13 @@ export default function LabPage() {
           </Link>
         </div>
 
-        {/* Honesty note */}
-        <div className="mt-4 rounded-[8px] border border-dashed border-[var(--g-hairline)] bg-[var(--g-bg-2)] px-3 py-2 font-mono text-[10px] text-[var(--g-ink-3)]">
-          <span className="tone-save">[live]</span> The conversion tax and scenario marginal above are real engine recomputes via{" "}
-          <code>POST /agents/clients/tax-years/:id/scenario</code> ({"delta_fields: ira_taxable_cents"}) — the full fold (SE, QBI, AMT, NIIT)
-          runs server-side. The IRMAA cliff cost is the real analysis figure. Baseline is the immutable snapshot. Spec §9.2.
-        </div>
+        <DevOnly>
+          <div className="mt-4 rounded-[8px] border border-dashed border-[var(--g-hairline)] bg-[var(--g-bg-2)] px-3 py-2 font-mono text-[10px] text-[var(--g-ink-3)]">
+            <span className="tone-save">[live]</span> The conversion tax and scenario marginal above are real engine recomputes via{" "}
+            <code>POST /agents/clients/tax-years/:id/scenario</code> ({"delta_fields: ira_taxable_cents"}) — the full fold (SE, QBI, AMT, NIIT)
+            runs server-side. The IRMAA cliff cost is the real analysis figure. Baseline is the immutable snapshot. Spec §9.2.
+          </div>
+        </DevOnly>
       </Panel>
 
       {/* ===== EMR TERRAIN ===== */}
@@ -764,11 +761,13 @@ export default function LabPage() {
             ]}
           />
         </div>
-        <div className="border-t border-[var(--g-hairline-soft)] px-5 py-3 font-mono text-[10px] text-[var(--g-ink-3)]">
-          <span className="tone-save">[live]</span> Curve = the engine&rsquo;s effective marginal (Δtax / Δincome) per step via{" "}
-          <code>POST /agents/clients/tax-years/:id/emr-sweep</code>. Dashed = the bracket table (real). Vertical lines = real cliff
-          thresholds (IRMAA / NIIT) — threshold income only; the per-cliff dollar cost is honestly not drawn here.
-        </div>
+        <DevOnly>
+          <div className="border-t border-[var(--g-hairline-soft)] px-5 py-3 font-mono text-[10px] text-[var(--g-ink-3)]">
+            <span className="tone-save">[live]</span> Curve = the engine&rsquo;s effective marginal (Δtax / Δincome) per step via{" "}
+            <code>POST /agents/clients/tax-years/:id/emr-sweep</code>. Dashed = the bracket table (real). Vertical lines = real cliff
+            thresholds (IRMAA / NIIT) — threshold income only; the per-cliff dollar cost is honestly not drawn here.
+          </div>
+        </DevOnly>
       </Panel>
 
       {/* ===== SCENARIO LEDGER ===== */}
@@ -835,21 +834,23 @@ export default function LabPage() {
             <tr>
               <td className="rowlab px-4 py-2 text-[12px] text-[var(--g-ink-2)]">
                 Lifetime tax (to {planYear.tax_year + 14}, NPV){" "}
-                <span className="font-mono text-[9px] text-[var(--g-ink-3)]">[additive]</span>
+                <DevOnly><span className="font-mono text-[9px] text-[var(--g-ink-3)]">[additive]</span></DevOnly>
               </td>
               {scenarios.map((col) => (
                 <td key={col.id} className="r px-4 py-2 text-right fig text-[13px] text-[var(--g-ink-3)]">
-                  — <span className="font-mono text-[8.5px]">awaiting endpoint</span>
+                  —<DevOnly> <span className="font-mono text-[8.5px]">awaiting endpoint</span></DevOnly>
                 </td>
               ))}
             </tr>
           </tbody>
         </table>
-        <div className="border-t border-[var(--g-hairline-soft)] px-5 py-3 text-[12px] text-[var(--g-ink-3)]">
-          <span className="font-mono text-[10px] tone-save">[live]</span> Baseline = real snapshot; the conversion column is a real engine
-          recompute (<code>POST /agents/clients/tax-years/:id/scenario</code>) — drag the handle to change it. The lifetime-NPV row genuinely
-          awaits a multi-year projection endpoint. Parentheses in print; negatives never bare-minus in CPA tables.
-        </div>
+        <DevOnly>
+          <div className="border-t border-[var(--g-hairline-soft)] px-5 py-3 text-[12px] text-[var(--g-ink-3)]">
+            <span className="font-mono text-[10px] tone-save">[live]</span> Baseline = real snapshot; the conversion column is a real engine
+            recompute (<code>POST /agents/clients/tax-years/:id/scenario</code>) — drag the handle to change it. The lifetime-NPV row genuinely
+            awaits a multi-year projection endpoint. Parentheses in print; negatives never bare-minus in CPA tables.
+          </div>
+        </DevOnly>
       </Panel>
 
       {/* ===== CROSSOVER + FILL SCHEDULE ===== */}
@@ -898,11 +899,13 @@ export default function LabPage() {
               { label: "tax cost of the fill (engine)", tone: "var(--cost)", dashed: false },
             ]}
           />
-          <div className="border-t border-[var(--g-hairline-soft)] px-4 pb-3 pt-2 font-mono text-[9.5px] text-[var(--g-ink-3)]">
-            <span className="tone-save">[live]</span> Each point is the real incremental tax cost as the conversion grows, via{" "}
-            <code>optimize/roth</code> (single-year bracket fill). The engine returns one recommended conversion + this cost trace —
-            not a multi-year calendar projection.
-          </div>
+          <DevOnly>
+            <div className="border-t border-[var(--g-hairline-soft)] px-4 pb-3 pt-2 font-mono text-[9.5px] text-[var(--g-ink-3)]">
+              <span className="tone-save">[live]</span> Each point is the real incremental tax cost as the conversion grows, via{" "}
+              <code>optimize/roth</code> (single-year bracket fill). The engine returns one recommended conversion + this cost trace —
+              not a multi-year calendar projection.
+            </div>
+          </DevOnly>
         </Panel>
 
         {/* Fill schedule — real optimizer trace increments */}
@@ -938,10 +941,12 @@ export default function LabPage() {
           ) : (
             <div className="px-4 py-6 text-center font-mono text-[11px] text-[var(--g-ink-3)]">No conversion headroom at this income.</div>
           )}
-          <div className="border-t border-[var(--g-hairline-soft)] px-4 py-2.5 font-mono text-[9.5px] text-[var(--g-ink-3)]">
-            <span className="tone-save">[live]</span> Increments + marginal-at-step from the engine trace (<code>optimize/roth</code>).
-            Single-year bracket fill — the schedule is the fill, not a multi-year calendar ladder.
-          </div>
+          <DevOnly>
+            <div className="border-t border-[var(--g-hairline-soft)] px-4 py-2.5 font-mono text-[9.5px] text-[var(--g-ink-3)]">
+              <span className="tone-save">[live]</span> Increments + marginal-at-step from the engine trace (<code>optimize/roth</code>).
+              Single-year bracket fill — the schedule is the fill, not a multi-year calendar ladder.
+            </div>
+          </DevOnly>
         </Panel>
       </div>
 

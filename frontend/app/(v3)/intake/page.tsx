@@ -30,6 +30,7 @@ import { useSearchParams } from "next/navigation";
 import { Check, Edit2, FileText, Sparkles, ChevronRight } from "lucide-react";
 import { isAxiosError } from "axios";
 import api from "@/lib/api";
+import { DevOnly } from "@/components/dev-only";
 import { cn } from "@/lib/cn";
 import {
   MicroLabel,
@@ -871,11 +872,13 @@ function IntakeInner() {
 
             {/* honesty note — per IMPLEMENTATION-BRIEF §1 Honesty Protocol */}
             <div className="mt-2 rounded-[6px] border border-dashed border-[var(--g-hairline-soft)] bg-[var(--g-surface)] px-3 py-2 font-mono text-[9.5px] text-[var(--g-ink-3)]">
-              {/* TODO(integration: POST /agents/provisional-snapshot) */}
-              <span className="text-[var(--cost)]">[additive]</span> These figures are rough client-side estimates (±), not engine output.
-              The provisional snapshot from rough inputs lands with the{" "}
-              <code>POST /agents/provisional-snapshot</code> endpoint (spec §9, additive).
-              See <code>INTEGRATION-TODO.17.md</code>.
+              These figures are rough estimates (±), not engine output.
+              <DevOnly>
+                {" "}{/* TODO(integration: POST /agents/provisional-snapshot) */}
+                <span className="text-[var(--cost)]">[additive]</span> The provisional snapshot from rough inputs lands with the{" "}
+                <code>POST /agents/provisional-snapshot</code> endpoint (spec §9, additive).
+                See <code>INTEGRATION-TODO.17.md</code>.
+              </DevOnly>
             </div>
           </section>
         )}

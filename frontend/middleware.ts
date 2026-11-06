@@ -40,6 +40,13 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL(`/c/${id}${sub}`, req.url));
   }
 
+  // The bracket editor is still the v1 tax-tables page. Case, Lab, and Home
+  // send advisors here when a year has no rows ("Load the bracket set in
+  // Admin → Brackets"). Every other /admin URL stays on the v3 playbook.
+  if (pathname === "/admin/brackets" || pathname.startsWith("/admin/brackets/")) {
+    return NextResponse.next();
+  }
+
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
     return NextResponse.redirect(new URL("/playbook", req.url));
   }

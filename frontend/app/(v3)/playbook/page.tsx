@@ -18,6 +18,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
+import { DevOnly, SHOW_DEV_LABELS } from "@/components/dev-only";
 import {
   Panel,
   PanelHead,
@@ -265,10 +266,12 @@ export default function PlaybookPage() {
       {/* SPEC · "fits N clients · $X live" = matrix column totals (book-scan).
           [additive: matrix endpoint] — rendered as an honest note below the grid. */}
       {!isLoading && activeStrategies.length > 0 ? (
-        <div className="rise d2 mt-3 inline-flex items-center gap-2 rounded-[8px] border border-dashed border-[var(--g-hairline)] bg-[var(--g-bg-2)] px-3 py-1.5 font-mono text-[10.5px] text-[var(--g-ink-3)]">
-          <span className="dot" style={{ background: "var(--cost)" }} />
-          {ADDITIVE_COUNTERS_NOTE}
-        </div>
+        <DevOnly>
+          <div className="rise d2 mt-3 inline-flex items-center gap-2 rounded-[8px] border border-dashed border-[var(--g-hairline)] bg-[var(--g-bg-2)] px-3 py-1.5 font-mono text-[10.5px] text-[var(--g-ink-3)]">
+            <span className="dot" style={{ background: "var(--cost)" }} />
+            {ADDITIVE_COUNTERS_NOTE}
+          </div>
+        </DevOnly>
       ) : null}
 
       {/* ---- the constants ---- */}
@@ -300,7 +303,9 @@ export default function PlaybookPage() {
                 </tr>
               </thead>
               <tbody>
-                {constantsRows.map((row) => (
+                {constantsRows
+                  .filter((row) => SHOW_DEV_LABELS || !row.isAdditive)
+                  .map((row) => (
                   <ConstantsRow
                     key={row.label}
                     row={row}
@@ -313,18 +318,20 @@ export default function PlaybookPage() {
         )}
 
         <div className="flex flex-wrap items-center gap-3 border-t border-[var(--g-hairline-soft)] px-5 py-3.5">
-          <Stamp kind="verified" className="!transform-none">148 golden tests green</Stamp>
+          <DevOnly><Stamp kind="verified" className="!transform-none">148 golden tests green</Stamp></DevOnly>
           <span className="text-[12px] text-[var(--g-ink-3)]">every value hand-derived, adversarially verified, and guarded — engines are constant-free by test</span>
           <Chip className="ml-auto">a constants change re-ranks the book + redlines affected memos</Chip>
         </div>
 
         {/* [additive] note: per-row test counts and all non-std-ded rows are fixture */}
-        <div className="flex items-center gap-2 border-t border-[var(--g-hairline-soft)] px-5 py-2.5 font-mono text-[10.5px] text-[var(--g-ink-3)]">
-          <span className="dot" style={{ background: "var(--cost)" }} />
-          {ADDITIVE_TESTS_NOTE}
-          {" · "}
-          <span className="tone-cost">[fixture]</span> AMT / QBI / IRMAA / SS / state rows — awaiting richer constants metadata endpoint (spec §9.8)
-        </div>
+        <DevOnly>
+          <div className="flex items-center gap-2 border-t border-[var(--g-hairline-soft)] px-5 py-2.5 font-mono text-[10.5px] text-[var(--g-ink-3)]">
+            <span className="dot" style={{ background: "var(--cost)" }} />
+            {ADDITIVE_TESTS_NOTE}
+            {" · "}
+            <span className="tone-cost">[fixture]</span> AMT / QBI / IRMAA / SS / state rows — awaiting richer constants metadata endpoint (spec §9.8)
+          </div>
+        </DevOnly>
       </Panel>
 
       <div className="mt-7">
@@ -364,7 +371,7 @@ function PlayCard({ strategy }: { strategy: Strategy }) {
           </span>
         )}
         {/* TODO(integration: GET /agents/matrix) — "fits N · $X live" from matrix endpoint */}
-        <span className="ml-auto font-mono text-[10.5px] text-[var(--g-ink-3)]" title={ADDITIVE_COUNTERS_NOTE}>
+        <span className="ml-auto font-mono text-[10.5px] text-[var(--g-ink-3)]" title={SHOW_DEV_LABELS ? ADDITIVE_COUNTERS_NOTE : undefined}>
           {engine ? "fits — · —" : "fits — · advisor-priced"}
         </span>
       </div>
@@ -479,7 +486,7 @@ function ConstantsRow({ row, yearView }: { row: ConstantRow; yearView: YearView 
           >
             {row.val2026 ?? "—"}
             {row.isAdditive ? <FixtureMark /> : null}
-            {row.whyChip ? (
+            {SHOW_DEV_LABELS && row.whyChip ? (
               <span className="ml-2 font-mono text-[9.5px] text-[var(--seal)]"> {row.whyChip}</span>
             ) : null}
           </td>
@@ -495,8 +502,7 @@ function ConstantsRow({ row, yearView }: { row: ConstantRow; yearView: YearView 
         <Chip className="text-[10px]">{row.source}</Chip>
       </td>
       <td className="r fig" style={{ color: "var(--save)" }}>
-        ✓ {row.tests}
-        {row.isAdditive ? <FixtureMark /> : null}
+        {SHOW_DEV_LABELS ? <>✓ {row.tests}{row.isAdditive ? <FixtureMark /> : null}</> : "—"}
       </td>
     </tr>
   );

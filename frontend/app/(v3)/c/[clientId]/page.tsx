@@ -12,6 +12,9 @@
 import { useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
 import { centsToUSD } from "@/lib/format";
+import { pickBracketSet } from "@/lib/brackets";
+import { BracketUnavailable } from "@/components/bracket-unavailable";
+import { DevOnly } from "@/components/dev-only";
 import { useClientOverview, type YearRow } from "@/components/client-overview";
 import {
   PositionInstrument,
@@ -90,11 +93,7 @@ export default function CasePage() {
   const { segments, pins, headroom } = useMemo(() => {
     const empty = { segments: [] as Segment[], pins: [] as Pin[], headroom: undefined as Headroom | undefined };
     if (!sets || !planYear || !snap) return empty;
-    const fed = sets.filter((s) => s.jurisdiction?.toLowerCase().includes("fed"));
-    const pool = fed.length ? fed : sets;
-    const set = pool.find((s) => s.tax_year === planYear.tax_year && s.filing_status === planYear.filing_status)
-      ?? pool.find((s) => s.filing_status === planYear.filing_status)
-      ?? pool[0];
+    const set = pickBracketSet(sets, planYear.tax_year, planYear.filing_status);
     if (!set) return empty;
     const rows = [...set.rows].sort((a, b) => a.lower_bound_cents - b.lower_bound_cents);
     const topLower = rows[rows.length - 1]?.lower_bound_cents ?? 0;
@@ -199,7 +198,7 @@ export default function CasePage() {
           hot
           label={<Term k="marginal-rate">true next-dollar</Term>}
           value="—"
-          detail="EMR sweep — additive (spec §9.3)"
+          detail="see the Lab"
         />
         <RateCell
           label={<Term k="effective-rate">average rate</Term>}
@@ -238,7 +237,7 @@ export default function CasePage() {
             </div>
           </>
         ) : (
-          <p className="text-[13px] text-[var(--g-ink-3)]">Bracket set unavailable for {planYear.tax_year} {planYear.filing_status}.</p>
+          <BracketUnavailable year={planYear.tax_year} filingStatus={planYear.filing_status} />
         )}
       </Panel>
 
@@ -273,9 +272,11 @@ export default function CasePage() {
                 />
               ) : null}
             </div>
-            <div className="border-t border-[var(--g-hairline-soft)] px-5 py-2.5 font-mono text-[10.5px] text-[var(--g-ink-3)]">
-              <span className="tone-cost">[additive]</span> NIIT · Add&apos;l-Medicare · QBI phase-in radar rows — from analysis sections + constants (spec §7-03).
-            </div>
+            <DevOnly>
+              <div className="border-t border-[var(--g-hairline-soft)] px-5 py-2.5 font-mono text-[10.5px] text-[var(--g-ink-3)]">
+                <span className="tone-cost">[additive]</span> NIIT · Add&apos;l-Medicare · QBI phase-in radar rows — from analysis sections + constants (spec §7-03).
+              </div>
+            </DevOnly>
           </Panel>
 
           {/* ---- filed vs plan ---- */}
@@ -361,26 +362,27 @@ export default function CasePage() {
                   </>
                 ) : (
                   <p className="mt-2 text-[13px] text-[var(--g-ink-2)]">
-                    No openings flagged yet on this year. The watch note&apos;s BECAUSE line (goals + the data that triggered it) wires with the strategist run stream (spec §7-03, additive).
+                    No openings flagged yet on this year.
                   </p>
                 )}
               </div>
             </div>
           </Panel>
 
-          {/* what this exemplar proves, for the swarm + Aaron */}
-          <Panel className="rise d5 p-5">
-            <div className="flex items-center gap-2">
-              <span className="dot dot-live" />
-              <MicroLabel>exemplar — the kit, proven on real data</MicroLabel>
-            </div>
-            <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--g-ink-2)]">
-              The Position renders from real bracket spans + the live snapshot; every figure opens its
-              provenance; the cliff radar + filed-vs-plan + the plan are live. The reference the
-              Phase-1 swarm copies. Secondary cards (entities map, the brief, the BECAUSE watch line)
-              + the EMR true-rate land next.
-            </p>
-          </Panel>
+          <DevOnly>
+            <Panel className="rise d5 p-5">
+              <div className="flex items-center gap-2">
+                <span className="dot dot-live" />
+                <MicroLabel>exemplar — the kit, proven on real data</MicroLabel>
+              </div>
+              <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--g-ink-2)]">
+                The Position renders from real bracket spans + the live snapshot; every figure opens its
+                provenance; the cliff radar + filed-vs-plan + the plan are live. The reference the
+                Phase-1 swarm copies. Secondary cards (entities map, the brief, the BECAUSE watch line)
+                + the EMR true-rate land next.
+              </p>
+            </Panel>
+          </DevOnly>
         </div>
       </div>
 

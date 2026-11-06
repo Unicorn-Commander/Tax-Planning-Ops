@@ -20,6 +20,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
+import { pickBracketSet } from "@/lib/brackets";
+import { DevOnly } from "@/components/dev-only";
 import { centsToUSD } from "@/lib/format";
 import { currentBusinessQuarter } from "@/lib/time";
 import {
@@ -71,11 +73,8 @@ interface JournalStatus { count: number; latest_hash: string | null; latest_at: 
 interface JournalTail { events: JournalEvent[]; status: JournalStatus }
 
 function buildSegments(sets: BracketSet[], year: number, filing: string): Segment[] {
-  if (!sets.length) return [];
-  const fed = sets.filter((s) => s.jurisdiction?.toLowerCase().includes("fed"));
-  const pool = fed.length ? fed : sets;
-  const set = pool.find((s) => s.tax_year === year && s.filing_status === filing) ?? pool.find((s) => s.filing_status === filing) ?? pool[0];
-  if (!set) return [];
+  const set = pickBracketSet(sets, year, filing);
+  if (!set?.rows?.length) return [];
   const rows = [...set.rows].sort((a, b) => a.lower_bound_cents - b.lower_bound_cents);
   const topLower = rows[rows.length - 1]?.lower_bound_cents ?? 0;
   const cap = topLower + 150_000_00;
@@ -321,9 +320,11 @@ export default function DeskPage() {
                 />
               ))
             )}
-            <div className="border-t border-[var(--g-hairline-soft)] px-5 py-2 font-mono text-[10px] text-[var(--g-ink-3)]">
-              <span className="tone-seal">[live]</span> drafted memos (GET /memos/pending) · <span className="tone-cost">[additive]</span> low-confidence-extraction items join with the per-client extraction list.
-            </div>
+            <DevOnly>
+              <div className="border-t border-[var(--g-hairline-soft)] px-5 py-2 font-mono text-[10px] text-[var(--g-ink-3)]">
+                <span className="tone-seal">[live]</span> drafted memos (GET /memos/pending) · <span className="tone-cost">[additive]</span> low-confidence-extraction items join with the per-client extraction list.
+              </div>
+            </DevOnly>
           </Panel>
 
           {/* ===== book pulse ===== */}
@@ -396,7 +397,9 @@ export default function DeskPage() {
                 );
               })
             )}
-            <div className="border-t border-[var(--g-hairline-soft)] px-[18px] py-1.5 font-mono text-[10px] text-[var(--g-ink-3)]"><span className="tone-seal">[live]</span> presence + last activity from the agent registry (GET /agents/registry)</div>
+            <DevOnly>
+              <div className="border-t border-[var(--g-hairline-soft)] px-[18px] py-1.5 font-mono text-[10px] text-[var(--g-ink-3)]"><span className="tone-seal">[live]</span> presence + last activity from the agent registry (GET /agents/registry)</div>
+            </DevOnly>
           </Panel>
 
           {/* the season at a glance — real quarterly */}

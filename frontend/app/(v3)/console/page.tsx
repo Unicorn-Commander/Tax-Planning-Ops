@@ -22,6 +22,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import api from "@/lib/api";
+import { DevOnly } from "@/components/dev-only";
 import { getStoredWorkspaceId, WORKSPACE_HEADER_NAME } from "@/lib/workspace";
 import {
   ConsolePane,
@@ -493,12 +494,14 @@ function ConsoleInner() {
               as it lands, then the authored <b>memo</b> — ending on the real totals. Every dollar is
               engine-computed server-side.
             </p>
-            <ul className="mt-3 space-y-1.5 text-[12.5px] text-[var(--g-ink-3)]">
-              <li><b className="tone-agent">[live]</b> strategist / propose-plan / scan-book are the answer engine.</li>
-              <li><b className="tone-agent">[live]</b> the streaming run — plan, call trace, findings, and memo over <code>POST …/strategist/stream</code>.</li>
-              <li><b className="tone-agent">[live]</b> the MCP server (door 3) — a real stdio server, 31 tools, manifest 0.2.0, Brigade-discoverable.</li>
-              <li><b className="tone-cost">[additive]</b> inline-artifact &quot;open in full&quot; deep-links, GUI↔chat edit-sync, and priced-question objects (the stream lands findings, not interactive priced questions).</li>
-            </ul>
+            <DevOnly>
+              <ul className="mt-3 space-y-1.5 text-[12.5px] text-[var(--g-ink-3)]">
+                <li><b className="tone-agent">[live]</b> strategist / propose-plan / scan-book are the answer engine.</li>
+                <li><b className="tone-agent">[live]</b> the streaming run — plan, call trace, findings, and memo over <code>POST …/strategist/stream</code>.</li>
+                <li><b className="tone-agent">[live]</b> the MCP server (door 3) — a real stdio server, 31 tools, manifest 0.2.0, Brigade-discoverable.</li>
+                <li><b className="tone-cost">[additive]</b> inline-artifact &quot;open in full&quot; deep-links, GUI↔chat edit-sync, and priced-question objects (the stream lands findings, not interactive priced questions).</li>
+              </ul>
+            </DevOnly>
           </Panel>
         ) : (
           <>
@@ -624,12 +627,13 @@ function ConsoleInner() {
               </Panel>
             ) : null}
 
-            {/* honesty footer — what's still genuinely pending */}
-            <div className="rounded-[8px] border border-dashed border-[var(--g-hairline)] bg-[var(--g-bg-2)] px-3 py-2 font-mono text-[10px] text-[var(--g-ink-3)]">
-              <span className="tone-agent">[live]</span> plan · the literal engine-call feed · findings · the authored memo · the totals — all real engine output streamed over{" "}
-              <code>POST /agents/clients/tax-years/:id/strategist/stream</code>.{" "}
-              <span className="tone-cost">[additive]</span> inline-artifact &quot;open in full&quot; deep-links, GUI↔chat edit-sync, and priced-question objects (the stream lands findings, not interactive priced questions).
-            </div>
+            <DevOnly>
+              <div className="rounded-[8px] border border-dashed border-[var(--g-hairline)] bg-[var(--g-bg-2)] px-3 py-2 font-mono text-[10px] text-[var(--g-ink-3)]">
+                <span className="tone-agent">[live]</span> plan · the literal engine-call feed · findings · the authored memo · the totals — all real engine output streamed over{" "}
+                <code>POST /agents/clients/tax-years/:id/strategist/stream</code>.{" "}
+                <span className="tone-cost">[additive]</span> inline-artifact &quot;open in full&quot; deep-links, GUI↔chat edit-sync, and priced-question objects (the stream lands findings, not interactive priced questions).
+              </div>
+            </DevOnly>
           </>
         )}
       </div>

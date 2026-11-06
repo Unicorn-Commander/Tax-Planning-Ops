@@ -26,6 +26,7 @@ import { centsToUSD } from "@/lib/format";
 import { businessDate } from "@/lib/time";
 import { useAction } from "@/lib/useAction";
 import { useClientOverview } from "@/components/client-overview";
+import { DevOnly } from "@/components/dev-only";
 import {
   Panel,
   PanelHead,
@@ -280,12 +281,14 @@ export default function BriefPage() {
 
         <Timeline profile={p} />
 
-        <div className="mt-3 px-[30px] font-mono text-[9.5px] text-[var(--g-ink-3)]">
-          {/* TODO(integration: GET /clients/{id}/timeline-shadows) */}
-          <span className="tone-cost mr-1">[additive]</span>
-          Shadow bands (residency clock, Roth valley, IRMAA lookback) are derived from the multiyear +
-          state engines — shown as labeled placeholders until the shadow-derivation endpoint lands.
-        </div>
+        <DevOnly>
+          <div className="mt-3 px-[30px] font-mono text-[9.5px] text-[var(--g-ink-3)]">
+            {/* TODO(integration: GET /clients/{id}/timeline-shadows) */}
+            <span className="tone-cost mr-1">[additive]</span>
+            Shadow bands (residency clock, Roth valley, IRMAA lookback) are derived from the multiyear +
+            state engines — shown as labeled placeholders until the shadow-derivation endpoint lands.
+          </div>
+        </DevOnly>
       </Panel>
 
       {/* ======================================================== two-col grid ======= */}
@@ -410,10 +413,12 @@ export default function BriefPage() {
                 </p>
               </div>
             </div>
-            <div className="mt-5 border-t border-[var(--g-hairline-soft)] pt-3 font-mono text-[9.5px] text-[var(--g-ink-3)]">
-              <span className="tone-cost">[additive]</span> Questions endpoint not yet live —
-              answers will re-run only the affected exhibits (spec §7-09).
-            </div>
+            <DevOnly>
+              <div className="mt-5 border-t border-[var(--g-hairline-soft)] pt-3 font-mono text-[9.5px] text-[var(--g-ink-3)]">
+                <span className="tone-cost">[additive]</span> Questions endpoint not yet live —
+                answers will re-run only the affected exhibits (spec §7-09).
+              </div>
+            </DevOnly>
           </div>
         </Panel>
       </div>

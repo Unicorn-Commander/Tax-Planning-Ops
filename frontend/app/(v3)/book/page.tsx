@@ -22,6 +22,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
 import { centsToUSD } from "@/lib/format";
+import { pickBracketSet } from "@/lib/brackets";
+import { useAction } from "@/lib/useAction";
 import {
   PanelHead,
   MicroLabel,
@@ -185,14 +187,8 @@ function deriveStage(ov: Overview | undefined, scan: ScanRow | undefined): { lab
 
 // Build micro-strata segments from bracket sets + a client's filing status/year
 function buildSegments(sets: BracketSet[], year: number, filing_status: string): Segment[] {
-  if (!sets.length) return [];
-  const fed = sets.filter((s) => s.jurisdiction?.toLowerCase().includes("fed"));
-  const pool = fed.length ? fed : sets;
-  const set =
-    pool.find((s) => s.tax_year === year && s.filing_status === filing_status) ??
-    pool.find((s) => s.filing_status === filing_status) ??
-    pool[0];
-  if (!set) return [];
+  const set = pickBracketSet(sets, year, filing_status);
+  if (!set?.rows?.length) return [];
   const rows = [...set.rows].sort((a, b) => a.lower_bound_cents - b.lower_bound_cents);
   const topLower = rows[rows.length - 1]?.lower_bound_cents ?? 0;
   const cap = topLower + 150_000_00; // display ceiling above top bracket
@@ -642,7 +638,7 @@ export default function BookPage() {
           value={
             <span className="block text-[22px] font-[750] leading-none tracking-[-0.02em] text-[var(--g-ink-3)]">—</span>
           }
-          label="signed · tracking to realized [additive]"
+          label="signed · tracking to realized"
         />
         {/* LIVE: GET /agents/realized-rollup — realized reconciliation (§9.7), gold treatment */}
         <RollupNum
@@ -810,7 +806,7 @@ function RosterRow({ clientId, scanRow, client, overview, sets }: RosterRowProps
       {/* TODO(integration: GET /clients/:id/analysis/emr) — true marginal (EMR sweep) */}
       <td className="r text-right fig">
         {nominalRate !== null ? (
-          <span title="nominal bracket rate — true next-dollar (EMR) is additive (spec §9.3)">
+          <span title="nominal bracket rate">
             {(nominalRate * 100).toFixed(0)}%
           </span>
         ) : (
@@ -935,6 +931,12 @@ function RollupNum({ value, label }: { value: ReactNode; label: string }) {
 }
 
 function EmptyBook() {
+  // Same loader as Settings → "Load sample data": POST /demo/load creates the
+  // caller's "Sample Firm (demo)" workspace (idempotent if it already exists).
+  const load = useAction(async () => {
+    await api.post("/demo/load");
+    window.setTimeout(() => window.location.reload(), 600);
+  });
   return (
     <div className="px-6 py-12 text-center">
       <p className="text-[15px] font-semibold text-[var(--g-ink)]">No clients in the book yet</p>
@@ -945,10 +947,16 @@ function EmptyBook() {
         <Link href="/c/new/return" className="btn btn-ink text-[13px]">
           Drop a 1040
         </Link>
-        <button type="button" className="btn btn-ghost text-[13px]">
-          Load demo book
+        <button
+          type="button"
+          className="btn btn-ghost text-[13px]"
+          disabled={load.pending}
+          onClick={() => void load.run()}
+        >
+          {load.pending ? "Loading…" : "Load demo book"}
         </button>
       </div>
+      {load.error ? <p className="mt-3 text-[12.5px] text-[var(--cliff)]">{load.error}</p> : null}
     </div>
   );
 }

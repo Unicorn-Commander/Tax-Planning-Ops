@@ -9,6 +9,7 @@
 
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { LABEL_ROW_PITCH, staggerLabels } from "@/lib/chart-labels";
 
 /** Compact axis money: $0 / $48k / $1.2M. */
 function k(cents: number): string {
@@ -260,12 +261,17 @@ export function EMRTerrain({
   className?: string;
 }) {
   if (points.length < 2) return null;
-  const W = 560, padX = 40, padTop = 24, padBottom = 30;
-  const plotH = height - padTop - padBottom;
+  const W = 560, padX = 40, padBottom = 30;
   const xs = points.map((p) => p.incomeCents);
   const xMin = Math.min(...xs), xMax = Math.max(...xs);
   const rMax = Math.max(...points.map((p) => p.ratePct), ...(statutory ?? []).map((s) => s.ratePct), 0.4);
   const X = (c: number) => padX + ((W - padX * 2) * (c - xMin)) / Math.max(1, xMax - xMin);
+  // X does not depend on padTop, so colliding spike labels can claim rows
+  // before the plot's top padding is known.
+  const placed = staggerLabels((spikes ?? []).map((s) => ({ x: X(s.incomeCents), text: s.label })));
+  const maxRow = placed.reduce((m, p) => Math.max(m, p.row), 0);
+  const padTop = 14 + (maxRow + 1) * LABEL_ROW_PITCH;
+  const plotH = height - padTop - padBottom;
   const Y = (r: number) => padTop + plotH * (1 - r / rMax);
   const line = (pts: { incomeCents: number; ratePct: number }[]) => pts.map((p, i) => `${i === 0 ? "M" : "L"}${X(p.incomeCents)},${Y(p.ratePct)}`).join(" ");
 
@@ -279,10 +285,10 @@ export function EMRTerrain({
       ))}
       {statutory ? <path d={line(statutory)} fill="none" stroke="var(--g-ink-3)" strokeWidth={1.25} strokeDasharray="4 3" /> : null}
       <path d={line(points)} fill="none" stroke="var(--cliff)" strokeWidth={2} />
-      {spikes?.map((s, i) => (
+      {placed.map((p, i) => (
         <g key={i}>
-          <line x1={X(s.incomeCents)} y1={padTop} x2={X(s.incomeCents)} y2={height - padBottom} stroke="var(--cliff)" strokeDasharray="2 2" strokeOpacity={0.6} />
-          <text x={X(s.incomeCents)} y={padTop - 6} textAnchor="middle" className="fill-[var(--cliff)] font-mono" fontSize="8.5">{s.label}</text>
+          <line x1={p.x} y1={padTop} x2={p.x} y2={height - padBottom} stroke="var(--cliff)" strokeDasharray="2 2" strokeOpacity={0.6} />
+          <text x={p.x} y={padTop - 6 - p.row * LABEL_ROW_PITCH} textAnchor="middle" className="fill-[var(--cliff)] font-mono" fontSize="8.5">{p.text}</text>
         </g>
       ))}
       <text x={padX} y={height - 10} className="fill-[var(--g-ink-3)] font-mono" fontSize="9">{k(xMin)}</text>
