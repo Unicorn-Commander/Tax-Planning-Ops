@@ -23,6 +23,7 @@ import Link from "next/link";
 import api from "@/lib/api";
 import { centsToUSD } from "@/lib/format";
 import { pickBracketSet } from "@/lib/brackets";
+import { useAction } from "@/lib/useAction";
 import {
   PanelHead,
   MicroLabel,
@@ -930,6 +931,12 @@ function RollupNum({ value, label }: { value: ReactNode; label: string }) {
 }
 
 function EmptyBook() {
+  // Same loader as Settings → "Load sample data": POST /demo/load creates the
+  // caller's "Sample Firm (demo)" workspace (idempotent if it already exists).
+  const load = useAction(async () => {
+    await api.post("/demo/load");
+    window.setTimeout(() => window.location.reload(), 600);
+  });
   return (
     <div className="px-6 py-12 text-center">
       <p className="text-[15px] font-semibold text-[var(--g-ink)]">No clients in the book yet</p>
@@ -940,10 +947,16 @@ function EmptyBook() {
         <Link href="/c/new/return" className="btn btn-ink text-[13px]">
           Drop a 1040
         </Link>
-        <button type="button" className="btn btn-ghost text-[13px]">
-          Load demo book
+        <button
+          type="button"
+          className="btn btn-ghost text-[13px]"
+          disabled={load.pending}
+          onClick={() => void load.run()}
+        >
+          {load.pending ? "Loading…" : "Load demo book"}
         </button>
       </div>
+      {load.error ? <p className="mt-3 text-[12.5px] text-[var(--cliff)]">{load.error}</p> : null}
     </div>
   );
 }
