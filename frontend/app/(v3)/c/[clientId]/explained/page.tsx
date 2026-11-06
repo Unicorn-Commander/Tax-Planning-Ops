@@ -264,7 +264,9 @@ export default function ExplainedPage() {
           &#x2713; Read &amp; checked
         </Stamp>
         <span className="text-[12.5px] text-[var(--g-ink-3)]">
-          your {taxYear} return &middot; the math matches what you filed, to the dollar
+          {planYear.role === "plan"
+            ? <>your {taxYear} plan &middot; projected from the filed return</>
+            : <>your {taxYear} return &middot; the math matches what you filed, to the dollar</>}
         </span>
         {/* progressive disclosure: the same data in its dense form */}
         <div className="ml-auto inline-flex overflow-hidden rounded-[9px] border border-[var(--g-hairline)] text-[11.5px] font-semibold">
@@ -307,7 +309,7 @@ export default function ExplainedPage() {
           <b>
             <Money cents={totalIncomeCents} />
           </b>{" "}
-          last year. After everything,{" "}
+          in {taxYear}. After everything,{" "}
           <b>
             <Money cents={totalTaxCents} />
           </b>{" "}
@@ -562,7 +564,7 @@ export default function ExplainedPage() {
             </p>
           ) : (
             <p className="m-0 text-[16.5px] leading-[1.62] text-[var(--g-ink)]">
-              The engine is scanning for moves you could make this year. Run the
+              The engine is scanning for moves you could make in {taxYear}. Run the
               full analysis to surface any open opportunities &mdash; some are
               worth thousands, and most are straightforward to implement.
             </p>
