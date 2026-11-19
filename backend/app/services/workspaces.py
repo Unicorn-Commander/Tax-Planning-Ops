@@ -9,10 +9,11 @@ auth middleware.
 
 Since migration 0023 the app role is SELECT-only on
 ``workspace_membership``: every write goes through the migration's SECURITY
-DEFINER functions (``workspace_membership_create_workspace`` for create and
-for the self-serve home row; the member functions in ``app.services.members``
-for the rest). The definer checks re-verify the actor against
-``current_uc_uid()`` in the database.
+DEFINER functions (``workspace_membership_create_workspace`` for a fresh
+named workspace, ``workspace_membership_ensure_home`` for the self-serve
+home row; the member functions in ``app.services.members`` for the rest).
+The definer checks re-verify the actor against ``current_uc_uid()`` in the
+database.
 """
 
 from __future__ import annotations
@@ -21,9 +22,8 @@ import uuid
 from typing import Any
 
 from sqlalchemy import select, text, update
-import asyncpg
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import ProgrammingError as SAProgrammingError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import async_session_maker, bind_session_context, ensure_workspace
 from app.models.membership import WorkspaceMembership
@@ -77,12 +77,15 @@ async def ensure_home_membership(
 ) -> None:
     """Make sure the user's self-serve workspace shows up in their switcher.
 
-    Inserts a membership for (uc_uid, workspace_id) ONLY when workspace_id is the
-    caller's own self-serve workspace (uuid5 of sub, no explicit workspace claim)
-    and the caller has no row there yet. For any claimed workspace — the token's
-    workspace_id, a PAT's workspace_scope, or a header selection — this writes
-    NOTHING and changes no role. Idempotent; the insert runs through the 0023
-    definer function, which re-checks the actor against current_uc_uid().
+    Writes the (uc_uid, workspace_id) owner row ONLY when workspace_id is the
+    caller's own self-serve workspace (uuid5 of sub, no explicit workspace
+    claim) and that workspace id is still UNOCCUPIED (no membership row of any
+    user). For any claimed workspace — the token's workspace_id, a PAT's
+    workspace_scope, or a header selection — this writes NOTHING and changes
+    no role. Idempotent: a repeat call finds the existing row and does
+    nothing. The write runs through the 0023 definer
+    ``workspace_membership_ensure_home``, which re-checks the actor against
+    current_uc_uid() and itself claims the id only when unoccupied.
 
     ``claims`` must be the request's VERIFIED claims (``ctx.claims``): the
     self-serve workspace the auth middleware actually resolves is
@@ -95,28 +98,19 @@ async def ensure_home_membership(
 
     if derive_self_serve_workspace(claims) != workspace_id:
         return
-    existing = await db.scalar(
-        select(WorkspaceMembership.id).where(
-            WorkspaceMembership.workspace_id == workspace_id,
-            WorkspaceMembership.deleted_at.is_(None),
-        )
-    )
-    if existing is not None:
-        return
-    # The 0023 definer: actor must equal current_uc_uid(); binds the GUC first
-    # (the request's active workspace is this one, but be explicit).
+    # The 0023 definer: the actor must equal current_uc_uid() and the workspace
+    # id must be unoccupied; bind the request's active workspace + uc_uid GUCs
+    # explicitly (the request's active workspace is this one, but be explicit).
     await bind_session_context(db, str(workspace_id), uc_uid)
     try:
         await db.execute(
-            text(
-                "SELECT workspace_membership_create_workspace(current_uc_uid(), :name)"
-            ),
-            {"name": name},
+            text("SELECT workspace_membership_ensure_home(:ws, :name)"),
+            {"ws": workspace_id, "name": name},
         )
     except SAProgrammingError as exc:
         pgerr = getattr(exc, "orig", None)
-        if isinstance(pgerr, asyncpg.PostgresError):
-            raise PermissionError(pgerr.get_message()) from exc
+        if pgerr is not None and getattr(pgerr, "sqlstate", None) == "42501":
+            raise PermissionError(str(pgerr)) from exc
         raise
     db.expire_all()
 

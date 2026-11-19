@@ -47,6 +47,7 @@ RUNTIME_ROLE = "tax_planning_ops_app"
 
 _FUNCTIONS = (
     "workspace_membership_create_workspace(text, text)",
+    "workspace_membership_ensure_home(uuid, text)",
     "workspace_membership_add_member(uuid, text, text)",
     "    workspace_membership_accept_invitation(uuid, text, text)",
     "workspace_membership_remove_member(uuid, text, text)",
@@ -78,6 +79,51 @@ def _create_write_functions() -> None:
                 (id, user_uc_uid, workspace_id, workspace_name, role)
             VALUES (gen_random_uuid(), v_uc_uid, v_new_id, p_name, 'owner');
             RETURN v_new_id;
+        END
+        $$
+        """
+    )
+    op.execute(
+        """
+        -- Self-serve home row: claim an UNOCCUPIED workspace id as the actor's
+        -- home. create_workspace mints a fresh uuid, but the self-serve home is
+        -- derived (uuid5 of the subject) and the caller must get a row in THAT
+        -- workspace. The guard is the only claim: an owner membership for the
+        -- actor is inserted only when NO membership row of ANY user exists for
+        -- p_workspace_id — it can never join a workspace someone else has.
+        -- If the actor already has a row (idempotent re-call) it does nothing;
+        -- if anyone else has one it does nothing, no error.
+        CREATE OR REPLACE FUNCTION workspace_membership_ensure_home(
+            p_workspace_id uuid, p_name text
+        ) RETURNS void
+        LANGUAGE plpgsql
+        SECURITY DEFINER
+        SET search_path = public, pg_temp
+        AS $$
+        DECLARE
+            v_uc_uid text := current_uc_uid();
+            v_claimable boolean;
+        BEGIN
+            IF v_uc_uid IS NULL THEN
+                RAISE EXCEPTION 'workspace_membership_ensure_home: actor not authorized'
+                    USING ERRCODE = '42501';
+            END IF;
+            SELECT NOT EXISTS (
+                SELECT 1 FROM workspace_membership WHERE workspace_id = p_workspace_id
+            ) INTO v_claimable;
+            IF NOT v_claimable THEN
+                RETURN;
+            END IF;
+            IF p_name IS NULL OR p_name = '' THEN
+                RAISE EXCEPTION 'workspace_membership_ensure_home: workspace name required'
+                    USING ERRCODE = '22023';
+            END IF;
+            INSERT INTO workspaces (id, name)
+            VALUES (p_workspace_id, p_name)
+            ON CONFLICT (id) DO NOTHING;
+            INSERT INTO workspace_membership
+                (id, user_uc_uid, workspace_id, workspace_name, role)
+            VALUES (gen_random_uuid(), v_uc_uid, p_workspace_id, p_name, 'owner');
         END
         $$
         """
