@@ -28,6 +28,7 @@ async def me(
     await ensure_home_membership(
         db,
         uc_uid=ctx.uc_uid,
+        claims=ctx.claims,
         workspace_id=ctx.workspace_id,
         name=active_name or f"Workspace {str(ctx.workspace_id)[:8]}",
     )
