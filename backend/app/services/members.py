@@ -15,10 +15,9 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
-import asyncpg
 from sqlalchemy import select, text
+from sqlalchemy.exc import DBAPIError as SADBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import ProgrammingError as SAProgrammingError
 
 from app.db.session import bind_session_context
 from app.models.membership import WorkspaceMembership
@@ -47,13 +46,16 @@ def _utc(value: datetime) -> datetime:
     return value.astimezone(UTC)
 
 
-def _db_error(exc: SAProgrammingError) -> Exception:
+def _db_error(exc: SADBAPIError) -> Exception:
     """Translate the definer functions' RAISE codes into the service's errors."""
     pgerr = getattr(exc, "orig", None)
-    if isinstance(pgerr, asyncpg.PostgresError):
-        if pgerr.sqlstate() == "42501":
-            return PermissionError(pgerr.get_message())
-        message = pgerr.get_message()
+    if pgerr is not None:
+        sqlstate = getattr(pgerr, "sqlstate", None)
+        if callable(sqlstate):
+            sqlstate = sqlstate()
+        if sqlstate == "42501":
+            return PermissionError(str(pgerr))
+        message = str(pgerr)
         if "last owner" in message:
             return LastOwnerError(message)
         if "invalid or expired" in message:
@@ -151,7 +153,7 @@ async def add_member(
                 "name": workspace_name,
             },
         )
-    except SAProgrammingError as exc:
+    except SADBAPIError as exc:
         raise _db_error(exc) from exc
     db.expire_all()
     membership = await _active_membership(
@@ -222,19 +224,22 @@ async def accept_invitation(
 
     The definer function re-checks actor == current_uc_uid(), the token's
     hash, its expiry/consumption state, and that the token's workspace matches
-    the target; the invitee must accept for themselves (p_invitee is bound to
-    the GUC, not to an argument)."""
+    the target; the invitee must accept for themselves (the actor is bound to
+    the GUC, not to a function argument). The audit row is stamped for the
+    invitation's workspace, re-binding the GUC so the row lands there even
+    when the request's active workspace differs."""
     # Rebind the actor so the definer function's current_uc_uid() is the
     # invitee even if the request's active workspace was someone else's.
     await bind_session_context(db, str(workspace_id), actor_uc_uid)
+    token_hash = hash_invitation_token(raw_token)
     try:
         await db.execute(
             text(
-                "SELECT workspace_membership_accept_invitation(:ws, :token)"
+                "SELECT workspace_membership_accept_invitation(:ws, :token, :token_hash)"
             ),
-            {"ws": workspace_id, "token": raw_token},
+            {"ws": workspace_id, "token": raw_token, "token_hash": token_hash},
         )
-    except SAProgrammingError as exc:
+    except SADBAPIError as exc:
         raise _db_error(exc) from exc
     db.expire_all()
     member = await _active_membership(
@@ -247,8 +252,12 @@ async def accept_invitation(
             "SELECT id FROM workspace_invitation "
             "WHERE token_hash = :token_hash AND consumed_at IS NOT NULL"
         ),
-        {"token_hash": hash_invitation_token(raw_token)},
+        {"token_hash": token_hash},
     )
+    # The audit row is scoped to the active-workspace GUC (audit_journal RLS);
+    # the invitee's GUC was rebound to this workspace above, and this keeps the
+    # row in the invitation's workspace even under a foreign active workspace.
+    await bind_session_context(db, str(workspace_id), actor_uc_uid)
     await append_audit_event(
         db,
         workspace_id=workspace_id,
@@ -296,7 +305,7 @@ async def remove_member(
                 "role": target_role,
             },
         )
-    except SAProgrammingError as exc:
+    except SADBAPIError as exc:
         raise _db_error(exc) from exc
     await append_audit_event(
         db,

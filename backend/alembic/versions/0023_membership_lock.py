@@ -36,9 +36,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects import postgresql
 
 revision: str = "0023_membership_lock"
 down_revision: str | None = "0022_member_invitations"
@@ -50,7 +48,7 @@ RUNTIME_ROLE = "tax_planning_ops_app"
 _FUNCTIONS = (
     "workspace_membership_create_workspace(text, text)",
     "workspace_membership_add_member(uuid, text, text)",
-    "workspace_membership_accept_invitation(uuid, text)",
+    "    workspace_membership_accept_invitation(uuid, text, text)",
     "workspace_membership_remove_member(uuid, text, text)",
 )
 
@@ -106,7 +104,6 @@ def _create_write_functions() -> None:
                 WHERE workspace_id = p_workspace
                   AND user_uc_uid = v_uc_uid
                   AND role = 'owner'
-                  AND deleted_at IS NULL
             ) THEN
                 RAISE EXCEPTION 'workspace_membership_add_member: workspace owner required'
                     USING ERRCODE = '42501';
@@ -132,7 +129,7 @@ def _create_write_functions() -> None:
     op.execute(
         """
         CREATE OR REPLACE FUNCTION workspace_membership_accept_invitation(
-            p_workspace uuid, p_raw_token text
+            p_workspace uuid, p_raw_token text, p_token_hash text
         ) RETURNS uuid
         LANGUAGE plpgsql
         SECURITY DEFINER
@@ -142,16 +139,21 @@ def _create_write_functions() -> None:
             v_uc_uid text := current_uc_uid();
             v_invitation workspace_invitation;
             v_row workspace_membership;
-            v_token_hash text := encode(digest(p_raw_token, 'sha256'), 'hex');
             v_now timestamptz := now();
         BEGIN
             IF v_uc_uid IS NULL THEN
                 RAISE EXCEPTION 'workspace_membership_accept_invitation: actor not authorized'
                     USING ERRCODE = '42501';
             END IF;
+            -- The hash is computed in the service with the same function it
+            -- stores on create; the raw token stays out of the persisted row.
+            IF p_token_hash IS NULL OR p_token_hash = '' THEN
+                RAISE EXCEPTION 'invitation is invalid or expired'
+                    USING ERRCODE = 'P0001';
+            END IF;
             SELECT * INTO v_invitation
             FROM workspace_invitation
-            WHERE token_hash = v_token_hash
+            WHERE token_hash = p_token_hash
             FOR UPDATE;
             IF v_invitation IS NULL
                OR v_invitation.consumed_at IS NOT NULL
@@ -214,7 +216,6 @@ def _create_write_functions() -> None:
                 WHERE workspace_id = p_workspace
                   AND user_uc_uid = v_uc_uid
                   AND role = 'owner'
-                  AND deleted_at IS NULL
             ) THEN
                 RAISE EXCEPTION 'workspace_membership_remove_member: workspace owner required'
                     USING ERRCODE = '42501';
@@ -241,15 +242,17 @@ def _create_write_functions() -> None:
         op.execute(f"GRANT EXECUTE ON FUNCTION {signature} TO {RUNTIME_ROLE}")
 
 
-def _lock_policies() -> None:
+def _lock_policies(owner_role: str) -> None:
     op.execute("DROP POLICY IF EXISTS workspace_membership_select ON workspace_membership")
     op.execute("DROP POLICY IF EXISTS workspace_membership_insert ON workspace_membership")
     op.execute("DROP POLICY IF EXISTS workspace_membership_update ON workspace_membership")
     op.execute("DROP POLICY IF EXISTS workspace_membership_delete ON workspace_membership")
     # SELECT keeps the 0022 shape: own rows always; the roster (flag-gated) read
-    # needs the member view. INSERT/UPDATE/DELETE get NO policy at all, so with
-    # the revoked grants no session can write the table by any path. The
-    # SECURITY DEFINER functions bypass RLS entirely (owner privileges).
+    # needs the member view. With FORCE RLS on, a definer write must pass a
+    # policy whose USING/WITH CHECK both hold for it: the write policies below
+    # name the table owner (read at migration time), a role with no direct
+    # grants, whose role check passes for every definer write; authorization
+    # against current_uc_uid() happens in the function bodies, not in policies.
     op.execute(
         f"""
         CREATE POLICY workspace_membership_select ON workspace_membership
@@ -263,23 +266,100 @@ def _lock_policies() -> None:
         )
         """
     )
+    op.execute(
+        f"""
+        CREATE POLICY workspace_membership_insert ON workspace_membership
+        FOR INSERT TO {owner_role}
+        WITH CHECK (true)
+        """
+    )
+    op.execute(
+        f"""
+        CREATE POLICY workspace_membership_update ON workspace_membership
+        FOR UPDATE TO {owner_role}
+        USING (true)
+        WITH CHECK (true)
+        """
+    )
+    op.execute(
+        f"""
+        CREATE POLICY workspace_membership_delete ON workspace_membership
+        FOR DELETE TO {owner_role}
+        USING (true)
+        """
+    )
+
+
+def _owner_role() -> str:
+    """The table's actual owner, read at migration time: the definer functions
+    it owns write with that role's privileges, so under FORCE RLS they pass any
+    policy whose TO clause names it."""
+    bind = op.get_bind()
+    row: tuple[str, ...] = bind.exec_driver_sql(
+        "SELECT pg_get_userbyid(relowner) FROM pg_class "
+        "WHERE oid = 'workspace_membership'::regclass"
+    ).one()
+    return str(row[0])
 
 
 def upgrade() -> None:
+    owner_role = _owner_role()
     # 1. Revoke every write path from the app role (and PUBLIC).
     op.execute(f"REVOKE INSERT, UPDATE, DELETE ON workspace_membership FROM {RUNTIME_ROLE}")
     op.execute("REVOKE ALL ON workspace_membership FROM PUBLIC")
-    # 2. Lock policies (SELECT stays user-scoped; definer clause for FORCE RLS).
-    _lock_policies()
+    # 2. Lock policies: SELECT stays user-scoped; the INSERT/UPDATE/DELETE
+    #    policies name the table owner (a role with no app grants) so the
+    #    definer functions — owned by the migration role — pass FORCE RLS.
+    _lock_policies(owner_role)
     # 3. The only write paths: SECURITY DEFINER functions.
     _create_write_functions()
 
 
-def downgrade() -> None:
-    for signature in _FUNCTIONS:
+def _drop_if_exists(signature: str) -> None:
+    op.execute(f"DROP FUNCTION IF EXISTS {signature}")
+
+
+def _revoke_if_exists(signature: str) -> None:
+    parts = signature.split("(", 1)
+    name, args = parts[0].strip(), parts[1].rstrip(")")
+    name_q = name.replace("'", "''")
+    args_q = args.replace("'", "''")
+    exists = (
+        op.get_bind()
+        .exec_driver_sql(
+            f"""
+            SELECT EXISTS (
+                SELECT 1
+                FROM pg_catalog.pg_proc p
+                JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+                WHERE n.nspname = 'public'
+                  AND p.proname = '{name_q}'
+                  AND pg_catalog.pg_get_function_identity_arguments(p.oid) = '{args_q}'
+            )
+            """
+        )
+        .scalar()
+    )
+    if exists:
         op.execute(f"REVOKE ALL ON FUNCTION {signature} FROM {RUNTIME_ROLE}")
-        op.execute(f"DROP FUNCTION IF EXISTS {signature}")
+
+
+def downgrade() -> None:
+    # REVOKE the still-existing signatures (no-op when none are granted), then
+    # DROP (never fails on a missing function).  An in-flight 0023 deployed
+    # with an older accept_invitation arity downgrades cleanly too.
+    for signature in _FUNCTIONS:
+        _revoke_if_exists(signature)
+    for signature in list(_FUNCTIONS) + ["workspace_membership_accept_invitation(uuid, text)"]:
+        _drop_if_exists(signature)
+    # Drop the 0023 owner-scoped write policies (they do not exist under 0022),
+    # then restore 0022's exact policy set: no write policies at all — the
+    # INSERT/UPDATE/DELETE paths come back with the granted table privileges,
+    # exactly as 0022 left them.
     op.execute("DROP POLICY IF EXISTS workspace_membership_select ON workspace_membership")
+    op.execute("DROP POLICY IF EXISTS workspace_membership_insert ON workspace_membership")
+    op.execute("DROP POLICY IF EXISTS workspace_membership_update ON workspace_membership")
+    op.execute("DROP POLICY IF EXISTS workspace_membership_delete ON workspace_membership")
     op.execute(
         """
         CREATE POLICY workspace_membership_select ON workspace_membership
@@ -291,37 +371,6 @@ def downgrade() -> None:
                 AND workspace_membership_is_member(workspace_id)
             )
         )
-        """
-    )
-    op.execute(
-        """
-        CREATE POLICY workspace_membership_insert ON workspace_membership
-        FOR INSERT TO tax_planning_ops_app
-        WITH CHECK (
-            user_uc_uid = current_uc_uid()
-            OR workspace_membership_is_owner(workspace_id)
-        )
-        """
-    )
-    op.execute(
-        """
-        CREATE POLICY workspace_membership_update ON workspace_membership
-        FOR UPDATE TO tax_planning_ops_app
-        USING (
-            user_uc_uid = current_uc_uid()
-            OR workspace_membership_is_owner(workspace_id)
-        )
-        WITH CHECK (
-            user_uc_uid = current_uc_uid()
-            OR workspace_membership_is_owner(workspace_id)
-        )
-        """
-    )
-    op.execute(
-        """
-        CREATE POLICY workspace_membership_delete ON workspace_membership
-        FOR DELETE TO tax_planning_ops_app
-        USING (workspace_membership_is_owner(workspace_id))
         """
     )
     op.execute(
