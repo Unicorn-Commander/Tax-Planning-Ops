@@ -38,6 +38,7 @@ jobs:
         env:
           MIGRATION_DATABASE_URL: postgresql+asyncpg://tax_planning_ops_owner:devowner@postgres:5432/tax_planning_ops
           RUNTIME_DB_PASSWORD: dev
+          DATABASE_URL: postgresql+asyncpg://tax_planning_ops_app:dev@postgres:5432/tax_planning_ops
           TPO_TEST_DATABASE_URL: postgresql://tax_planning_ops_app:REMOVED@postgres:5432/tax_planning_ops
           TPO_TEST_OWNER_DATABASE_URL: postgresql://tax_planning_ops_owner:REMOVED@postgres:5432/tax_planning_ops
         run: |

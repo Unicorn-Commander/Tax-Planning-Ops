@@ -8,6 +8,8 @@ Skips unless TPO_TEST_DATABASE_URL points at a migrated DB whose DSN
 authenticates as the NOBYPASSRLS tax_planning_ops_app role (like
 test_rls_integration.py) AND TPO_TEST_OWNER_DATABASE_URL points at the same
 DB whose DSN authenticates as the NOBYPASSRLS tax_planning_ops_owner role.
+The app's DATABASE_URL must point at the same database (the /me request runs
+through the app's own engine, which reads settings.DATABASE_URL).
 All subjects and workspace names are fictional.
 """
 
