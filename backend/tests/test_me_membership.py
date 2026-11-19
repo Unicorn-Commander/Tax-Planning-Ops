@@ -6,7 +6,9 @@ claimed workspace — the token's workspace_id claim, a PAT's workspace_scope, o
 a header-selected workspace — it must write nothing and change no role.
 Skips unless TPO_TEST_DATABASE_URL points at a migrated DB whose DSN
 authenticates as the NOBYPASSRLS tax_planning_ops_app role (like
-test_rls_integration.py). All subjects and workspace names are fictional.
+test_rls_integration.py) AND TPO_TEST_OWNER_DATABASE_URL points at the same
+DB whose DSN authenticates as the NOBYPASSRLS tax_planning_ops_owner role.
+All subjects and workspace names are fictional.
 """
 
 from __future__ import annotations
@@ -56,10 +58,10 @@ PUBLIC_JWK = {
 
 
 def _owner_dsn() -> str:
-    dsn = os.environ.get("TPO_TEST_DATABASE_URL")
+    dsn = os.environ.get("TPO_TEST_OWNER_DATABASE_URL")
     if not dsn:
-        pytest.skip("TPO_TEST_DATABASE_URL not set")
-    return dsn.replace("tax_planning_ops_app:dev", "tax_planning_ops_owner:dev")
+        pytest.skip("TPO_TEST_OWNER_DATABASE_URL not set")
+    return dsn
 
 
 class _JWKSResponse:
