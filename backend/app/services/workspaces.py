@@ -67,12 +67,18 @@ async def list_my_memberships(db: AsyncSession, *, uc_uid: str) -> list[Workspac
 async def ensure_home_membership(
     db: AsyncSession, *, uc_uid: str, workspace_id: uuid.UUID, name: str
 ) -> None:
-    """Make sure the user's active/home workspace shows up in their switcher.
+    """Make sure the user's self-serve workspace shows up in their switcher.
 
-    Idempotent: inserts a membership for (uc_uid, workspace_id) if absent. Safe
-    under the membership RLS — ``WITH CHECK`` requires user_uc_uid == the session
-    uc_uid, which the tenant session has set."""
+    Inserts a membership for (uc_uid, workspace_id) ONLY when workspace_id is the
+    caller's own self-serve workspace (uuid5 of sub, no explicit workspace claim)
+    and the caller has no row there yet. For any claimed workspace — the token's
+    workspace_id, a PAT's workspace_scope, or a header selection — this writes
+    NOTHING and changes no role. Idempotent and safe under the membership RLS."""
     if not uc_uid:
+        return
+    from app.core.auth import derive_self_serve_workspace
+
+    if derive_self_serve_workspace({"sub": uc_uid}) != workspace_id:
         return
     existing = await db.scalar(
         select(WorkspaceMembership.id).where(
