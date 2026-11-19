@@ -15,6 +15,9 @@ import os
 from uuid import UUID, uuid4
 
 import pytest
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
 
 pytestmark = pytest.mark.integration
 
@@ -38,13 +41,39 @@ def _owner_dsn() -> str:
     return dsn
 
 
+def _app_async_dsn() -> str:
+    dsn = _app_dsn()
+    if dsn.startswith("postgres://"):
+        return "postgresql+asyncpg://" + dsn.removeprefix("postgres://")
+    if dsn.startswith("postgresql://"):
+        return "postgresql+asyncpg://" + dsn.removeprefix("postgresql://")
+    return dsn
+
+
 @pytest.fixture
 async def app_conn():
+    # Each statement commits in its own implicit transaction, so session-scoped
+    # GUCs (set_config ..., false) persist across statements on this connection.
     conn = await asyncpg.connect(_app_dsn())
     try:
         yield conn
     finally:
         await conn.close()
+
+
+@pytest.fixture
+async def app_session():
+    """A SQLAlchemy AsyncSession over the app role (for the service paths)."""
+    engine = create_async_engine(_app_async_dsn(), poolclass=NullPool)
+    async with engine.connect() as connection:
+        transaction = await connection.begin()
+        session = AsyncSession(bind=connection, expire_on_commit=False, autoflush=False)
+        try:
+            yield session
+        finally:
+            await session.close()
+            await transaction.rollback()
+    await engine.dispose()
 
 
 @pytest.fixture
@@ -57,27 +86,38 @@ async def owner_conn():
 
 
 async def _seed(
-    owner_conn: asyncpg.Connection, owner_uid: str, ws_id: str, workspace_name: str
+    owner_conn: asyncpg.Connection,
+    owner_uid: str,
+    ws_id: str,
+    workspace_name: str,
 ) -> None:
-    await owner_conn.execute(
-        "INSERT INTO workspaces (id, name) VALUES ($1, $2) "
-        "ON CONFLICT (id) DO NOTHING",
-        ws_id,
-        workspace_name,
-    )
-    await owner_conn.execute(
-        "INSERT INTO workspace_membership "
-        "(id, user_uc_uid, workspace_id, workspace_name, role) "
-        "VALUES (gen_random_uuid(), $1, $2, $3, 'owner')",
-        owner_uid,
-        ws_id,
-        workspace_name,
-    )
+    """Commit the seed rows: the app-role session fixture rolls its transaction
+    back, so uncommitted owner-side writes are invisible to it (FK checks bypass
+    RLS, but SELECT is scoped)."""
+    async with owner_conn.transaction():
+        await owner_conn.execute(
+            "INSERT INTO workspaces (id, name) VALUES ($1, $2) "
+            "ON CONFLICT (id) DO NOTHING",
+            ws_id,
+            workspace_name,
+        )
+        await owner_conn.execute(
+            "INSERT INTO workspace_membership "
+            "(id, user_uc_uid, workspace_id, workspace_name, role) "
+            "VALUES (gen_random_uuid(), $1, $2, $3, 'owner')",
+            owner_uid,
+            ws_id,
+            workspace_name,
+        )
 
 
 async def _set_guc(conn: asyncpg.Connection, uc_uid: str, workspace_id: str) -> None:
-    await conn.execute("SELECT set_config('app.uc_uid', $1, true)", uc_uid)
-    await conn.execute("SELECT set_config('app.current_workspace', $1, true)", workspace_id)
+    # LOCAL (true) scope dies with the implicit asyncpg transaction; use plain
+    # session scope so the GUCs persist across statements on this connection.
+    await conn.execute("SELECT set_config('app.uc_uid', $1, false)", uc_uid)
+    await conn.execute(
+        "SELECT set_config('app.current_workspace', $1, false)", workspace_id
+    )
 
 
 @pytest.mark.asyncio
@@ -126,13 +166,14 @@ async def test_app_cannot_raise_own_role(app_conn, owner_conn) -> None:
     0023 the app role has no UPDATE at all."""
     ws_id = str(uuid4())
     await _seed(owner_conn, OWNER_UID, ws_id, "Fictional Cedar Tax Group")
-    await owner_conn.execute(
-        "INSERT INTO workspace_membership "
-        "(id, user_uc_uid, workspace_id, workspace_name, role) "
-        "VALUES (gen_random_uuid(), $1, $2, 'Fictional Cedar Tax Group', 'member')",
-        OTHER_UID,
-        ws_id,
-    )
+    async with owner_conn.transaction():
+        await owner_conn.execute(
+            "INSERT INTO workspace_membership "
+            "(id, user_uc_uid, workspace_id, workspace_name, role) "
+            "VALUES (gen_random_uuid(), $1, $2, 'Fictional Cedar Tax Group', 'member')",
+            OTHER_UID,
+            ws_id,
+        )
     await _set_guc(app_conn, OTHER_UID, ws_id)
     with pytest.raises(asyncpg.exceptions.PostgresError):
         await app_conn.execute(
@@ -163,16 +204,20 @@ async def test_app_can_read_own_membership(app_conn, owner_conn) -> None:
     assert (
         await app_conn.fetchval(
             "SELECT count(*) FROM workspace_membership "
-            "WHERE user_uc_uid = $1 AND deleted_at IS NULL",
+            "WHERE user_uc_uid = $1 AND workspace_id = $2 AND deleted_at IS NULL",
             OWNER_UID,
+            ws_id,
         )
         == 1
     )
+    # RLS is user-scoped: no matter what uc_uid the session claims, another
+    # user's rows are invisible.
+    await _set_guc(app_conn, OTHER_UID, ws_id)
     assert (
         await app_conn.fetchval(
             "SELECT count(*) FROM workspace_membership "
-            "WHERE user_uc_uid = $1 AND deleted_at IS NULL",
-            OTHER_UID,
+            "WHERE workspace_id = $1 AND deleted_at IS NULL",
+            ws_id,
         )
         == 0
     )
@@ -224,29 +269,26 @@ async def test_app_direct_grants_revoked(app_conn) -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_workspace_definer_mints_owner_row(app_conn, owner_conn) -> None:
+async def test_create_workspace_definer_mints_owner_row(app_session, owner_conn) -> None:
     """POST /workspaces path: the SECURITY DEFINER create function must still
     work for the app role — server-generated id, actor becomes owner."""
-    import uuid
-
     from app.services.workspaces import create_workspace
 
-    async with app_conn.transaction():
-        created = await create_workspace(uc_uid=OTHER_UID, name="Fictional New Co")
-        assert created["role"] == "owner"
-        new_ws: str = created["workspace_id"]
-        assert UUID(new_ws) == uuid.UUID(new_ws)
-        role = await owner_conn.fetchval(
-            "SELECT role FROM workspace_membership "
-            "WHERE user_uc_uid = $1 AND workspace_id = $2",
-            OTHER_UID,
-            new_ws,
-        )
-        assert role == "owner"
+    created = await create_workspace(uc_uid=OTHER_UID, name="Fictional New Co")
+    assert created["role"] == "owner"
+    new_ws: str = created["workspace_id"]
+    assert UUID(new_ws) is not None
+    role = await owner_conn.fetchval(
+        "SELECT role FROM workspace_membership "
+        "WHERE user_uc_uid = $1 AND workspace_id = $2",
+        OTHER_UID,
+        new_ws,
+    )
+    assert role == "owner"
 
 
 @pytest.mark.asyncio
-async def test_add_member_and_invitation_through_definer(app_conn, owner_conn) -> None:
+async def test_add_member_and_invitation_through_definer(app_session, owner_conn) -> None:
     """add_member (owner-gated) and accept_invitation still work after the
     lock, and a NON-owner is still refused by the function itself."""
     from app.services.members import (
@@ -258,8 +300,12 @@ async def test_add_member_and_invitation_through_definer(app_conn, owner_conn) -
 
     ws_id = str(uuid4())
     await _seed(owner_conn, OWNER_UID, ws_id, "Fictional Cedar Tax Group")
+    await app_session.execute(text("SELECT set_config('app.uc_uid', :v, true)"), {"v": OWNER_UID})
+    await app_session.execute(
+        text("SELECT set_config('app.current_workspace', :v, true)"), {"v": ws_id}
+    )
     added = await add_member(
-        app_conn, workspace_id=UUID(ws_id), actor_uc_uid=OWNER_UID, member_uc_uid=OTHER_UID
+        app_session, workspace_id=UUID(ws_id), actor_uc_uid=OWNER_UID, member_uc_uid=OTHER_UID
     )
     assert added.role == "member"
 
@@ -270,18 +316,22 @@ async def test_add_member_and_invitation_through_definer(app_conn, owner_conn) -
         "fictional-plain-t1",
         ws_id,
     )
+    await app_session.execute(
+        text("SELECT set_config('app.uc_uid', :v, true)"), {"v": "fictional-plain-t1"}
+    )
     with pytest.raises(PermissionError):
         await add_member(
-            app_conn,
+            app_session,
             workspace_id=UUID(ws_id),
             actor_uc_uid="fictional-plain-t1",
             member_uc_uid="fictional-visitor-t1",
         )
 
-    created = await create_invitation(app_conn, workspace_id=UUID(ws_id), actor_uc_uid=OWNER_UID)
+    await app_session.execute(text("SELECT set_config('app.uc_uid', :v, true)"), {"v": OWNER_UID})
+    created = await create_invitation(app_session, workspace_id=UUID(ws_id), actor_uc_uid=OWNER_UID)
     invitee = "fictional-invitee-t1"
     accepted = await accept_invitation(
-        app_conn,
+        app_session,
         workspace_id=UUID(ws_id),
         actor_uc_uid=invitee,
         raw_token=str(created["invitation_token"]),
@@ -291,7 +341,7 @@ async def test_add_member_and_invitation_through_definer(app_conn, owner_conn) -
 
     with pytest.raises(InvalidInvitationError):
         await accept_invitation(
-            app_conn,
+            app_session,
             workspace_id=UUID(ws_id),
             actor_uc_uid="fictional-late-t1",
             raw_token=str(created["invitation_token"]),
@@ -299,23 +349,28 @@ async def test_add_member_and_invitation_through_definer(app_conn, owner_conn) -
 
 
 @pytest.mark.asyncio
-async def test_remove_member_through_definer(app_conn, owner_conn) -> None:
+async def test_remove_member_through_definer(app_session, owner_conn) -> None:
     from app.services.members import LastOwnerError, remove_member
 
     ws_id = str(uuid4())
     await _seed(owner_conn, OWNER_UID, ws_id, "Fictional Cedar Tax Group")
-    await owner_conn.execute(
-        "INSERT INTO workspace_membership "
-        "(id, user_uc_uid, workspace_id, workspace_name, role) "
-        "VALUES (gen_random_uuid(), $1, $2, 'Fictional Cedar Tax Group', 'member')",
-        OTHER_UID,
-        ws_id,
+    async with owner_conn.transaction():
+        await owner_conn.execute(
+            "INSERT INTO workspace_membership "
+            "(id, user_uc_uid, workspace_id, workspace_name, role) "
+            "VALUES (gen_random_uuid(), $1, $2, 'Fictional Cedar Tax Group', 'member')",
+            OTHER_UID,
+            ws_id,
+        )
+    await app_session.execute(text("SELECT set_config('app.uc_uid', :v, true)"), {"v": OWNER_UID})
+    await app_session.execute(
+        text("SELECT set_config('app.current_workspace', :v, true)"), {"v": ws_id}
     )
     removed = await remove_member(
-        app_conn, workspace_id=UUID(ws_id), actor_uc_uid=OWNER_UID, member_uc_uid=OTHER_UID
+        app_session, workspace_id=UUID(ws_id), actor_uc_uid=OWNER_UID, member_uc_uid=OTHER_UID
     )
     assert removed.user_uc_uid == OTHER_UID
     with pytest.raises(LastOwnerError):
         await remove_member(
-            app_conn, workspace_id=UUID(ws_id), actor_uc_uid=OWNER_UID, member_uc_uid=OWNER_UID
+            app_session, workspace_id=UUID(ws_id), actor_uc_uid=OWNER_UID, member_uc_uid=OWNER_UID
         )

@@ -1,23 +1,27 @@
 """Workspace member management and single-use workspace invitations.
 
-Membership rows are RLS-protected.  The migration keeps the normal user-scoped
-switcher query intact, while this service enables the roster-read flag only for
-the target-workspace list operation.  Owner checks remain explicit in the
-service and are also represented by the database policy functions.
+Since migration 0023 the app role holds SELECT-only on
+``workspace_membership``: every write path here runs through the
+SECURITY DEFINER functions created by that migration (actor checked against
+``current_uc_uid()`` in the database, owner checks in the function).  The
+service layer keeps the same public API and error types: ``PermissionError``
+from the database's 42501, ``InvalidInvitationError``/``LastOwnerError`` from
+its P0001.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import Any, cast
+from typing import Any
 from uuid import UUID, uuid4
 
+import asyncpg
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import ProgrammingError as SAProgrammingError
 
 from app.db.session import bind_session_context
 from app.models.membership import WorkspaceMembership
-from app.models.workspace import Workspace
 from app.services.audit import append_audit_event
 from app.services.member_tokens import (
     generate_invitation_token,
@@ -43,25 +47,37 @@ def _utc(value: datetime) -> datetime:
     return value.astimezone(UTC)
 
 
+def _db_error(exc: SAProgrammingError) -> Exception:
+    """Translate the definer functions' RAISE codes into the service's errors."""
+    pgerr = getattr(exc, "orig", None)
+    if isinstance(pgerr, asyncpg.PostgresError):
+        if pgerr.sqlstate() == "42501":
+            return PermissionError(pgerr.get_message())
+        message = pgerr.get_message()
+        if "last owner" in message:
+            return LastOwnerError(message)
+        if "invalid or expired" in message:
+            return InvalidInvitationError(message)
+        return PermissionError(message)
+    return exc
+
+
 async def _enable_roster_read(db: AsyncSession) -> None:
-    """Allow the RLS roster policy for this transaction only."""
-    await db.execute(
-        text("SELECT set_config('app.membership_read', '1', true)")
-    )
+    """Allow the RLS roster read for this transaction only (legacy flag; the
+    0023 select policy is user-scoped and the roster read goes through the
+    same flag-gated policy restored for read paths)."""
+    await db.execute(text("SELECT set_config('app.membership_read', '1', true)"))
 
 
 async def _active_membership(
     db: AsyncSession, *, workspace_id: UUID, uc_uid: str
 ) -> WorkspaceMembership | None:
-    return cast(
-        WorkspaceMembership | None,
-        await db.scalar(
-            select(WorkspaceMembership).where(
-                WorkspaceMembership.workspace_id == workspace_id,
-                WorkspaceMembership.user_uc_uid == uc_uid,
-                WorkspaceMembership.deleted_at.is_(None),
-            )
-        ),
+    return await db.scalar(
+        select(WorkspaceMembership).where(
+            WorkspaceMembership.workspace_id == workspace_id,
+            WorkspaceMembership.user_uc_uid == uc_uid,
+            WorkspaceMembership.deleted_at.is_(None),
+        )
     )
 
 
@@ -107,53 +123,61 @@ async def add_member(
     actor_uc_uid: str,
     member_uc_uid: str,
 ) -> WorkspaceMembership:
-    """Add a known subject as a normal member, idempotently."""
+    """Add a known subject as a normal member, idempotently.
+
+    The actor must be an active OWNER (checked in the service for a clear
+    error and re-checked in the definer function against current_uc_uid())."""
     await _require_owner(db, workspace_id=workspace_id, uc_uid=actor_uc_uid)
     await _enable_roster_read(db)
     workspace_name = await db.scalar(
-        select(Workspace.name).where(Workspace.id == workspace_id)
+        select(WorkspaceMembership.workspace_name)
+        .where(
+            WorkspaceMembership.workspace_id == workspace_id,
+            WorkspaceMembership.deleted_at.is_(None),
+        )
+        .limit(1)
     )
     if workspace_name is None:
         raise LookupError("workspace not found")
 
-    # The owner-only INSERT/UPDATE policy lets this query see a previously
-    # removed row so re-adding a subject does not collide with the unique key.
-    existing = await db.scalar(
-        select(WorkspaceMembership).where(
-            WorkspaceMembership.workspace_id == workspace_id,
-            WorkspaceMembership.user_uc_uid == member_uc_uid,
+    try:
+        await db.execute(
+            text(
+                "SELECT workspace_membership_add_member(:ws, :member, :name)"
+            ),
+            {
+                "ws": workspace_id,
+                "member": member_uc_uid,
+                "name": workspace_name,
+            },
         )
+    except SAProgrammingError as exc:
+        raise _db_error(exc) from exc
+    db.expire_all()
+    membership = await _active_membership(
+        db, workspace_id=workspace_id, uc_uid=member_uc_uid
     )
-    if existing is None:
-        existing = WorkspaceMembership(
-            user_uc_uid=member_uc_uid,
-            workspace_id=workspace_id,
-            workspace_name=workspace_name,
-            role=MEMBER_ROLE,
-        )
-        db.add(existing)
-    elif existing.deleted_at is not None:
-        existing.deleted_at = None
-        existing.workspace_name = workspace_name
-        existing.role = MEMBER_ROLE
-
-    await db.flush()
+    if membership is None:
+        raise LookupError("member not found in this workspace")
     await append_audit_event(
         db,
         workspace_id=workspace_id,
         actor_uc_uid=actor_uc_uid,
         event_type="workspace.member.added",
         aggregate_type="workspace_membership",
-        aggregate_id=existing.id,
-        payload={"member_uc_uid": member_uc_uid, "role": existing.role},
+        aggregate_id=membership.id,
+        payload={"member_uc_uid": member_uc_uid, "role": membership.role},
     )
-    return existing
+    return membership
 
 
 async def create_invitation(
     db: AsyncSession, *, workspace_id: UUID, actor_uc_uid: str
 ) -> dict[str, Any]:
-    """Persist only a hash and return the raw token exactly once."""
+    """Persist only a hash and return the raw token exactly once.
+
+    Owner-gated in the service; the workspace_invitation table keeps its own
+    (0022) grants and is not part of the 0023 lock."""
     await _require_owner(db, workspace_id=workspace_id, uc_uid=actor_uc_uid)
     raw_token = generate_invitation_token()
     invitation_id = uuid4()
@@ -194,67 +218,36 @@ async def accept_invitation(
     actor_uc_uid: str,
     raw_token: str,
 ) -> WorkspaceMembership:
-    """Atomically consume an invitation and add the accepting subject."""
-    result = await db.execute(
-        text(
-            """
-            SELECT id, workspace_id, role, expires_at, consumed_at
-            FROM workspace_invitation
-            WHERE token_hash = :token_hash
-            FOR UPDATE
-            """
-        ),
-        {"token_hash": hash_invitation_token(raw_token)},
-    )
-    row = result.mappings().first()
-    if row is None:
-        raise InvalidInvitationError("invitation is invalid or expired")
+    """Atomically consume an invitation and add the accepting subject.
 
-    invitation_workspace_id = UUID(str(row["workspace_id"]))
-    expires_at = _utc(row["expires_at"])
-    if (
-        row["consumed_at"] is not None
-        or expires_at <= datetime.now(UTC)
-        or invitation_workspace_id != workspace_id
-    ):
-        raise InvalidInvitationError("invitation is invalid or expired")
-
-    # The invitee is not a member yet, so the request's active workspace may be
-    # their private self-serve workspace. Rebind this transaction only after the
-    # token proves the target workspace, then the normal INSERT RLS check applies.
+    The definer function re-checks actor == current_uc_uid(), the token's
+    hash, its expiry/consumption state, and that the token's workspace matches
+    the target; the invitee must accept for themselves (p_invitee is bound to
+    the GUC, not to an argument)."""
+    # Rebind the actor so the definer function's current_uc_uid() is the
+    # invitee even if the request's active workspace was someone else's.
     await bind_session_context(db, str(workspace_id), actor_uc_uid)
-    workspace_name = await db.scalar(
-        select(Workspace.name).where(Workspace.id == workspace_id)
-    )
-    if workspace_name is None:
-        raise InvalidInvitationError("invitation is invalid or expired")
-
-    member = await db.scalar(
-        select(WorkspaceMembership).where(
-            WorkspaceMembership.workspace_id == workspace_id,
-            WorkspaceMembership.user_uc_uid == actor_uc_uid,
+    try:
+        await db.execute(
+            text(
+                "SELECT workspace_membership_accept_invitation(:ws, :token)"
+            ),
+            {"ws": workspace_id, "token": raw_token},
         )
+    except SAProgrammingError as exc:
+        raise _db_error(exc) from exc
+    db.expire_all()
+    member = await _active_membership(
+        db, workspace_id=workspace_id, uc_uid=actor_uc_uid
     )
     if member is None:
-        member = WorkspaceMembership(
-            user_uc_uid=actor_uc_uid,
-            workspace_id=workspace_id,
-            workspace_name=workspace_name,
-            role=str(row["role"] or MEMBER_ROLE),
-        )
-        db.add(member)
-    elif member.deleted_at is not None:
-        member.deleted_at = None
-        member.workspace_name = workspace_name
-        member.role = str(row["role"] or MEMBER_ROLE)
-
-    await db.flush()
-    await db.execute(
+        raise InvalidInvitationError("invitation is invalid or expired")
+    consumed = await db.scalar(
         text(
-            "UPDATE workspace_invitation SET consumed_at = now() "
-            "WHERE id = :invitation_id AND consumed_at IS NULL"
+            "SELECT id FROM workspace_invitation "
+            "WHERE token_hash = :token_hash AND consumed_at IS NOT NULL"
         ),
-        {"invitation_id": row["id"]},
+        {"token_hash": hash_invitation_token(raw_token)},
     )
     await append_audit_event(
         db,
@@ -263,7 +256,7 @@ async def accept_invitation(
         event_type="workspace.invitation.accepted",
         aggregate_type="workspace_membership",
         aggregate_id=member.id,
-        payload={"invitation_id": str(row["id"]), "role": member.role},
+        payload={"invitation_id": str(consumed), "role": member.role},
     )
     return member
 
@@ -275,7 +268,10 @@ async def remove_member(
     actor_uc_uid: str,
     member_uc_uid: str,
 ) -> WorkspaceMembership:
-    """Remove a member, refusing to orphan the workspace."""
+    """Remove a member, refusing to orphan the workspace.
+
+    The last-owner guard lives in the definer function (row-locked count);
+    the service reads the target's role first to pass the right check in."""
     await _require_owner(db, workspace_id=workspace_id, uc_uid=actor_uc_uid)
     await _enable_roster_read(db)
     target = await db.scalar(
@@ -287,26 +283,21 @@ async def remove_member(
     )
     if target is None:
         raise LookupError("member not found in this workspace")
-
-    if target.role == "owner":
-        # Lock the owner set before counting so two concurrent removals cannot
-        # both observe two owners and leave the workspace orphaned.
-        owners = await db.scalars(
-            select(WorkspaceMembership)
-            .where(
-                WorkspaceMembership.workspace_id == workspace_id,
-                WorkspaceMembership.role == "owner",
-                WorkspaceMembership.deleted_at.is_(None),
-            )
-            .with_for_update()
-        )
-        if len(list(owners.all())) <= 1:
-            raise LastOwnerError("cannot remove the last owner")
-
     target_id = target.id
     target_role = target.role
-    await db.delete(target)
-    await db.flush()
+    try:
+        await db.execute(
+            text(
+                "SELECT workspace_membership_remove_member(:ws, :member, :role)"
+            ),
+            {
+                "ws": workspace_id,
+                "member": member_uc_uid,
+                "role": target_role,
+            },
+        )
+    except SAProgrammingError as exc:
+        raise _db_error(exc) from exc
     await append_audit_event(
         db,
         workspace_id=workspace_id,

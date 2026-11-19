@@ -5,13 +5,14 @@ claim, or the self-serve ``uuid5(sub)`` derivation). This module lets a user own
 SEVERAL named workspaces (e.g. a personal file + a company file) and switch
 between them. ``workspace_membership`` is the source of truth for "which
 workspaces may this user select", and selection is authorized against it in the
-auth middleware. RLS scopes the table to the caller's uc_uid, so a user can only
-ever see/manage their own memberships; ``WITH CHECK`` means they can only create
-a membership for themselves.
+auth middleware.
 
-The two write paths that touch the RLS-protected ``workspaces`` table
-(create/rename) bind a session to the *target* workspace id so the workspaces
-``WITH CHECK (id = current_workspace_id())`` is satisfied.
+Since migration 0023 the app role is SELECT-only on
+``workspace_membership``: every write goes through the migration's SECURITY
+DEFINER functions (``workspace_membership_create_workspace`` for create and
+for the self-serve home row; the member functions in ``app.services.members``
+for the rest). The definer checks re-verify the actor against
+``current_uc_uid()`` in the database.
 """
 
 from __future__ import annotations
@@ -20,7 +21,9 @@ import uuid
 from typing import Any
 
 from sqlalchemy import select, text, update
+import asyncpg
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import ProgrammingError as SAProgrammingError
 
 from app.db.session import async_session_maker, bind_session_context, ensure_workspace
 from app.models.membership import WorkspaceMembership
@@ -78,7 +81,8 @@ async def ensure_home_membership(
     caller's own self-serve workspace (uuid5 of sub, no explicit workspace claim)
     and the caller has no row there yet. For any claimed workspace — the token's
     workspace_id, a PAT's workspace_scope, or a header selection — this writes
-    NOTHING and changes no role. Idempotent and safe under the membership RLS.
+    NOTHING and changes no role. Idempotent; the insert runs through the 0023
+    definer function, which re-checks the actor against current_uc_uid().
 
     ``claims`` must be the request's VERIFIED claims (``ctx.claims``): the
     self-serve workspace the auth middleware actually resolves is
@@ -99,40 +103,49 @@ async def ensure_home_membership(
     )
     if existing is not None:
         return
-    db.add(
-        WorkspaceMembership(
-            user_uc_uid=uc_uid,
-            workspace_id=workspace_id,
-            workspace_name=name,
-            role="owner",
+    # The 0023 definer: actor must equal current_uc_uid(); binds the GUC first
+    # (the request's active workspace is this one, but be explicit).
+    await bind_session_context(db, str(workspace_id), uc_uid)
+    try:
+        await db.execute(
+            text(
+                "SELECT workspace_membership_create_workspace(current_uc_uid(), :name)"
+            ),
+            {"name": name},
         )
-    )
-    await db.flush()
+    except SAProgrammingError as exc:
+        pgerr = getattr(exc, "orig", None)
+        if isinstance(pgerr, asyncpg.PostgresError):
+            raise PermissionError(pgerr.get_message()) from exc
+        raise
+    db.expire_all()
 
 
 async def create_workspace(*, uc_uid: str, name: str) -> dict[str, Any]:
     """Create a brand-new named workspace owned by this user.
 
-    Binds a fresh session to the NEW workspace id (so the workspaces
-    ``WITH CHECK`` passes) AND the caller's uc_uid (so the membership
-    ``WITH CHECK`` passes), provisions the workspace row, and records ownership.
-    """
+    Runs entirely through the 0023 SECURITY DEFINER function: it checks the
+    actor against current_uc_uid(), provisions the workspace row with a
+    server-generated id, and records the caller as owner. The session's GUCs
+    are bound to the CALLER's context first (the function never trusts its
+    arguments for authorization)."""
     clean = name.strip() or "Untitled workspace"
-    new_id = uuid.uuid4()
     async with async_session_maker() as session:
-        # Bind to the new workspace + the caller so both RLS WITH CHECKs pass.
-        await bind_session_context(session, str(new_id), uc_uid)
-        await ensure_workspace(session, str(new_id), clean)
-        membership = WorkspaceMembership(
-            user_uc_uid=uc_uid,
-            workspace_id=new_id,
-            workspace_name=clean,
-            role="owner",
+        # Bind the uc_uid GUC (workspace unknown yet); the function derives the
+        # actor from it and mints the owner row for the same user.
+        await _set_uc_uid(session, uc_uid)
+        new_id = await session.scalar(
+            text(
+                "SELECT workspace_membership_create_workspace(current_uc_uid(), :name)"
+            ),
+            {"name": clean},
         )
-        session.add(membership)
-        await session.flush()
         await session.commit()
-    return {"workspace_id": new_id, "name": clean, "role": "owner"}
+    return {
+        "workspace_id": str(new_id) if new_id is not None else new_id,
+        "name": clean,
+        "role": "owner",
+    }
 
 
 async def rename_workspace(*, uc_uid: str, workspace_id: uuid.UUID, name: str) -> dict[str, Any]:
@@ -146,13 +159,9 @@ async def rename_workspace(*, uc_uid: str, workspace_id: uuid.UUID, name: str) -
         raise PermissionError("not a member of this workspace")
     async with async_session_maker() as session:
         await bind_session_context(session, str(workspace_id), uc_uid)
+        await ensure_workspace(session, str(workspace_id), clean)
         await session.execute(
             update(Workspace).where(Workspace.id == workspace_id).values(name=clean)
-        )
-        await session.execute(
-            update(WorkspaceMembership)
-            .where(WorkspaceMembership.workspace_id == workspace_id)
-            .values(workspace_name=clean)
         )
         await session.commit()
     return {"workspace_id": workspace_id, "name": clean}
