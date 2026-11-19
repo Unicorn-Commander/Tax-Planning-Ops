@@ -253,7 +253,7 @@ async def test_definer_functions_authorize_membership(app_conn, owner_conn) -> N
 @pytest.mark.asyncio
 async def test_app_direct_grants_revoked(app_conn) -> None:
     """The lock is enforced by REVOKED table grants, not just policy wording."""
-    privileges = set(
+    privileges = {
         r["privilege_type"]
         for r in await app_conn.fetch(
             """
@@ -261,10 +261,10 @@ async def test_app_direct_grants_revoked(app_conn) -> None:
             FROM information_schema.table_privileges
             WHERE table_schema = 'public'
               AND table_name = 'workspace_membership'
-              AND grantee = current_user
+               AND grantee = current_user
             """
         )
-    )
+    }
     assert privileges == {"SELECT"}, f"unexpected grants: {privileges}"
 
 
