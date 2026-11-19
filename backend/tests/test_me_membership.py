@@ -92,12 +92,12 @@ def _sign(claims: dict[str, Any]) -> str:
     return encoded
 
 
-def _claims(*, sub: str, **extra: Any) -> dict[str, Any]:
+def _claims(*, sub: str, uc_uid: str | None = None, **extra: Any) -> dict[str, Any]:
     now = int(time.time())
     body: dict[str, Any] = {
         "iss": ISSUER,
         "sub": sub,
-        "uc_uid": sub,
+        "uc_uid": uc_uid if uc_uid is not None else sub,
         "aud": "tax-planning-ops",
         "azp": "tax-planning-ops",
         "iat": now,
@@ -134,17 +134,23 @@ async def _get_me(
     client: Any,
     *,
     sub: str,
+    uc_uid: str | None = None,
     workspace_id: UUID | None = None,
     workspaces: list[dict[str, str]] | None = None,
     header_workspace: UUID | None = None,
 ) -> dict[str, Any]:
-    """GET /me for a token for `sub`; returns the response payload."""
+    """GET /me for a token for `sub`; returns the response payload.
+
+    When ``uc_uid`` is given and differs from ``sub`` the token carries a
+    ``uc_uid`` claim that names a different subject than ``sub`` — the
+    GATE-347 shape (production's one row is keyed ``uc_uid "aaron"`` while
+    the token ``sub`` is a Keycloak UUID)."""
     extra: dict[str, Any] = {}
     if workspace_id is not None:
         extra["workspace_id"] = str(workspace_id)
     if workspaces:
         extra["workspaces"] = workspaces
-    token = _sign(_claims(sub=sub, **extra))
+    token = _sign(_claims(sub=sub, uc_uid=uc_uid, **extra))
     headers: dict[str, str] = {"Authorization": f"Bearer {token}"}
     if header_workspace is not None:
         headers["X-Workspace-Id"] = str(header_workspace)
@@ -284,4 +290,67 @@ async def test_me_existing_member_role_unchanged(client: Any, admin_conn: Any) -
     await _get_me(client, sub=sub, workspace_id=other_ws)
     assert await _membership_for(admin_conn, sub, other_ws) == [
         {"role": "member", "workspace_id": other_ws, "workspace_name": FIRM_NAME}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_me_self_serve_uc_uid_differs_from_sub(
+    client: Any, admin_conn: Any
+) -> None:
+    """GATE-347: a self-serve token whose uc_uid differs from sub (the
+    production shape) must still get its uuid5(sub) home row as owner,
+    exactly once. The old code derived the workspace from uc_uid, so for
+    any token where uc_uid != sub the two never matched and the home row
+    was never written (fails closed: a missing switcher entry)."""
+    from app.core.auth import derive_self_serve_workspace
+
+    uc_uid = "fictional-aaron-uc"
+    sub = "fictional-keycloak-sub-005"
+    derived = derive_self_serve_workspace({"sub": sub})
+    assert derived is not None
+    # Sanity: the two derivations genuinely differ — this is what broke.
+    wrong_derived = derive_self_serve_workspace({"sub": uc_uid})
+    assert wrong_derived is not None and wrong_derived != derived
+
+    first = await _get_me(client, sub=sub, uc_uid=uc_uid)
+    assert first["workspace_id"] == str(derived)
+    assert {w["workspaceId"] for w in first["workspaces"]} == {str(derived)}
+    assert [w["role"] for w in first["workspaces"] if w["workspaceId"] == str(derived)] == [
+        "owner"
+    ]
+
+    rows = await _membership_for(admin_conn, uc_uid, derived)
+    assert len(rows) == 1
+    assert rows[0]["role"] == "owner"
+
+    # Idempotent: a second /me call writes nothing new.
+    second = await _get_me(client, sub=sub, uc_uid=uc_uid)
+    assert second["workspace_id"] == str(derived)
+    assert await _membership_for(admin_conn, uc_uid, derived) == rows
+
+
+@pytest.mark.asyncio
+async def test_me_claimed_workspace_uc_uid_differs_from_sub(
+    client: Any, admin_conn: Any
+) -> None:
+    """GATE-347: a token WITH an explicit workspace claim (uc_uid != sub)
+    must get NO home row — the "no explicit workspace claim" rule must hold
+    even when uc_uid differs from sub."""
+    from app.core.auth import derive_self_serve_workspace
+
+    uc_uid = "fictional-aaron-uc-006"
+    sub = "fictional-keycloak-sub-006"
+    derived = derive_self_serve_workspace({"sub": sub})
+    assert derived is not None
+    firm_ws = uuid4()
+    await _seed_workspace(admin_conn, firm_ws)
+    await _seed_membership(admin_conn, uc_uid, firm_ws, "member")
+
+    payload = await _get_me(client, sub=sub, uc_uid=uc_uid, workspace_id=firm_ws)
+    assert payload["workspace_id"] == str(firm_ws)
+    # The home workspace (uuid5(sub)) must NOT have been written.
+    assert await _membership_for(admin_conn, uc_uid, derived) == []
+    # The claimed workspace's existing row is unchanged.
+    assert await _membership_for(admin_conn, uc_uid, firm_ws) == [
+        {"role": "member", "workspace_id": firm_ws, "workspace_name": FIRM_NAME}
     ]
