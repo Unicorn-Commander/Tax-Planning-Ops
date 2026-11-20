@@ -12,7 +12,7 @@ from starlette.responses import JSONResponse, Response
 from app.core.config import Settings
 from app.core.request_context import current_door, normalize_door
 from app.db.session import async_session_maker
-from app.integrations.control_plane import check_entitlement
+from app.integrations.control_plane import check_tax_ops_access
 from app.integrations.keycloak import KeycloakVerifier
 from app.oauth_discovery import bearer_token_present, is_mcp_path, mcp_www_authenticate
 from app.schemas.auth import AuthContext
@@ -37,6 +37,9 @@ WORKSPACE_HEADER = "X-Workspace-Id"
 _SELF_SERVE_WS_NAMESPACE = UUID("d5f7e2a0-7c3b-4e6a-9f1d-7461782d706c")
 # Baseline scope a self-serve user holds WITHIN their own derived workspace.
 _SELF_SERVE_SCOPES = frozenset({"taxplan:advisor"})
+
+# 403 body for a caller whose Ops-Center org lacks tax_ops_access.
+NOT_ENTITLED_DETAIL = "Tax-Planning-Ops is not included in your plan"
 
 
 def _scopes_from_claims(claims: dict[str, Any]) -> set[str]:
@@ -189,8 +192,8 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                     )
                 owner = pat.owner_uc_uid
                 # Synthesize minimal claims so the SAME downstream flow
-                # (resolve_workspace_id + _scopes_from_claims + self-serve +
-                # entitlement) fences a PAT caller identically to a browser.
+                # (resolve_workspace_id + _scopes_from_claims + self-serve) fences a
+                # PAT caller identically to a browser. The entitlement differs: see below.
                 claims: dict[str, Any] = {
                     "sub": owner,
                     "uc_uid": owner,
@@ -204,8 +207,26 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 request.state.auth_via_pat = True
                 # Fire-and-forget last_used bump; never block auth on it.
                 asyncio.create_task(_touch_pat_last_used(pat.id))
+                # A PAT is our own credential: never send it to Ops-Center.
+                # With the check on, a PAT caller has no user bearer to present
+                # and is refused (fail closed).
+                user_bearer = ""
             else:
                 claims = await self.verifier.verify(token)
+                user_bearer = token
+            # The door. Asked BEFORE any workspace is resolved, derived or
+            # looked up: a refused caller gets no self-serve workspace, no
+            # membership lookup, and never reaches a route (so no workspace row
+            # is written). Off (ENTITLEMENT_CHECK_ENABLED=false) = allowed.
+            entitled = await check_tax_ops_access(
+                bearer=user_bearer,
+                sub=str(claims.get("sub") or ""),
+                settings=self.settings,
+            )
+            if not entitled:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, detail=NOT_ENTITLED_DETAIL
+                )
             header_ws = request.headers.get(WORKSPACE_HEADER)
             uc_uid = str(claims.get("uc_uid") or claims.get("sub") or "")
             try:
@@ -230,11 +251,6 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             # firm workspaces still require an explicitly granted taxplan role.
             if derive_self_serve_workspace(claims) is not None:
                 scopes = scopes | _SELF_SERVE_SCOPES
-            entitled = await check_entitlement(workspace_id, self.settings)
-            if not entitled:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN, detail="module not entitled"
-                )
             request.state.auth_context = AuthContext(
                 claims=claims,
                 uc_uid=str(claims.get("uc_uid") or claims.get("sub") or ""),
