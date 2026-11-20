@@ -287,9 +287,8 @@ For source runs, `backend/app/core/config.py` reads API settings from the proces
 | `KEYCLOAK_REDIRECT_URI` / `FRONTEND_URL` / `CORS_ORIGINS` | API callback, browser redirect base, and allowed origins; Compose derives them from `API_DOMAIN` and `DOMAIN`. |
 | `KEYCLOAK_CLIENT_SECRET` | Confidential-client secret for the browser login and the service-account mint. |
 | `KEYCLOAK_URL` / `KEYCLOAK_REALM` | Compose forwards these as frontend build arguments, but the current login flow uses the backend `KEYCLOAK_ISSUER`. |
-| `ENTITLEMENT_CHECK_ENABLED` | Enables the workspace `tax-planning-ops` entitlement check on authenticated requests. Results are cached for 60 seconds; a failed refresh can reuse a stale result. Default off skips this check, not authentication or scopes. |
-| `CONTROL_PLANE_BASE_URL` | Ops-Center base URL used by that check. |
-| `CONTROL_PLANE_TOKEN` | Bearer token for the entitlement request. |
+| `ENTITLEMENT_CHECK_ENABLED` | Asks Ops-Center whether the caller's org has `tax_ops_access` on every authenticated request, before any workspace is resolved. Allowed only on 200 with `authorized: true`; any other answer is 403 "Tax-Planning-Ops is not included in your plan" (fail closed). Positive answers are cached up to 60 seconds; refusals are not cached. PAT callers are refused while it is on. Default off skips this check, not authentication or scopes. |
+| `OPS_CENTER_URL` | Ops-Center origin for that check (no default). Dogfood `https://magicunicorn.dev`, production `https://unicorncommander.ai`. Empty with the check on refuses everyone and logs one startup error. |
 | `GARAGE_ENDPOINT` | S3 endpoint for return PDFs and plan documents. |
 | `GARAGE_ACCESS_KEY` / `GARAGE_SECRET_KEY` | When either is empty, the API keeps the object key and does not store the bytes. |
 | `GARAGE_BUCKET` | Bucket name. |
