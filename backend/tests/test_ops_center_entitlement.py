@@ -3,6 +3,11 @@
 A fake Ops-Center (httpx.MockTransport) answers each case; no network. The
 caller's own bearer is forwarded. Allowed ONLY on 200 with authorized == true;
 every other answer fails closed. All subjects, orgs and hosts are fictional.
+
+Red on base 93e5b147: the cache reset no longer errors in setup; each test
+then FAILS in its body with AttributeError, because the unit under test
+(check_tax_ops_access, tax_ops_org, log_entitlement_config) does not exist on
+the base: that missing client IS the hole this file pins.
 """
 
 from __future__ import annotations

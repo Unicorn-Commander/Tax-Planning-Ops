@@ -7,6 +7,15 @@ no self-serve workspace is derived. The workspace's trusted org
 (workspaces.org_id) is a stubbed lookup, and the fake Ops-Center answers per
 requested org: org A and org B are different firms. All subjects, orgs and
 hosts are fictional.
+
+Red on base 93e5b147 (these tests, that base's app/): setup never errors
+(cache reset and the org lookup stub are getattr/raising=False). Every
+"entitled -> 200" test FAILS on behaviour: the base flag-on path asks no
+Ops-Center and refuses everyone ("module not entitled"), so 403 != 200 and no
+request reaches the fake. The refusal tests fail on the body (the base 403 is
+not the plan message). Correctly green on base: the flag-off test (today's
+behaviour is the contract), the empty-URL and PAT refusals (the base refuses
+them too), and the unbound-workspace refusal (the base refuses every caller).
 """
 
 from __future__ import annotations

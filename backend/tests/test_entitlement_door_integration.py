@@ -13,6 +13,13 @@ Skips unless TPO_TEST_OWNER_DATABASE_URL points at a migrated DB and the app's
 DATABASE_URL points at the same DB as the NOBYPASSRLS app role (like
 test_me_membership.py). Ops-Center and the Keycloak JWKS are an
 httpx.MockTransport: no network. All subjects, orgs and hosts are fictional.
+
+Red on base 93e5b147 (app/ at the base, DB migrated through 0023): the
+entitled, refused and cross-org cases FAIL on behaviour (base: 403 "module not
+entitled" for everyone; no Ops-Center call; no org bound). Green on base: the
+flag-off test (today's behaviour), the unbound-workspace refusal (the base
+refuses every caller) and the trigger test (it tests migration 0023 itself;
+on a DB without 0023 it errors on the missing org_id column, the correct red).
 """
 
 from __future__ import annotations
