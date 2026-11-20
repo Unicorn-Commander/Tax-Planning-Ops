@@ -143,7 +143,9 @@ def _timeout(request: httpx.Request) -> httpx.Response:
             id="org-id-not-canonical",
         ),
         pytest.param(
-            lambda r: _orgs_body([{"org_id": ORG_A.upper(), "role": "owner"}]),
+            lambda r: _orgs_body(
+                [{"org_id": "11111111-2222-4333-8444-AAAAAAAAAAAA", "role": "owner"}]
+            ),
             id="org-id-not-lowercase-canonical",
         ),
         pytest.param(lambda r: _orgs_body([{"org_id": ORG_A}]), id="role-missing"),
