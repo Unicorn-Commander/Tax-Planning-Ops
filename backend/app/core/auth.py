@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Callable, Iterable
 from typing import Any
 from uuid import UUID, uuid5
@@ -12,7 +13,7 @@ from starlette.responses import JSONResponse, Response
 from app.core.config import Settings
 from app.core.request_context import current_door, normalize_door
 from app.db.session import async_session_maker
-from app.integrations.control_plane import check_entitlement
+from app.integrations.control_plane import tax_ops_org
 from app.integrations.keycloak import KeycloakVerifier
 from app.oauth_discovery import bearer_token_present, is_mcp_path, mcp_www_authenticate
 from app.schemas.auth import AuthContext
@@ -21,7 +22,9 @@ from app.security.pat import (
     looks_like_pat,
     touch_last_used,
 )
-from app.services.workspaces import is_workspace_member
+from app.services.workspaces import is_workspace_member, workspace_org
+
+logger = logging.getLogger("tax_planning_ops.entitlement")
 
 DOOR_HEADER = "X-UC-Door"
 
@@ -37,6 +40,9 @@ WORKSPACE_HEADER = "X-Workspace-Id"
 _SELF_SERVE_WS_NAMESPACE = UUID("d5f7e2a0-7c3b-4e6a-9f1d-7461782d706c")
 # Baseline scope a self-serve user holds WITHIN their own derived workspace.
 _SELF_SERVE_SCOPES = frozenset({"taxplan:advisor"})
+
+# 403 body for a caller whose Ops-Center org lacks tax_ops_access.
+NOT_ENTITLED_DETAIL = "Tax-Planning-Ops is not included in your plan"
 
 
 def _scopes_from_claims(claims: dict[str, Any]) -> set[str]:
@@ -111,6 +117,21 @@ def resolve_workspace_id(
     return selected, authorized
 
 
+def _target_workspace(claims: dict[str, Any], header_ws: str | None) -> UUID | None:
+    """The workspace this request would enter (header, else the claim's primary,
+    else the self-serve derivation): the same pick as resolve_workspace_id,
+    before it is authorized. None when there is none or the header is not a uuid."""
+    if header_ws:
+        try:
+            return UUID(str(header_ws))
+        except ValueError:
+            return None
+    primary, authorized = _claim_workspace_ids(claims)
+    if authorized:
+        return primary or sorted(authorized, key=str)[0]
+    return derive_self_serve_workspace(claims)
+
+
 async def _touch_pat_last_used(pat_id: UUID) -> None:
     """Best-effort last_used_at bump in its own committed session. Fire-and-
     forget: any failure is swallowed so auth is never blocked on telemetry."""
@@ -148,6 +169,38 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.settings = settings
         self.verifier = verifier or KeycloakVerifier(settings)
+
+    async def _entitled_org(
+        self, claims: dict[str, Any], target: UUID | None, bearer: str
+    ) -> UUID | None:
+        """The org that entitles this caller to the workspace being entered.
+
+        The org is the workspace's own, read server-side (workspaces.org_id),
+        never a request value: a caller entitled in org A who holds a claim,
+        header or membership for org B's workspace is asked about B, and only
+        an answer for exactly B lets them in. The one unbound case allowed is
+        the caller's OWN self-serve workspace: it is bound (by get_tenant_db)
+        to the org Ops-Center answers for the caller. Any other workspace
+        without a bound org is refused (fail closed)."""
+        if not bearer:
+            # A PAT (or anything without a user bearer): nothing Ops-Center can
+            # verify, so refuse before touching the database.
+            logger.warning("tax_ops_access refused: no user bearer to present")
+            return None
+        if target is None:
+            logger.warning("tax_ops_access refused: no workspace to enter")
+            return None
+        bound = await workspace_org(target)
+        if bound is None and target != derive_self_serve_workspace(claims):
+            logger.warning("tax_ops_access refused: workspace has no bound org")
+            return None
+        answered = await tax_ops_org(
+            bearer=bearer,
+            sub=str(claims.get("sub") or ""),
+            settings=self.settings,
+            org_id=str(bound) if bound else None,
+        )
+        return UUID(answered) if answered else None
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         # Stamp which door this request came through (GUI / Console / MCP / API)
@@ -189,8 +242,8 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                     )
                 owner = pat.owner_uc_uid
                 # Synthesize minimal claims so the SAME downstream flow
-                # (resolve_workspace_id + _scopes_from_claims + self-serve +
-                # entitlement) fences a PAT caller identically to a browser.
+                # (resolve_workspace_id + _scopes_from_claims + self-serve) fences a
+                # PAT caller identically to a browser. The entitlement differs: see below.
                 claims: dict[str, Any] = {
                     "sub": owner,
                     "uc_uid": owner,
@@ -204,9 +257,26 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 request.state.auth_via_pat = True
                 # Fire-and-forget last_used bump; never block auth on it.
                 asyncio.create_task(_touch_pat_last_used(pat.id))
+                # A PAT is our own credential: never send it to Ops-Center.
+                # With the check on, a PAT caller has no user bearer to present
+                # and is refused (fail closed).
+                user_bearer = ""
             else:
                 claims = await self.verifier.verify(token)
+                user_bearer = token
             header_ws = request.headers.get(WORKSPACE_HEADER)
+            # The door. Asked BEFORE the workspace selection is authorized
+            # (no membership lookup) and before any route runs (so a refused
+            # caller never gets a workspace row). Off
+            # (ENTITLEMENT_CHECK_ENABLED=false) = allowed, today's behaviour.
+            org_id: UUID | None = None
+            target = _target_workspace(claims, header_ws)
+            if self.settings.ENTITLEMENT_CHECK_ENABLED:
+                org_id = await self._entitled_org(claims, target, user_bearer)
+                if org_id is None:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN, detail=NOT_ENTITLED_DETAIL
+                    )
             uc_uid = str(claims.get("uc_uid") or claims.get("sub") or "")
             try:
                 workspace_id, authorized = resolve_workspace_id(claims, header_ws)
@@ -224,23 +294,24 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                         raise
                 else:
                     raise
+            if org_id is not None and workspace_id != target:
+                # Never let an answer for one workspace's org admit another.
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, detail=NOT_ENTITLED_DETAIL
+                )
             scopes = _scopes_from_claims(claims)
             # Self-serve: a UC user with no explicit workspace claim is the
             # advisor of their own derived workspace (RLS-isolated). Managed /
             # firm workspaces still require an explicitly granted taxplan role.
             if derive_self_serve_workspace(claims) is not None:
                 scopes = scopes | _SELF_SERVE_SCOPES
-            entitled = await check_entitlement(workspace_id, self.settings)
-            if not entitled:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN, detail="module not entitled"
-                )
             request.state.auth_context = AuthContext(
                 claims=claims,
                 uc_uid=str(claims.get("uc_uid") or claims.get("sub") or ""),
                 workspace_id=workspace_id,
                 authorized_workspace_ids=authorized,
                 scopes=scopes,
+                org_id=org_id,
             )
         except HTTPException as exc:
             headers = None

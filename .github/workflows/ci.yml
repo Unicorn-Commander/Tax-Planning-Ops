@@ -44,6 +44,12 @@ jobs:
         run: |
           python -m app.db.bootstrap
           pytest -m integration
+          # The entitlement door (fake Ops-Center) must really run against
+          # Postgres here: a skip is a failure.
+          pytest -m integration tests/test_entitlement_door_integration.py -rs > door.log \
+            || { cat door.log; exit 1; }
+          cat door.log
+          ! grep -q SKIPPED door.log
       - name: exactly one alembic head
         run: python scripts/check_alembic_heads.py
 
