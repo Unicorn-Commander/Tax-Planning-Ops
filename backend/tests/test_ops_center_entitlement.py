@@ -225,6 +225,31 @@ async def test_positive_answer_cached_per_sub_and_org(fake_ops_center) -> None:
     assert len(seen) == 3
 
 
+async def test_allowed_for_org_a_does_not_serve_org_b(fake_ops_center) -> None:
+    """R2-2: allow A, then ask about B within 60 s: a new call, B's own answer."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.params.get("org_id") == ORG:
+            return httpx.Response(200, json=_body(True))
+        return httpx.Response(403, json={"detail": "not a member"})
+
+    seen = fake_ops_center(handler)
+    assert await _check(org_id=ORG) is True
+    assert await _check(org_id=ORG_B) is False
+    assert [r.url.params["org_id"] for r in seen] == [ORG, ORG_B]
+
+
+async def test_new_bearer_revalidates_within_60s(fake_ops_center) -> None:
+    """R2-2: a new bearer (a new session, maybe another org membership by now)
+    is asked again: a positive answer is bound to the bearer that earned it."""
+    answers = iter([_body(True), _body(False)])
+    seen = fake_ops_center(lambda r: httpx.Response(200, json=next(answers)))
+    assert await _check(org_id=ORG, bearer="fictional.bearer.one") is True
+    assert await _check(org_id=ORG, bearer="fictional.bearer.two") is False
+    assert len(seen) == 2
+    assert seen[1].headers["Authorization"] == "Bearer fictional.bearer.two"
+
+
 async def test_positive_cache_expires_within_60s(fake_ops_center, monkeypatch) -> None:
     clock = [1000.0]
     monkeypatch.setattr(control_plane.time, "monotonic", lambda: clock[0])

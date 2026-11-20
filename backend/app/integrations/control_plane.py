@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
 from uuid import UUID
@@ -24,13 +25,14 @@ logger = logging.getLogger("tax_planning_ops.entitlement")
 # bound to. Anything else (401/403/404/5xx, timeout, connection error,
 # malformed JSON, missing or non-bool "authorized", a missing or different
 # org_id) is a refusal: fail closed. Only a positive answer is cached, per
-# (sub, requested org), for at most _TAX_OPS_CACHE_TTL_SECONDS; a refusal is
-# never cached.
+# (sub, requested org, bearer digest), for at most _TAX_OPS_CACHE_TTL_SECONDS:
+# an answer for org A never serves org B, and a new bearer (a new session) is
+# asked again. A refusal is never cached. The bearer itself is never stored.
 TAX_OPS_FEATURE_KEY = "tax_ops_access"
 _TAX_OPS_TIMEOUT_SECONDS = 3.0
 _TAX_OPS_CACHE_TTL_SECONDS = 60.0
-# (sub, requested org or "") -> (allowed at, the org Ops-Center answered for)
-_tax_ops_allowed: dict[tuple[str, str], tuple[float, str]] = {}
+# (sub, requested org or "", sha256(bearer)) -> (allowed at, the org answered for)
+_tax_ops_allowed: dict[tuple[str, str, str], tuple[float, str]] = {}
 
 
 def clear_entitlement_cache() -> None:
@@ -74,7 +76,7 @@ async def tax_ops_org(
     if not bearer or not sub:
         _refuse("no user bearer to present")
         return None
-    key = (sub, org_id or "")
+    key = (sub, org_id or "", hashlib.sha256(bearer.encode()).hexdigest())
     now = time.monotonic()
     cached = _tax_ops_allowed.get(key)
     if cached is not None and now - cached[0] < _TAX_OPS_CACHE_TTL_SECONDS:

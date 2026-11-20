@@ -328,6 +328,39 @@ def test_mcp_bearer_acting_for_b_is_checked_against_b(
         assert reached == {}
 
 
+@pytest.mark.parametrize("b_answer", ["refused", "entitled"])
+def test_allowed_in_a_then_b_within_60s_asks_again_for_b(
+    ops_center, monkeypatch: pytest.MonkeyPatch, b_answer: str
+) -> None:
+    """R2-2: a cached 'allowed' for org A never serves org B: the same caller
+    and bearer moving to B's workspace seconds later gets a NEW Ops-Center call
+    and B's own answer."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if b_answer == "entitled" and request.url.params.get("org_id") == ORG_B:
+            return httpx.Response(200, json=_body(True, ORG_B))
+        return _entitled_in_a_only(request)
+
+    seen = ops_center(handler)
+
+    async def _member(uc_uid: str, workspace_id: UUID) -> bool:
+        return True
+
+    monkeypatch.setattr(authmod, "is_workspace_member", _member)
+    claims = {"sub": "fictional-advisor-785", "scope": "taxplan:advisor"}
+    resp_a, reached_a = _dispatch(claims, headers={"X-Workspace-Id": str(FIRM_WS)})
+    assert resp_a.status_code == 200
+    assert str(reached_a["ctx"].org_id) == ORG_A
+    resp_b, reached_b = _dispatch(claims, headers={"X-Workspace-Id": str(FIRM_B_WS)})
+    assert [r.url.params.get("org_id") for r in seen] == [ORG_A, ORG_B]
+    if b_answer == "entitled":
+        assert resp_b.status_code == 200
+        assert str(reached_b["ctx"].org_id) == ORG_B
+    else:
+        assert resp_b.status_code == 403
+        assert reached_b == {}
+
+
 def test_unbound_managed_workspace_is_refused_without_asking(ops_center) -> None:
     """R2-1: a claimed workspace with no server-side org has nothing to check
     against; it is refused (fail closed), and only a self-serve workspace may
