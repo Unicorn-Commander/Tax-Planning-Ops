@@ -53,6 +53,19 @@ async def is_workspace_member(uc_uid: str, workspace_id: uuid.UUID) -> bool:
         return found is not None
 
 
+async def workspace_org(workspace_id: uuid.UUID) -> uuid.UUID | None:
+    """The Ops-Center org a workspace is bound to (None: no row, or not bound).
+
+    Server-side truth for the entitlement door: the org it asks Ops-Center
+    about is read here, never taken from the request. Runs in its own session
+    bound to that workspace (the workspaces RLS only shows the bound row)."""
+    async with async_session_maker() as session:
+        await bind_session_context(session, str(workspace_id), None)
+        return await session.scalar(
+            select(Workspace.org_id).where(Workspace.id == workspace_id)
+        )
+
+
 async def list_my_memberships(db: AsyncSession, *, uc_uid: str) -> list[WorkspaceMembership]:
     """The caller's workspaces (RLS already scopes to their uc_uid). Newest first;
     the home workspace, if seeded, sorts naturally by creation."""
@@ -110,19 +123,23 @@ async def ensure_home_membership(
     await db.flush()
 
 
-async def create_workspace(*, uc_uid: str, name: str) -> dict[str, Any]:
+async def create_workspace(
+    *, uc_uid: str, name: str, org_id: uuid.UUID | None = None
+) -> dict[str, Any]:
     """Create a brand-new named workspace owned by this user.
 
     Binds a fresh session to the NEW workspace id (so the workspaces
     ``WITH CHECK`` passes) AND the caller's uc_uid (so the membership
     ``WITH CHECK`` passes), provisions the workspace row, and records ownership.
+    ``org_id`` (the org the creating request was entitled in) binds the new
+    workspace to that Ops-Center org.
     """
     clean = name.strip() or "Untitled workspace"
     new_id = uuid.uuid4()
     async with async_session_maker() as session:
         # Bind to the new workspace + the caller so both RLS WITH CHECKs pass.
         await bind_session_context(session, str(new_id), uc_uid)
-        await ensure_workspace(session, str(new_id), clean)
+        await ensure_workspace(session, str(new_id), clean, str(org_id) if org_id else None)
         membership = WorkspaceMembership(
             user_uc_uid=uc_uid,
             workspace_id=new_id,

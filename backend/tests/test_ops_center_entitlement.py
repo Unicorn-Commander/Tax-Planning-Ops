@@ -20,6 +20,7 @@ from app.integrations import control_plane
 OPS_CENTER = "https://ops-center.example.com"
 BEARER = "fictional.user.bearer"  # noqa: S105
 ORG = "11111111-2222-4333-8444-555555555555"
+ORG_B = "22222222-3333-4444-8555-666666666666"
 
 
 def _settings(**overrides: Any) -> Settings:
@@ -46,7 +47,9 @@ def _body(authorized: bool) -> dict[str, Any]:
 
 @pytest.fixture(autouse=True)
 def _clear_cache() -> None:
-    control_plane.clear_entitlement_cache()
+    # getattr: on a base without the cache the tests still run and fail on
+    # behaviour, not in setup.
+    getattr(control_plane, "clear_entitlement_cache", lambda: None)()
 
 
 @pytest.fixture
@@ -100,6 +103,37 @@ async def test_org_claim_is_forwarded(fake_ops_center) -> None:
     assert await _check(org_id=ORG) is True
     assert seen[0].url.params["org_id"] == ORG
     assert seen[0].url.params["feature_key"] == "tax_ops_access"
+
+
+async def test_answer_for_another_org_refuses(fake_ops_center) -> None:
+    """R2-1: asked for org B, a 200 authorized=true answer for org A is a refusal."""
+    seen = fake_ops_center(lambda r: httpx.Response(200, json=_body(True)))
+    assert await _check(org_id=ORG_B) is False
+    assert seen[0].url.params["org_id"] == ORG_B
+
+
+async def test_answer_for_the_asked_org_allows(fake_ops_center) -> None:
+    fake_ops_center(lambda r: httpx.Response(200, json={**_body(True), "org_id": ORG_B}))
+    assert await _check(org_id=ORG_B) is True
+
+
+async def test_tax_ops_org_returns_the_answered_org(fake_ops_center) -> None:
+    fake_ops_center(lambda r: httpx.Response(200, json=_body(True)))
+    org = await control_plane.tax_ops_org(
+        bearer=BEARER, sub="fictional-sub-1", settings=_settings()
+    )
+    assert org == ORG
+
+
+@pytest.mark.parametrize(
+    "org_id",
+    [None, "", "not-a-uuid", "AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE", 42],
+    ids=["null", "empty", "not-a-uuid", "non-canonical", "not-a-string"],
+)
+async def test_authorized_without_a_usable_org_refuses(fake_ops_center, org_id) -> None:
+    """R2-1: authorized=true with no org to bind the workspace to is a refusal."""
+    fake_ops_center(lambda r: httpx.Response(200, json={**_body(True), "org_id": org_id}))
+    assert await _check() is False
 
 
 @pytest.mark.parametrize(

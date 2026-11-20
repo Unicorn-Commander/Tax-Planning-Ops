@@ -20,6 +20,8 @@ class AuthContext(BaseModel):
     workspace_id: UUID
     authorized_workspace_ids: set[UUID]
     scopes: set[str]
+    # The Ops-Center org that entitled this request (None with the door off).
+    org_id: UUID | None = None
 
 
 class MeResponse(BaseModel):

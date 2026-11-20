@@ -30,7 +30,7 @@ async def post_load_demo(
     Idempotent: if the user already has a demo workspace it is returned as-is
     (no duplicate, no re-seed). Returns ``{workspace_id, name, client_count}``.
     """
-    return await load_demo_workspace(uc_uid=ctx.uc_uid)
+    return await load_demo_workspace(uc_uid=ctx.uc_uid, org_id=ctx.org_id)
 
 
 @router.post("/reset")

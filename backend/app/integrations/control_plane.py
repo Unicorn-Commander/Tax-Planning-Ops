@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from uuid import UUID
 
 import httpx
 
@@ -15,50 +16,69 @@ logger = logging.getLogger("tax_planning_ops.entitlement")
 # for the caller's OWN Keycloak bearer with
 #   {"org_id", "org_name", "display_name", "slug", "tier", "role",
 #    "entitlements": [...], "authorized": bool}
-# Allowed ONLY on 200 with authorized is True. Anything else (401/403/404/5xx,
-# timeout, connection error, malformed JSON, missing or non-bool "authorized")
-# is a refusal: fail closed. Only a positive answer is cached, per (sub, org),
-# for at most _TAX_OPS_CACHE_TTL_SECONDS; a refusal is never cached.
+# Allowed ONLY on 200 with authorized is True AND an org bound to the
+# workspace being entered: when the caller asks for ``org_id`` (the workspace's
+# trusted org, resolved server-side) the answer's org_id must equal it exactly;
+# with no org to ask for (a self-serve caller whose own workspace is not bound
+# yet) the answer must name a canonical org uuid, which the caller is then
+# bound to. Anything else (401/403/404/5xx, timeout, connection error,
+# malformed JSON, missing or non-bool "authorized", a missing or different
+# org_id) is a refusal: fail closed. Only a positive answer is cached, per
+# (sub, requested org), for at most _TAX_OPS_CACHE_TTL_SECONDS; a refusal is
+# never cached.
 TAX_OPS_FEATURE_KEY = "tax_ops_access"
 _TAX_OPS_TIMEOUT_SECONDS = 3.0
 _TAX_OPS_CACHE_TTL_SECONDS = 60.0
-_tax_ops_allowed: dict[tuple[str, str], float] = {}
+# (sub, requested org or "") -> (allowed at, the org Ops-Center answered for)
+_tax_ops_allowed: dict[tuple[str, str], tuple[float, str]] = {}
 
 
 def clear_entitlement_cache() -> None:
     _tax_ops_allowed.clear()
 
 
-def _refuse(reason: str) -> bool:
+def _refuse(reason: str) -> None:
     # One line per refused request, the status/reason only: never the token,
     # never the response body.
     logger.warning("tax_ops_access refused: %s", reason)
-    return False
 
 
-async def check_tax_ops_access(
+def _canonical_org(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        canonical = str(UUID(value))
+    except ValueError:
+        return None
+    return canonical if canonical == value else None
+
+
+async def tax_ops_org(
     *,
     bearer: str,
     sub: str,
     settings: Settings,
     org_id: str | None = None,
-) -> bool:
-    """Is the caller's Ops-Center org entitled to Tax-Planning-Ops?
+) -> str | None:
+    """The Ops-Center org that entitles this caller to Tax-Planning-Ops, or None.
 
-    ``bearer`` is the caller's own Keycloak access token; ``org_id`` (optional)
-    is forwarded as ``?org_id=`` and must be an org the caller belongs to."""
-    if not settings.ENTITLEMENT_CHECK_ENABLED:
-        return True
+    ``bearer`` is the caller's own Keycloak access token. ``org_id`` is the
+    TRUSTED org of the workspace being entered (never taken from the request);
+    it is forwarded as ``?org_id=`` and the answer must be for exactly that org.
+    Without it, the org Ops-Center resolves for the caller is returned. Callers
+    must check ``ENTITLEMENT_CHECK_ENABLED`` themselves: this always asks."""
     base = settings.OPS_CENTER_URL.strip().rstrip("/")
     if not base:
-        return _refuse("OPS_CENTER_URL is not set")
+        _refuse("OPS_CENTER_URL is not set")
+        return None
     if not bearer or not sub:
-        return _refuse("no user bearer to present")
+        _refuse("no user bearer to present")
+        return None
     key = (sub, org_id or "")
     now = time.monotonic()
-    allowed_at = _tax_ops_allowed.get(key)
-    if allowed_at is not None and now - allowed_at < _TAX_OPS_CACHE_TTL_SECONDS:
-        return True
+    cached = _tax_ops_allowed.get(key)
+    if cached is not None and now - cached[0] < _TAX_OPS_CACHE_TTL_SECONDS:
+        return cached[1]
     _tax_ops_allowed.pop(key, None)
     params = {"feature_key": TAX_OPS_FEATURE_KEY}
     if org_id:
@@ -71,21 +91,51 @@ async def check_tax_ops_access(
                 headers={"Authorization": f"Bearer {bearer}"},
             )
     except httpx.TimeoutException:
-        return _refuse("timeout")
+        _refuse("timeout")
+        return None
     except httpx.HTTPError as exc:
-        return _refuse(f"connection error ({type(exc).__name__})")
+        _refuse(f"connection error ({type(exc).__name__})")
+        return None
     if response.status_code != 200:
-        return _refuse(f"status {response.status_code}")
+        _refuse(f"status {response.status_code}")
+        return None
     try:
         body = response.json()
     except ValueError:
-        return _refuse("status 200, malformed JSON")
+        _refuse("status 200, malformed JSON")
+        return None
     if not isinstance(body, dict) or not isinstance(body.get("authorized"), bool):
-        return _refuse("status 200, no boolean 'authorized'")
+        _refuse("status 200, no boolean 'authorized'")
+        return None
     if body["authorized"] is not True:
-        return _refuse("status 200, authorized false")
-    _tax_ops_allowed[key] = now
-    return True
+        _refuse("status 200, authorized false")
+        return None
+    answered = _canonical_org(body.get("org_id"))
+    if answered is None:
+        _refuse("status 200, no org_id")
+        return None
+    if org_id and answered != org_id:
+        _refuse("status 200, org_id is not the workspace's org")
+        return None
+    _tax_ops_allowed[key] = (now, answered)
+    return answered
+
+
+async def check_tax_ops_access(
+    *,
+    bearer: str,
+    sub: str,
+    settings: Settings,
+    org_id: str | None = None,
+) -> bool:
+    """Is the caller entitled to Tax-Planning-Ops (in ``org_id``, if given)?
+    Off (ENTITLEMENT_CHECK_ENABLED=false) = allowed without asking."""
+    if not settings.ENTITLEMENT_CHECK_ENABLED:
+        return True
+    return (
+        await tax_ops_org(bearer=bearer, sub=sub, settings=settings, org_id=org_id)
+        is not None
+    )
 
 
 def log_entitlement_config(settings: Settings) -> None:

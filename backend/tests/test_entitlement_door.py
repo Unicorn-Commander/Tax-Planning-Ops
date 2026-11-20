@@ -3,7 +3,10 @@
 Drives JWTAuthMiddleware.dispatch directly with a stub Keycloak verifier and a
 fake Ops-Center (httpx.MockTransport); no network, no database. A refused
 caller gets 403 before any route runs, so no workspace row can be written and
-no self-serve workspace is derived. All subjects and hosts are fictional.
+no self-serve workspace is derived. The workspace's trusted org
+(workspaces.org_id) is a stubbed lookup, and the fake Ops-Center answers per
+requested org: org A and org B are different firms. All subjects, orgs and
+hosts are fictional.
 """
 
 from __future__ import annotations
@@ -27,11 +30,14 @@ from app.security.pat import PATRow, generate_secret
 OPS_CENTER = "https://ops-center.example.com"
 REFUSED = "Tax-Planning-Ops is not included in your plan"
 FIRM_WS = UUID("00000000-0000-4000-8000-0000000000f1")
+FIRM_B_WS = UUID("00000000-0000-4000-8000-0000000000f2")
+ORG_A = "11111111-2222-4333-8444-555555555555"
+ORG_B = "22222222-3333-4444-8555-666666666666"
 
 
-def _body(authorized: bool) -> dict[str, Any]:
+def _body(authorized: bool, org_id: str = ORG_A) -> dict[str, Any]:
     return {
-        "org_id": "11111111-2222-4333-8444-555555555555" if authorized else None,
+        "org_id": org_id if authorized else None,
         "org_name": None,
         "display_name": None,
         "slug": None,
@@ -67,9 +73,38 @@ class _StubVerifier:
         return dict(self.claims)
 
 
+def _entitled_in_a_only(request: httpx.Request) -> httpx.Response:
+    """Ops-Center for a caller who belongs to org A only: A (or no org asked)
+    is entitled; any other org is 403 'not a member'."""
+    asked = request.url.params.get("org_id")
+    if asked in (None, ORG_A):
+        return httpx.Response(200, json=_body(True, ORG_A))
+    return httpx.Response(403, json={"detail": "not a member"})
+
+
+def _always_answers_a(request: httpx.Request) -> httpx.Response:
+    """A misbehaving answer: org A, authorized, whatever org was asked for."""
+    return httpx.Response(200, json=_body(True, ORG_A))
+
+
 @pytest.fixture(autouse=True)
 def _clear_cache() -> None:
-    control_plane.clear_entitlement_cache()
+    # getattr: on a base without the cache the tests still run and fail on
+    # behaviour, not in setup.
+    getattr(control_plane, "clear_entitlement_cache", lambda: None)()
+
+
+@pytest.fixture(autouse=True)
+def bound_orgs(monkeypatch: pytest.MonkeyPatch) -> dict[UUID, UUID]:
+    """The server-side workspace -> org binding (workspaces.org_id), stubbed:
+    no database. FIRM_WS belongs to org A, FIRM_B_WS to org B."""
+    bound: dict[UUID, UUID] = {FIRM_WS: UUID(ORG_A), FIRM_B_WS: UUID(ORG_B)}
+
+    async def _workspace_org(workspace_id: UUID) -> UUID | None:
+        return bound.get(workspace_id)
+
+    monkeypatch.setattr(authmod, "workspace_org", _workspace_org, raising=False)
+    return bound
 
 
 @pytest.fixture
@@ -155,18 +190,26 @@ def test_entitled_self_serve_caller_gets_own_workspace(ops_center) -> None:
     assert len(seen) == 1
     assert seen[0].headers["Authorization"] == "Bearer fictional.keycloak.jwt"
     assert seen[0].url.params["feature_key"] == "tax_ops_access"
+    # Not bound yet: Ops-Center's org for the caller binds it (get_tenant_db).
+    assert "org_id" not in seen[0].url.params
+    assert str(ctx.org_id) == ORG_A
+
+
+def test_bound_self_serve_workspace_is_asked_for_its_own_org(ops_center, bound_orgs) -> None:
+    seen = ops_center(_entitled_in_a_only)
+    claims = _self_serve_claims("fictional-signup-010")
+    derived = authmod.derive_self_serve_workspace(claims)
+    assert derived is not None
+    bound_orgs[derived] = UUID(ORG_B)  # bound to B; the caller is now only in A
+    resp, reached = _dispatch(claims)
+    assert resp.status_code == 403
+    assert reached == {}
+    assert seen[0].url.params["org_id"] == ORG_B
 
 
 @pytest.mark.parametrize("answer", sorted(ANSWERS))
-def test_refused_self_serve_caller_gets_403_and_no_workspace(
-    ops_center, monkeypatch: pytest.MonkeyPatch, answer: str
-) -> None:
+def test_refused_self_serve_caller_gets_403_and_no_workspace(ops_center, answer: str) -> None:
     ops_center(ANSWERS[answer])
-
-    def _must_not_derive(claims: dict[str, Any]) -> UUID | None:
-        raise AssertionError("a refused caller must never be given a self-serve workspace")
-
-    monkeypatch.setattr(authmod, "derive_self_serve_workspace", _must_not_derive)
     resp, reached = _dispatch(_self_serve_claims())
     assert resp.status_code == 403
     assert REFUSED in resp.body.decode()
@@ -191,7 +234,7 @@ def test_member_with_workspace_claim_whose_org_lost_access_is_403(
 
 
 def test_member_with_workspace_claim_entitled_is_allowed(ops_center) -> None:
-    ops_center(lambda r: httpx.Response(200, json=_body(True)))
+    seen = ops_center(_entitled_in_a_only)
     claims = {
         "sub": "fictional-advisor-778",
         "workspace_id": str(FIRM_WS),
@@ -200,12 +243,111 @@ def test_member_with_workspace_claim_entitled_is_allowed(ops_center) -> None:
     resp, reached = _dispatch(claims)
     assert resp.status_code == 200
     assert reached["ctx"].workspace_id == FIRM_WS
+    assert str(reached["ctx"].org_id) == ORG_A
+    assert seen[0].url.params["org_id"] == ORG_A
+
+
+def test_entitled_in_a_with_claim_for_b_is_403(ops_center) -> None:
+    """R2-1: entitled in org A, holding a workspace claim for org B's workspace.
+    The door asks about B (the workspace's own org), not the caller's A."""
+    seen = ops_center(_entitled_in_a_only)
+    claims = {
+        "sub": "fictional-advisor-780",
+        "workspace_id": str(FIRM_B_WS),
+        "scope": "taxplan:advisor",
+    }
+    resp, reached = _dispatch(claims)
+    assert resp.status_code == 403
+    assert REFUSED in resp.body.decode()
+    assert reached == {}
+    assert [r.url.params.get("org_id") for r in seen] == [ORG_B]
+
+
+def test_answer_for_another_org_is_403(ops_center) -> None:
+    """R2-1: a 200 authorized=true answer for org A does not open org B."""
+    ops_center(_always_answers_a)
+    claims = {
+        "sub": "fictional-advisor-781",
+        "workspace_id": str(FIRM_B_WS),
+        "scope": "taxplan:advisor",
+    }
+    resp, reached = _dispatch(claims)
+    assert resp.status_code == 403
+    assert REFUSED in resp.body.decode()
+    assert reached == {}
+
+
+def test_membership_header_for_b_is_checked_against_b(
+    ops_center, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """R2-1: a member of B's workspace who is entitled only in A is refused."""
+    seen = ops_center(_always_answers_a)
+
+    async def _member(uc_uid: str, workspace_id: UUID) -> bool:
+        return True
+
+    monkeypatch.setattr(authmod, "is_workspace_member", _member)
+    resp, reached = _dispatch(
+        {"sub": "fictional-advisor-782", "scope": "taxplan:advisor"},
+        headers={"X-Workspace-Id": str(FIRM_B_WS)},
+    )
+    assert resp.status_code == 403
+    assert reached == {}
+    assert seen[0].url.params["org_id"] == ORG_B
+
+
+@pytest.mark.parametrize("entitled_in_b", [False, True])
+def test_mcp_bearer_acting_for_b_is_checked_against_b(
+    ops_center, monkeypatch: pytest.MonkeyPatch, entitled_in_b: bool
+) -> None:
+    """R2-1: the MCP door forwards the user's bearer + X-Workspace-Id; the
+    user is checked in B's org (B's answer decides, not the user's A)."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if entitled_in_b and request.url.params.get("org_id") == ORG_B:
+            return httpx.Response(200, json=_body(True, ORG_B))
+        return _entitled_in_a_only(request)
+
+    seen = ops_center(handler)
+
+    async def _member(uc_uid: str, workspace_id: UUID) -> bool:
+        return True
+
+    monkeypatch.setattr(authmod, "is_workspace_member", _member)
+    resp, reached = _dispatch(
+        {"sub": "fictional-mcp-user-783", "scope": "taxplan:advisor"},
+        headers={"X-UC-Door": "mcp", "X-Workspace-Id": str(FIRM_B_WS)},
+    )
+    assert seen[0].url.params["org_id"] == ORG_B
+    if entitled_in_b:
+        assert resp.status_code == 200
+        assert reached["ctx"].workspace_id == FIRM_B_WS
+        assert str(reached["ctx"].org_id) == ORG_B
+    else:
+        assert resp.status_code == 403
+        assert reached == {}
+
+
+def test_unbound_managed_workspace_is_refused_without_asking(ops_center) -> None:
+    """R2-1: a claimed workspace with no server-side org has nothing to check
+    against; it is refused (fail closed), and only a self-serve workspace may
+    be bound on first entry."""
+    seen = ops_center(_always_answers_a)
+    claims = {
+        "sub": "fictional-advisor-784",
+        "workspace_id": "00000000-0000-4000-8000-0000000000f9",
+        "scope": "taxplan:advisor",
+    }
+    resp, reached = _dispatch(claims)
+    assert resp.status_code == 403
+    assert reached == {}
+    assert seen == []
 
 
 def test_refused_header_selection_skips_membership_lookup(
     ops_center, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    ops_center(ANSWERS["authorized-false"])
+    ops_center(ANSWERS["403"])
 
     async def _no_db(uc_uid: str, workspace_id: UUID) -> bool:
         raise AssertionError("a refused caller must not reach the membership lookup")

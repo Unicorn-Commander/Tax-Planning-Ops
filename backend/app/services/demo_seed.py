@@ -380,7 +380,9 @@ async def _clear_demo_data(session: AsyncSession) -> None:
     await session.flush()
 
 
-async def load_demo_workspace(*, uc_uid: str) -> dict[str, Any]:
+async def load_demo_workspace(
+    *, uc_uid: str, org_id: UUID | None = None
+) -> dict[str, Any]:
     """Create (or reuse) the user's "Sample Firm (demo)" workspace and seed it.
 
     Idempotent-ish: if the user already has a demo workspace (detected by the
@@ -396,7 +398,7 @@ async def load_demo_workspace(*, uc_uid: str) -> dict[str, Any]:
             "client_count": client_count,
         }
 
-    created = await create_workspace(uc_uid=uc_uid, name=DEMO_WORKSPACE_NAME)
+    created = await create_workspace(uc_uid=uc_uid, name=DEMO_WORKSPACE_NAME, org_id=org_id)
     workspace_id = created["workspace_id"]
     async with async_session_maker() as session:
         await bind_session_context(session, str(workspace_id), uc_uid)

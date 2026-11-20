@@ -20,3 +20,6 @@ class Workspace(TimestampMixin, Base):
         JSONB, nullable=False, server_default="{}"
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    # The Ops-Center org this workspace belongs to (the entitlement door asks
+    # for tax_ops_access in exactly this org). NULL = not bound yet.
+    org_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
