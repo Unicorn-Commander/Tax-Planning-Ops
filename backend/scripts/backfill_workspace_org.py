@@ -1,26 +1,38 @@
-"""Backfill workspaces.org_id from each owner's Ops-Center org (task 33982835).
+"""Backfill workspaces.org_id from an operator-supplied mapping file (33982835).
 
 Binds every workspace whose org_id is NULL (created before the entitlement
-door, PR #15) to its OWNER's Ops-Center org, ONLY when unambiguous: exactly
-one owner-role member, and Ops-Center answers exactly one org where that
-owner is owner or admin. Ambiguous workspaces (no owner, 2+ owners, 0 or 2+
-orgs) are left NULL and listed; an Ops-Center failure skips the workspace.
-Each bind is its own guarded transaction (UPDATE ... WHERE id = $1 AND
-org_id IS NULL, exactly one row, else rollback); a bound org is never
-overwritten. Idempotent: a re-run is a no-op. Prints a summary with workspace
-ids only — no emails, no owner names, no bearer.
+door, PR #15) to the Ops-Center org the OWNER of Ops-Center mapped it to.
+Ops-Center serves no endpoint that answers, with an operator credential,
+for OTHER users' orgs (its org routes answer only for the caller's own
+session), so this script does NOT ask Ops-Center anything: it validates and
+applies a mapping file (workspace_id -> org_id) produced by the Ops-Center
+owner.
+
+Mapping file — CSV with a ``workspace_id,org_id`` header:
+
+  workspace_id,org_id
+  0a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d,11111111-2222-4333-8444-555555555555
+
+or JSON: {"<workspace_id>": "<org_id>", ...} or
+[{"workspace_id": ..., "org_id": ...}, ...]. Both ids lowercase-canonical UUIDs.
+
+LIVE checks (what Tax owns): workspace exists, org_id NULL, owner-role
+member present, org_id a canonical UUID, no workspace listed twice. Invalid
+rows are refused, left NULL and listed with a reason. The Ops-Center side
+(org exists, holds tax_ops_access, the owner is a member) is TRUSTED from
+the mapping file — the run prints that note. Each bind is its own guarded
+transaction (UPDATE ... WHERE id = $1 AND org_id IS NULL, exactly one row,
+else rollback); a bound org is never overwritten. Idempotent: a re-run is a
+no-op. Prints workspace ids and fixed reasons only — no emails, no bearer.
 
 Run as the OWNER database role (the app role's RLS cannot see other
-workspaces), with the Ops-Center URL configured and an operator bearer that
-Ops-Center accepts for org-membership reads:
+workspaces):
 
   export MIGRATION_DATABASE_URL=postgresql://tax_planning_ops_owner:REMOVED@host/db
-  export OPS_CENTER_URL=https://ops-center.example.com
-  export OPS_CENTER_BEARER=<operator token>   # env only: never argv, never printed
-  python scripts/backfill_workspace_org.py --dry-run   # counts only, writes nothing
-  python scripts/backfill_workspace_org.py             # the guarded backfill
+  python scripts/backfill_workspace_org.py --mapping-file mapping.csv --dry-run
+  python scripts/backfill_workspace_org.py --mapping-file mapping.csv
 
-Read-only against Ops-Center; the only writes are the guarded binds above.
+No network: the only writes are the guarded binds above.
 """
 
 from __future__ import annotations
@@ -30,16 +42,20 @@ import asyncio
 import os
 import sys
 from pathlib import Path
-from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # run from anywhere
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine  # noqa: E402
 from sqlalchemy.pool import NullPool  # noqa: E402
 
-from app.core.config import get_settings  # noqa: E402
-from app.integrations.control_plane import owner_admin_orgs  # noqa: E402
-from app.services.org_backfill import backfill_workspace_orgs  # noqa: E402
+from app.services.org_backfill import (  # noqa: E402
+    TRUSTED_NOTE,
+    BackfillResult,
+    MappingFileError,
+    Refusal,
+    backfill_workspace_orgs,
+    load_mapping,
+)
 
 
 def _owner_url(explicit: str | None) -> str:
@@ -56,45 +72,48 @@ def _owner_url(explicit: str | None) -> str:
     return url
 
 
-def _ids(label: str, values: list[Any]) -> str:
-    return f"{label} ({len(values)}): " + (", ".join(str(v) for v in values) if values else "-")
+def _report(result: BackfillResult, refused_at_load: list[Refusal], dry_run: bool) -> None:
+    mode = "DRY RUN (nothing written)" if dry_run else "APPLIED"
+    verb = "would bind" if dry_run else "bound"
+    print(f"workspace-org backfill — {mode}")
+    print(f"{verb} ({len(result.bound)}): " + (", ".join(str(v) for v in result.bound) or "-"))
+    refused = [f"{r.ref}: {r.reason}" for r in refused_at_load] + [
+        f"{r.ref}: {r.reason}" for r in result.refused
+    ]
+    print(f"refused, left NULL ({len(refused)}):")
+    for line in refused:
+        print(f"  {line}")
+    print(f"trusted: {TRUSTED_NOTE}")
 
 
-async def _run(database_url: str, dry_run: bool) -> int:
-    settings = get_settings()
-    bearer = os.environ.get("OPS_CENTER_BEARER", "")
-    if not settings.OPS_CENTER_URL.strip():
-        print("OPS_CENTER_URL is not set: nothing can be asked, refusing to run.")
+async def _run(database_url: str, mapping_path: Path, dry_run: bool) -> int:
+    try:
+        rows, refused_at_load = load_mapping(mapping_path)
+    except MappingFileError as exc:
+        print(f"mapping file refused: {exc}")
         return 2
-    if not bearer:
-        print("OPS_CENTER_BEARER is not set: nothing can be asked, refusing to run.")
-        return 2
-
     engine = create_async_engine(database_url, poolclass=NullPool)
     factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
     try:
-
-        async def ask_orgs(uc_uid: str) -> list[str] | None:
-            return await owner_admin_orgs(bearer=bearer, uc_uid=uc_uid, settings=settings)
-
-        result = await backfill_workspace_orgs(factory, ask_orgs, dry_run=dry_run)
+        result = await backfill_workspace_orgs(factory, rows, dry_run=dry_run)
     finally:
         await engine.dispose()
-
-    mode = "DRY RUN (nothing written)" if dry_run else "APPLIED"
-    print(f"workspace-org backfill — {mode}")
-    print(_ids("bound", result.bound))
-    print(_ids("ambiguous (left NULL)", result.ambiguous))
-    print(_ids("skipped (Ops-Center unavailable, left NULL)", result.skipped))
+    _report(result, refused_at_load, dry_run)
     return 0
 
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument(
+        "--mapping-file",
+        required=True,
+        type=Path,
+        help="CSV or JSON file mapping workspace_id -> org_id (from the Ops-Center owner)",
+    )
+    p.add_argument(
         "--dry-run",
         action="store_true",
-        help="read and ask only; print counts, write nothing",
+        help="validate and report only; write nothing",
     )
     p.add_argument(
         "--database-url",
@@ -102,7 +121,7 @@ def main() -> int:
         help="owner-role DSN (default: $MIGRATION_DATABASE_URL; never $DATABASE_URL)",
     )
     args = p.parse_args()
-    return asyncio.run(_run(_owner_url(args.database_url), args.dry_run))
+    return asyncio.run(_run(_owner_url(args.database_url), args.mapping_file, args.dry_run))
 
 
 if __name__ == "__main__":
