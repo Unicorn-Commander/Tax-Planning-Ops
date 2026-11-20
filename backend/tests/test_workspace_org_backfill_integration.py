@@ -1,24 +1,23 @@
-"""Workspace-org backfill against migrated Postgres (task 33982835).
+"""Workspace-org backfill against migrated Postgres (task 33982835, round 2).
 
-For every workspace with org_id NULL, bind it to its OWNER's Ops-Center org
-ONLY when unambiguous: exactly one owner-role member (workspace_membership,
-role='owner', not deleted) whose Ops-Center answer is exactly one org where
-they are owner or admin. Ambiguous (no owner, 2+ owners, 0 or 2+ orgs) ->
-leave NULL and list. Ops-Center unreachable -> skip, leave NULL. One guarded
-transaction per workspace (UPDATE ... WHERE id = $1 AND org_id IS NULL,
-exactly one row, else rollback); a non-NULL org_id is never overwritten.
-Idempotent: a re-run is a no-op. Dry run reads and asks but writes nothing.
+The backfill VALIDATES AND APPLIES an OPERATOR-SUPPLIED mapping file
+(workspace_id -> org_id, produced by the Ops-Center owner); it never asks
+Ops-Center anything (Ops-Center serves no endpoint that answers for other
+users' orgs with an operator credential). Live checks are what Tax owns:
+the workspace exists, its org_id is NULL, it has an owner-role member
+(workspace_membership, role='owner', not deleted), the org_id is a canonical
+UUID, and no workspace is listed twice. Anything invalid is refused, left
+NULL and listed with a reason. The Ops-Center side (org exists, holds
+tax_ops_access, the owner is a member) is TRUSTED from the mapping file.
+Each bind is one guarded transaction (UPDATE ... WHERE id = $1 AND
+org_id IS NULL, exactly one row, else rollback); a non-NULL org_id is never
+overwritten. Idempotent: a re-run is a no-op. Dry run validates but writes
+nothing. The DB is shared with the other integration files, so every
+assertion is scoped to the workspace under test and each test deletes its
+own rows. All subjects, orgs and hosts are fictional.
 
-The Ops-Center answer is injected as ``ask_orgs`` (the real HTTP read is
-pinned in test_ops_center_orgs.py); one test wires the real
-control_plane.owner_admin_orgs behind an httpx.MockTransport. No network.
-Skips unless TPO_TEST_OWNER_DATABASE_URL points at a migrated DB (the backfill
-runs as the owner role: the app role's RLS cannot see other workspaces). The
-DB is shared with the other integration files, so every assertion is scoped
-to the workspace under test and each test deletes its own rows. All subjects,
-orgs and hosts are fictional.
-
-Red on base c68559b: app.services.org_backfill does not exist (ImportError).
+Red on 275749d: app.services.org_backfill has no MappingRow/Refusal/
+load_mapping and backfill_workspace_orgs does not take mapping rows yet.
 """
 
 from __future__ import annotations
@@ -37,7 +36,11 @@ pytestmark = pytest.mark.integration
 asyncpg = pytest.importorskip("asyncpg")
 del asyncpg
 
-from app.services.org_backfill import backfill_workspace_orgs  # noqa: E402
+from app.services.org_backfill import (  # noqa: E402
+    BackfillResult,
+    MappingRow,
+    backfill_workspace_orgs,
+)
 
 ORG_A = UUID("11111111-2222-4333-8444-555555555555")
 ORG_B = UUID("22222222-3333-4444-8555-666666666666")
@@ -57,7 +60,7 @@ def _owner_dsn() -> str:
 @pytest.fixture
 async def factory():  # type: ignore[no-untyped-def]
     """Owner-role session factory; deletes workspaces/memberships created via
-    the returned helper so the shared test DB stays clean."""
+    the helper below so the shared test DB stays clean."""
     engine = create_async_engine(_owner_dsn(), poolclass=NullPool)
     maker = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
     created: list[UUID] = []
@@ -130,171 +133,112 @@ async def _org_of(maker: Any, workspace_id: UUID) -> str | None:
     return None if value is None else str(value)
 
 
-def _outcome(result: Any, workspace_id: UUID) -> str | None:
-    for label in ("bound", "ambiguous", "skipped"):
-        if workspace_id in getattr(result, label):
-            return label
-    return None
+def _outcome(result: BackfillResult, workspace_id: UUID) -> str | None:
+    """"bound", the refusal reason for that workspace, or None if unlisted."""
+    if workspace_id in result.bound:
+        return "bound"
+    reasons = [r.reason for r in result.refused if r.ref == str(workspace_id)]
+    if len(reasons) > 1:
+        return f"refused {len(reasons)}x: {reasons[0]}"
+    return reasons[0] if reasons else None
 
 
-def _ask(answers: dict[str, list[str] | None]):  # type: ignore[no-untyped-def]
-    asked: list[str] = []
-
-    async def ask_orgs(uc_uid: str) -> list[str] | None:
-        asked.append(uc_uid)
-        return answers.get(uc_uid)
-
-    ask_orgs.asked = asked  # type: ignore[attr-defined]
-    return ask_orgs
+def _row(workspace_id: UUID, org_id: str = str(ORG_A)) -> MappingRow:
+    return MappingRow(workspace_id=workspace_id, org_id=org_id, ref="test")
 
 
-async def test_unbound_with_one_owner_org_is_bound(factory: Any) -> None:
+async def test_valid_mapping_binds(factory: Any) -> None:
     ws = uuid4()
     owner = f"fictional-backfill-owner-{uuid4()}"
     await _insert_workspace(factory, workspace_id=ws, org_id=None, owners=(owner,))
-    result = await backfill_workspace_orgs(factory, _ask({owner: [str(ORG_A)]}))
+    result = await backfill_workspace_orgs(factory, [_row(ws)])
     assert _outcome(result, ws) == "bound"
     assert await _org_of(factory, ws) == str(ORG_A)
 
 
-async def test_two_owner_orgs_left_null(factory: Any) -> None:
-    ws = uuid4()
-    owner = f"fictional-backfill-owner-{uuid4()}"
-    await _insert_workspace(factory, workspace_id=ws, org_id=None, owners=(owner,))
-    result = await backfill_workspace_orgs(
-        factory, _ask({owner: [str(ORG_A), str(ORG_B)]})
-    )
-    assert _outcome(result, ws) == "ambiguous"
-    assert await _org_of(factory, ws) is None
+async def test_unknown_workspace_refused_and_listed(factory: Any) -> None:
+    missing = uuid4()
+    result = await backfill_workspace_orgs(factory, [_row(missing)])
+    assert _outcome(result, missing) == "workspace not found"
+    assert missing not in result.bound
 
 
-async def test_zero_owner_orgs_left_null(factory: Any) -> None:
-    ws = uuid4()
-    owner = f"fictional-backfill-owner-{uuid4()}"
-    await _insert_workspace(factory, workspace_id=ws, org_id=None, owners=(owner,))
-    result = await backfill_workspace_orgs(factory, _ask({owner: []}))
-    assert _outcome(result, ws) == "ambiguous"
-    assert await _org_of(factory, ws) is None
-
-
-async def test_no_owner_member_left_null(factory: Any) -> None:
-    ws = uuid4()
-    member = f"fictional-backfill-member-{uuid4()}"
-    await _insert_workspace(factory, workspace_id=ws, org_id=None, members=(member,))
-    ask = _ask({})
-    result = await backfill_workspace_orgs(factory, ask)
-    assert _outcome(result, ws) == "ambiguous"
-    assert member not in ask.asked  # a member is not an owner to ask
-    assert await _org_of(factory, ws) is None
-
-
-async def test_two_owner_members_ambiguous(factory: Any) -> None:
-    ws = uuid4()
-    o1 = f"fictional-backfill-owner-a-{uuid4()}"
-    o2 = f"fictional-backfill-owner-b-{uuid4()}"
-    await _insert_workspace(factory, workspace_id=ws, org_id=None, owners=(o1, o2))
-    ask = _ask({o1: [str(ORG_A)], o2: [str(ORG_A)]})
-    result = await backfill_workspace_orgs(factory, ask)
-    assert _outcome(result, ws) == "ambiguous"
-    assert o1 not in ask.asked and o2 not in ask.asked
-    assert await _org_of(factory, ws) is None
-
-
-async def test_deleted_owner_membership_ignored(factory: Any) -> None:
-    ws = uuid4()
-    live = f"fictional-backfill-live-{uuid4()}"
-    gone = f"fictional-backfill-gone-{uuid4()}"
-    await _insert_workspace(
-        factory, workspace_id=ws, org_id=None, owners=(live,), deleted_owners=(gone,)
-    )
-    result = await backfill_workspace_orgs(factory, _ask({live: [str(ORG_A)]}))
-    assert _outcome(result, ws) == "bound"
-    assert await _org_of(factory, ws) == str(ORG_A)
-
-
-async def test_already_bound_untouched(factory: Any) -> None:
+async def test_already_bound_refused_and_never_overwritten(factory: Any) -> None:
     ws = uuid4()
     owner = f"fictional-backfill-owner-{uuid4()}"
     await _insert_workspace(factory, workspace_id=ws, org_id=ORG_B, owners=(owner,))
-    ask = _ask({owner: [str(ORG_A)]})
-    result = await backfill_workspace_orgs(factory, ask)
-    assert _outcome(result, ws) is None  # not even listed
-    assert owner not in ask.asked  # never even asked
+    result = await backfill_workspace_orgs(factory, [_row(ws, str(ORG_A))])
+    assert _outcome(result, ws) == "workspace already bound"
     assert await _org_of(factory, ws) == str(ORG_B)
 
 
-async def test_rerun_is_a_noop(factory: Any) -> None:
+@pytest.mark.parametrize(
+    "bad_org",
+    [
+        pytest.param("not-a-uuid", id="not-a-uuid"),
+        pytest.param("11111111-2222-4333-8444-55555555555", id="too-short"),
+        pytest.param("11111111222243338444 5555555555555", id="not-hex-dashes"),
+        pytest.param("11111111-2222-4333-8444-AAAAAAAAAAAA", id="uppercase-not-canonical"),
+        pytest.param("", id="empty"),
+    ],
+)
+async def test_malformed_org_id_refused(factory: Any, bad_org: str) -> None:
     ws = uuid4()
     owner = f"fictional-backfill-owner-{uuid4()}"
     await _insert_workspace(factory, workspace_id=ws, org_id=None, owners=(owner,))
-    ask = _ask({owner: [str(ORG_A)]})
-    first = await backfill_workspace_orgs(factory, ask)
-    assert _outcome(first, ws) == "bound"
-    second = await backfill_workspace_orgs(factory, ask)
-    assert _outcome(second, ws) is None  # no longer unbound: nothing to do
-    assert await _org_of(factory, ws) == str(ORG_A)
+    result = await backfill_workspace_orgs(factory, [_row(ws, bad_org)])
+    assert _outcome(result, ws) == "org_id is not a canonical uuid"
+    assert await _org_of(factory, ws) is None
+
+
+async def test_duplicate_workspace_refused_left_null(factory: Any) -> None:
+    ws = uuid4()
+    owner = f"fictional-backfill-owner-{uuid4()}"
+    await _insert_workspace(factory, workspace_id=ws, org_id=None, owners=(owner,))
+    result = await backfill_workspace_orgs(factory, [_row(ws), _row(ws)])
+    assert _outcome(result, ws) == "refused 2x: workspace listed more than once in the mapping"
+    assert await _org_of(factory, ws) is None
+
+
+async def test_no_owner_member_refused(factory: Any) -> None:
+    ws = uuid4()
+    member = f"fictional-backfill-member-{uuid4()}"
+    await _insert_workspace(factory, workspace_id=ws, org_id=None, members=(member,))
+    result = await backfill_workspace_orgs(factory, [_row(ws)])
+    assert _outcome(result, ws) == "no owner member"
+    assert await _org_of(factory, ws) is None
+
+
+async def test_deleted_owner_membership_not_an_owner(factory: Any) -> None:
+    ws = uuid4()
+    gone = f"fictional-backfill-gone-{uuid4()}"
+    await _insert_workspace(
+        factory, workspace_id=ws, org_id=None, deleted_owners=(gone,)
+    )
+    result = await backfill_workspace_orgs(factory, [_row(ws)])
+    assert _outcome(result, ws) == "no owner member"
+    assert await _org_of(factory, ws) is None
 
 
 async def test_dry_run_changes_nothing(factory: Any) -> None:
     ws = uuid4()
     owner = f"fictional-backfill-owner-{uuid4()}"
     await _insert_workspace(factory, workspace_id=ws, org_id=None, owners=(owner,))
-    ask = _ask({owner: [str(ORG_A)]})
-    result = await backfill_workspace_orgs(factory, ask, dry_run=True)
+    result = await backfill_workspace_orgs(factory, [_row(ws)], dry_run=True)
     assert _outcome(result, ws) == "bound"  # would bind
     assert await _org_of(factory, ws) is None  # but did not
     # and the real run afterwards still binds it
-    real = await backfill_workspace_orgs(factory, ask)
+    real = await backfill_workspace_orgs(factory, [_row(ws)])
     assert _outcome(real, ws) == "bound"
     assert await _org_of(factory, ws) == str(ORG_A)
 
 
-async def test_ops_center_failure_skips_and_leaves_null(factory: Any) -> None:
+async def test_rerun_is_a_noop(factory: Any) -> None:
     ws = uuid4()
     owner = f"fictional-backfill-owner-{uuid4()}"
     await _insert_workspace(factory, workspace_id=ws, org_id=None, owners=(owner,))
-    result = await backfill_workspace_orgs(factory, _ask({owner: None}))
-    assert _outcome(result, ws) == "skipped"
-    assert await _org_of(factory, ws) is None
-
-
-async def test_real_owner_admin_orgs_behind_fake_transport(
-    factory: Any, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """End to end: the service wired to the real Ops-Center read (MockTransport)."""
-    import httpx
-
-    from app.core.config import Settings
-    from app.integrations import control_plane
-
-    ws = uuid4()
-    owner = f"fictional-backfill-e2e-{uuid4()}"
-    await _insert_workspace(factory, workspace_id=ws, org_id=None, owners=(owner,))
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        assert str(request.url).startswith("https://ops-center.example.com/api/v1/orgs?")
-        # Other rows may exist in the shared DB: answer empty for their owners,
-        # exactly one org for the owner under test.
-        if request.url.params["uc_uid"] == owner:
-            return httpx.Response(
-                200, json={"orgs": [{"org_id": str(ORG_A), "role": "owner"}]}
-            )
-        return httpx.Response(200, json={"orgs": []})
-
-    real = httpx.AsyncClient
-
-    def http_factory(*args: Any, **kwargs: Any) -> httpx.AsyncClient:
-        kwargs["transport"] = httpx.MockTransport(handler)
-        return real(*args, **kwargs)
-
-    monkeypatch.setattr(control_plane.httpx, "AsyncClient", http_factory)
-    settings = Settings(OPS_CENTER_URL="https://ops-center.example.com")
-
-    async def ask_orgs(uc_uid: str) -> list[str] | None:
-        return await control_plane.owner_admin_orgs(
-            bearer="fictional.operator.bearer", uc_uid=uc_uid, settings=settings
-        )
-
-    result = await backfill_workspace_orgs(factory, ask_orgs)
-    assert _outcome(result, ws) == "bound"
-    assert await _org_of(factory, ws) == str(ORG_A)
+    first = await backfill_workspace_orgs(factory, [_row(ws)])
+    assert _outcome(first, ws) == "bound"
+    second = await backfill_workspace_orgs(factory, [_row(ws)])
+    assert _outcome(second, ws) == "workspace already bound"  # listed, not bound again
+    assert await _org_of(factory, ws) == str(ORG_A)  # unchanged
