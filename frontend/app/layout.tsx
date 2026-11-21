@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Libre_Franklin, Source_Serif_4, IBM_Plex_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { ClientProviders } from "@/components/client-providers";
 import { ThemeToggle } from "@/components/theme";
@@ -8,23 +8,52 @@ import { ThemeToggle } from "@/components/theme";
    - Franklin = the instrument/UI voice (the 1040's own letterform heritage)
    - Source Serif 4 = the document/counsel voice (memos, present)
    - IBM Plex Mono = the ledger voice (figures, citations, hashes) */
-const franklin = Libre_Franklin({
-  subsets: ["latin"],
+const franklin = localFont({
+  src: [
+    {
+      path: "../node_modules/@fontsource-variable/libre-franklin/files/libre-franklin-latin-wght-normal.woff2",
+      weight: "100 900",
+      style: "normal",
+    },
+  ],
   variable: "--font-franklin",
-  weight: ["400", "500", "600", "700", "800"],
   display: "swap",
 });
-const sourceSerif = Source_Serif_4({
-  subsets: ["latin"],
+const sourceSerif = localFont({
+  src: [
+    {
+      path: "../node_modules/@fontsource-variable/source-serif-4/files/source-serif-4-latin-wght-normal.woff2",
+      weight: "100 900",
+      style: "normal",
+    },
+    {
+      path: "../node_modules/@fontsource-variable/source-serif-4/files/source-serif-4-latin-wght-italic.woff2",
+      weight: "100 900",
+      style: "italic",
+    },
+  ],
   variable: "--font-source-serif",
-  weight: ["400", "600"],
-  style: ["normal", "italic"],
   display: "swap",
 });
-const plexMono = IBM_Plex_Mono({
-  subsets: ["latin"],
+const plexMono = localFont({
+  src: [
+    {
+      path: "../node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-500-normal.woff2",
+      weight: "500",
+      style: "normal",
+    },
+    {
+      path: "../node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-600-normal.woff2",
+      weight: "600",
+      style: "normal",
+    },
+  ],
   variable: "--font-plex-mono",
-  weight: ["400", "500", "600"],
   display: "swap",
 });
 
