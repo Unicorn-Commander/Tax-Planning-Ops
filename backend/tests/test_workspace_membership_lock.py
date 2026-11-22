@@ -328,8 +328,10 @@ async def test_add_member_and_invitation_through_definer(app_session, owner_conn
         )
 
     await app_session.execute(text("SELECT set_config('app.uc_uid', :v, true)"), {"v": OWNER_UID})
-    created = await create_invitation(app_session, workspace_id=UUID(ws_id), actor_uc_uid=OWNER_UID)
     invitee = "fictional-invitee-t1"
+    created = await create_invitation(
+        app_session, workspace_id=UUID(ws_id), actor_uc_uid=OWNER_UID, invitee_uc_uid=invitee
+    )
     accepted = await accept_invitation(
         app_session,
         workspace_id=UUID(ws_id),
@@ -489,7 +491,9 @@ async def test_c4_accept_hashes_raw_token_in_definer(app_conn, owner_conn) -> No
     await _seed(owner_conn, OWNER_UID, ws_id, "Fictional Cedar Tax Group")
     raw = "fictional-raw-token-" + "x" * 32
     await _set_guc(app_conn, OWNER_UID, ws_id)
-    await app_conn.fetchrow("SELECT * FROM workspace_invitation_create($1, $2)", ws_id, raw)
+    await app_conn.fetchrow(
+        "SELECT * FROM workspace_invitation_create($1, $2, 'fictional-invitee-c4')", ws_id, raw
+    )
     stored = await owner_conn.fetchval(
         "SELECT token_hash FROM workspace_invitation WHERE workspace_id = $1", ws_id
     )
@@ -532,7 +536,9 @@ async def test_c4_only_active_owner_can_create_invitation(app_conn, owner_conn) 
         await _set_guc(app_conn, uid, ws_id)
         with pytest.raises(asyncpg.exceptions.PostgresError) as excinfo:
             await app_conn.fetchrow(
-                "SELECT * FROM workspace_invitation_create($1, $2)", ws_id, "y" * 43
+                "SELECT * FROM workspace_invitation_create($1, $2, 'fictional-x-c4')",
+                ws_id,
+                "y" * 43,
             )
         assert excinfo.value.sqlstate == "42501"
     assert (
@@ -541,3 +547,86 @@ async def test_c4_only_active_owner_can_create_invitation(app_conn, owner_conn) 
         )
         == 0
     )
+
+
+@pytest.mark.asyncio
+async def test_c5_invitation_bound_to_invitee(app_conn, owner_conn) -> None:
+    """C5: an invitation had no recipient, so whoever held the token joined.
+    It now names its invitee; anyone else is refused and the invitation stays
+    unconsumed for the real invitee. A pre-0024 row (no invitee) is dead."""
+    ws_id = str(uuid4())
+    await _seed(owner_conn, OWNER_UID, ws_id, "Fictional Cedar Tax Group")
+    raw = "fictional-bound-token-" + "z" * 32
+    await _set_guc(app_conn, OWNER_UID, ws_id)
+    await app_conn.fetchrow(
+        "SELECT * FROM workspace_invitation_create($1, $2, 'fictional-intended-c5')", ws_id, raw
+    )
+    assert (
+        await owner_conn.fetchval(
+            "SELECT invitee_uc_uid FROM workspace_invitation WHERE workspace_id = $1", ws_id
+        )
+        == "fictional-intended-c5"
+    )
+    await _set_guc(app_conn, "fictional-thief-c5", ws_id)
+    with pytest.raises(asyncpg.exceptions.RaiseError):
+        await app_conn.fetchval(
+            "SELECT workspace_membership_accept_invitation($1, $2)", ws_id, raw
+        )
+    assert (
+        await owner_conn.fetchval(
+            "SELECT count(*) FROM workspace_membership "
+            "WHERE workspace_id = $1 AND user_uc_uid = 'fictional-thief-c5'",
+            ws_id,
+        )
+        == 0
+    )
+    await _set_guc(app_conn, "fictional-intended-c5", ws_id)
+    assert await app_conn.fetchval(
+        "SELECT workspace_membership_accept_invitation($1, $2)", ws_id, raw
+    )
+
+    # A legacy invitation with no invitee cannot be accepted by anyone.
+    from app.services.member_tokens import hash_invitation_token
+
+    legacy = "fictional-legacy-token-" + "q" * 32
+    await owner_conn.execute(
+        "INSERT INTO workspace_invitation "
+        "(workspace_id, token_hash, role, expires_at, created_by_uc_uid) "
+        "VALUES ($1, $2, 'member', now() + interval '1 day', $3)",
+        ws_id,
+        hash_invitation_token(legacy),
+        OWNER_UID,
+    )
+    await _set_guc(app_conn, "fictional-anyone-c5", ws_id)
+    with pytest.raises(asyncpg.exceptions.RaiseError):
+        await app_conn.fetchval(
+            "SELECT workspace_membership_accept_invitation($1, $2)", ws_id, legacy
+        )
+
+
+@pytest.mark.asyncio
+async def test_c5_service_wrong_user_cannot_accept(app_session, owner_conn) -> None:
+    from app.services.members import (
+        InvalidInvitationError,
+        accept_invitation,
+        create_invitation,
+    )
+
+    ws_id = str(uuid4())
+    await _seed(owner_conn, OWNER_UID, ws_id, "Fictional Cedar Tax Group")
+    from app.db.session import bind_session_context
+
+    await bind_session_context(app_session, ws_id, OWNER_UID)
+    created = await create_invitation(
+        app_session,
+        workspace_id=UUID(ws_id),
+        actor_uc_uid=OWNER_UID,
+        invitee_uc_uid="fictional-intended-c5s",
+    )
+    with pytest.raises(InvalidInvitationError):
+        await accept_invitation(
+            app_session,
+            workspace_id=UUID(ws_id),
+            actor_uc_uid="fictional-other-c5s",
+            raw_token=str(created["invitation_token"]),
+        )

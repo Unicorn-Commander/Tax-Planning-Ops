@@ -151,7 +151,9 @@ async def test_member_add_invite_accept_roster_and_last_owner_guard(
         )
 
     await bind_session_context(db, str(workspace_id), owner)
-    created = await create_invitation(db, workspace_id=workspace_id, actor_uc_uid=owner)
+    created = await create_invitation(
+        db, workspace_id=workspace_id, actor_uc_uid=owner, invitee_uc_uid=invited_member
+    )
     raw_token = str(created["invitation_token"])
 
     accepted = await accept_invitation(
@@ -212,7 +214,12 @@ async def test_member_add_invite_accept_roster_and_last_owner_guard(
     await db.rollback()
 
     await bind_session_context(db, str(workspace_id), owner)
-    expired = await create_invitation(db, workspace_id=workspace_id, actor_uc_uid=owner)
+    expired = await create_invitation(
+        db,
+        workspace_id=workspace_id,
+        actor_uc_uid=owner,
+        invitee_uc_uid="fictional-advisor-007",
+    )
     await db.commit()
     await owner_conn.execute(
         "UPDATE workspace_invitation SET expires_at = now() - interval '1 minute' "

@@ -164,21 +164,25 @@ async def add_member(
 
 
 async def create_invitation(
-    db: AsyncSession, *, workspace_id: UUID, actor_uc_uid: str
+    db: AsyncSession, *, workspace_id: UUID, actor_uc_uid: str, invitee_uc_uid: str
 ) -> dict[str, Any]:
     """Create an invitation and return the raw token exactly once.
 
     Owner-gated in the service for a clear error and again in the definer
     ``workspace_invitation_create`` (actor = current_uc_uid(), active owner).
-    The definer hashes the token and fixes role and expiry; the app role has
-    no direct access to ``workspace_invitation``."""
+    The definer hashes the token, fixes role and expiry, and binds the
+    invitation to ``invitee_uc_uid``: only that subject can accept it. The app
+    role has no direct access to ``workspace_invitation``."""
     await _require_owner(db, workspace_id=workspace_id, uc_uid=actor_uc_uid)
     raw_token = generate_invitation_token()
     try:
         row = (
             await db.execute(
-                text("SELECT o_id, o_expires_at FROM workspace_invitation_create(:ws, :token)"),
-                {"ws": workspace_id, "token": raw_token},
+                text(
+                    "SELECT o_id, o_expires_at "
+                    "FROM workspace_invitation_create(:ws, :token, :invitee)"
+                ),
+                {"ws": workspace_id, "token": raw_token, "invitee": invitee_uc_uid},
             )
         ).one()
     except SADBAPIError as exc:
@@ -191,7 +195,11 @@ async def create_invitation(
         event_type="workspace.invitation.created",
         aggregate_type="workspace_invitation",
         aggregate_id=invitation_id,
-        payload={"expires_at": expires_at.isoformat(), "role": MEMBER_ROLE},
+        payload={
+            "expires_at": expires_at.isoformat(),
+            "role": MEMBER_ROLE,
+            "invitee_uc_uid": invitee_uc_uid,
+        },
     )
     return {"invitation_token": raw_token, "expires_at": expires_at}
 
@@ -205,9 +213,9 @@ async def accept_invitation(
 ) -> WorkspaceMembership:
     """Atomically consume an invitation and add the accepting subject.
 
-    The definer hashes the raw token itself, checks expiry/consumption and the
-    target workspace, and adds current_uc_uid() (the invitee accepts for
-    themselves). The audit row is stamped for the invitation's workspace,
+    The definer hashes the raw token itself, checks expiry/consumption, the
+    target workspace and that current_uc_uid() is the invitation's bound
+    invitee, then adds that subject. The audit row is stamped for the invitation's workspace,
     re-binding the GUC so the row lands there even when the request's active
     workspace differs."""
     await bind_session_context(db, str(workspace_id), actor_uc_uid)

@@ -50,7 +50,7 @@ _FUNCTIONS = (
     "workspace_membership_ensure_home(uuid, text, uuid)",
     "workspace_membership_add_member(uuid, text, text)",
     "workspace_membership_accept_invitation(uuid, text)",
-    "workspace_invitation_create(uuid, text)",
+    "workspace_invitation_create(uuid, text, text)",
     "workspace_membership_remove_member(uuid, text, text)",
 )
 
@@ -179,7 +179,7 @@ def _create_write_functions() -> None:
         -- token inside the function, the role is always 'member' and the
         -- expiry is fixed (7 days). Returns the new invitation's id/expiry.
         CREATE OR REPLACE FUNCTION workspace_invitation_create(
-            p_workspace uuid, p_raw_token text,
+            p_workspace uuid, p_raw_token text, p_invitee_uc_uid text,
             OUT o_id uuid, OUT o_expires_at timestamptz
         )
         LANGUAGE plpgsql
@@ -199,6 +199,10 @@ def _create_write_functions() -> None:
                 RAISE EXCEPTION 'workspace_invitation_create: workspace owner required'
                     USING ERRCODE = '42501';
             END IF;
+            IF p_invitee_uc_uid IS NULL OR btrim(p_invitee_uc_uid) = '' THEN
+                RAISE EXCEPTION 'workspace_invitation_create: invitee required'
+                    USING ERRCODE = '22023';
+            END IF;
             IF p_raw_token IS NULL OR length(p_raw_token) < 32 THEN
                 RAISE EXCEPTION 'workspace_invitation_create: token too short'
                     USING ERRCODE = '22023';
@@ -206,11 +210,12 @@ def _create_write_functions() -> None:
             o_id := gen_random_uuid();
             o_expires_at := now() + interval '7 days';
             INSERT INTO workspace_invitation
-                (id, workspace_id, token_hash, role, expires_at, created_by_uc_uid)
+                (id, workspace_id, token_hash, role, expires_at, created_by_uc_uid,
+                 invitee_uc_uid)
             VALUES (
                 o_id, p_workspace,
                 encode(sha256(convert_to(p_raw_token, 'UTF8')), 'hex'),
-                'member', o_expires_at, v_uc_uid
+                'member', o_expires_at, v_uc_uid, btrim(p_invitee_uc_uid)
             );
         END
         $$
@@ -220,7 +225,9 @@ def _create_write_functions() -> None:
         """
         -- Accept: the raw token is hashed HERE and compared with the stored
         -- hash (a caller cannot present a hash it read). Only 'member'
-        -- invitations are honoured. An active member keeps its stored role;
+        -- invitations are honoured, and only by their bound invitee
+        -- (invitee_uc_uid = current_uc_uid()); a pre-0024 invitation has no
+        -- invitee and can no longer be accepted. An active member keeps its stored role;
         -- a soft-deleted one is restored as a member. Returns the consumed
         -- invitation's id.
         CREATE OR REPLACE FUNCTION workspace_membership_accept_invitation(
@@ -251,6 +258,7 @@ def _create_write_functions() -> None:
                OR v_invitation.consumed_at IS NOT NULL
                OR v_invitation.expires_at <= now()
                OR v_invitation.role IS DISTINCT FROM 'member'
+               OR v_invitation.invitee_uc_uid IS DISTINCT FROM v_uc_uid
                OR v_invitation.workspace_id IS DISTINCT FROM p_workspace THEN
                 RAISE EXCEPTION 'invitation is invalid or expired' USING ERRCODE = 'P0001';
             END IF;
@@ -423,6 +431,8 @@ def upgrade() -> None:
     # are created and consumed only through the definers below.
     op.execute(f"REVOKE ALL ON workspace_invitation FROM {RUNTIME_ROLE}")
     op.execute("REVOKE ALL ON workspace_invitation FROM PUBLIC")
+    # Every invitation names its invitee; acceptance requires a match.
+    op.execute("ALTER TABLE workspace_invitation ADD COLUMN invitee_uc_uid varchar(255)")
     # 2. Lock policies: SELECT stays user-scoped; the INSERT/UPDATE/DELETE
     #    policies name the table owner (a role with no app grants) so the
     #    definer functions — owned by the migration role — pass FORCE RLS.
@@ -471,6 +481,7 @@ def downgrade() -> None:
         _revoke_if_exists(signature)
     for signature in list(_FUNCTIONS) + ["workspace_membership_accept_invitation(uuid, text, text)"]:
         _drop_if_exists(signature)
+    op.execute("ALTER TABLE workspace_invitation DROP COLUMN IF EXISTS invitee_uc_uid")
     op.execute(f"GRANT SELECT, INSERT, UPDATE ON workspace_invitation TO {RUNTIME_ROLE}")
     # Drop every 0024 policy, then recreate 0022's exact policy set (the
     # SELECT policy plus the INSERT/UPDATE/DELETE policies of

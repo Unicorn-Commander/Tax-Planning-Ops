@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import require_scopes
 from app.db.session import get_tenant_db
 from app.schemas.auth import AuthContext, WorkspaceMembership
-from app.schemas.members import MemberAddIn
+from app.schemas.members import InvitationCreateIn, MemberAddIn
 from app.services.members import (
     InvalidInvitationError,
     LastOwnerError,
@@ -176,14 +176,19 @@ async def post_workspace_member(
 )
 async def post_workspace_invitation(
     workspace_id: UUID,
+    payload: InvitationCreateIn,
     ctx: AuthContext = Depends(require_scopes(("taxplan:advisor",))),
     db: AsyncSession = Depends(get_tenant_db),
 ) -> InvitationCreatedOut:
-    """Create an owner-controlled invitation; the raw token is returned once."""
+    """Create an owner-controlled invitation for one invitee (``uc_uid``); the
+    raw token is returned once and only that subject can accept it."""
     _require_selected_workspace(workspace_id, ctx)
     try:
         created = await create_invitation(
-            db, workspace_id=workspace_id, actor_uc_uid=ctx.uc_uid
+            db,
+            workspace_id=workspace_id,
+            actor_uc_uid=ctx.uc_uid,
+            invitee_uc_uid=payload.uc_uid,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
