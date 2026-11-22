@@ -178,7 +178,7 @@ async def _exchange_at_brigade(
         raise AccountingOpsUnavailableError(f"could not reach Brigade exchange: {exc}") from exc
     if resp.status_code in (400, 401, 403):
         raise AccountingOpsAuthError(
-            f"Brigade token exchange rejected ({resp.status_code}) — the "
+            f"Brigade token exchange rejected ({resp.status_code}): the "
             "tax-planning-ops → accounting-ops exchange contract may not be registered yet."
         )
     if resp.status_code >= 400:
@@ -252,7 +252,7 @@ async def fetch_pl(
 
     if resp.status_code in (401, 403):
         raise AccountingOpsAuthError(
-            "Accounting-Ops rejected the service token — the federation trust for "
+            "Accounting-Ops rejected the service token: the federation trust for "
             "Tax-Planning-Ops is not yet authorized on the Accounting-Ops side."
         )
     if resp.status_code == 404:
@@ -366,7 +366,7 @@ async def fetch_tax_documents(
 
     if resp.status_code in (401, 403):
         raise AccountingOpsAuthError(
-            "Accounting-Ops rejected the service token — the federation trust for "
+            "Accounting-Ops rejected the service token: the federation trust for "
             "Tax-Planning-Ops is not yet authorized on the Accounting-Ops side."
         )
     if resp.status_code == 404:
