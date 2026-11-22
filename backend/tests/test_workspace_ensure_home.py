@@ -50,6 +50,16 @@ async def _set_guc(conn: asyncpg.Connection, uc_uid: str, workspace_id: str) -> 
     )
 
 
+async def _members(owner_conn: asyncpg.Connection, ws_id: str) -> set[tuple[str, str]]:
+    rows = await owner_conn.fetch(
+        "SELECT user_uc_uid, role FROM workspace_membership WHERE workspace_id = $1", ws_id
+    )
+    return {(r["user_uc_uid"], r["role"]) for r in rows}
+
+
+_CALL = "SELECT workspace_membership_ensure_home($1, 'Fictional Cedar Tax Group', NULL)"
+
+
 @pytest.mark.asyncio
 async def test_ensure_home_occupied_id_no_row_no_error(app_conn, owner_conn) -> None:
     """A workspace id another user already holds: ensure_home writes NOTHING
@@ -65,23 +75,55 @@ async def test_ensure_home_occupied_id_no_row_no_error(app_conn, owner_conn) -> 
         ws_id,
     )
     await _set_guc(app_conn, "fictional-caller-t9", ws_id)
-    await app_conn.execute(
-        "SELECT workspace_membership_ensure_home($1, 'Fictional Cedar Tax Group')", ws_id
-    )
-    assert (
-        await owner_conn.fetchval(
-            "SELECT count(*) FROM workspace_membership WHERE workspace_id=$1", ws_id
-        )
-        == 1
-    )
-    assert (
-        await owner_conn.fetchval(
-            "SELECT count(*) FROM workspace_membership "
-            "WHERE workspace_id=$1 AND user_uc_uid='fictional-caller-t9'", ws_id
-        )
-        == 0
-    )
+    assert await app_conn.fetchval(_CALL, ws_id) is False
+    assert await _members(owner_conn, ws_id) == {("fictional-holder-t9", "owner")}
     assert await owner_conn.fetchval("SELECT count(*) FROM workspaces WHERE id=$1", ws_id) == 1
+
+
+@pytest.mark.asyncio
+async def test_c3_existing_workspace_without_members_is_not_claimed(
+    app_conn, owner_conn
+) -> None:
+    """C3: a workspaces row that exists but has NO membership row (a managed
+    workspace not yet seeded, or one whose members all left) was claimed as
+    owner by any caller. It must never be claimed."""
+    ws_id = str(uuid4())
+    await owner_conn.execute(
+        "INSERT INTO workspaces (id, name) VALUES ($1, 'Fictional Foreign LLP')", ws_id
+    )
+    await _set_guc(app_conn, "fictional-intruder-t9", ws_id)
+    assert await app_conn.fetchval(_CALL, ws_id) is False
+    assert await _members(owner_conn, ws_id) == set()
+    assert (
+        await owner_conn.fetchval("SELECT name FROM workspaces WHERE id=$1", ws_id)
+        == "Fictional Foreign LLP"
+    )
+
+
+@pytest.mark.asyncio
+async def test_c3_fresh_workspace_is_created_and_claimed_once(app_conn, owner_conn) -> None:
+    """The legitimate path: a workspace that does not exist yet is created and
+    claimed by the caller in one call; a repeat call claims nothing more."""
+    ws_id = str(uuid4())
+    await _set_guc(app_conn, "fictional-newcomer-t9", ws_id)
+    assert await app_conn.fetchval(_CALL, ws_id) is True
+    assert await app_conn.fetchval(_CALL, ws_id) is False
+    assert await _members(owner_conn, ws_id) == {("fictional-newcomer-t9", "owner")}
+    # A second user arriving at the same id later claims nothing.
+    await _set_guc(app_conn, "fictional-latecomer-t9", ws_id)
+    assert await app_conn.fetchval(_CALL, ws_id) is False
+    assert await _members(owner_conn, ws_id) == {("fictional-newcomer-t9", "owner")}
+
+
+@pytest.mark.asyncio
+async def test_c3_id_other_than_active_workspace_refused(app_conn, owner_conn) -> None:
+    """The id must be the session's active workspace; any other id is 42501."""
+    ws_id = str(uuid4())
+    await _set_guc(app_conn, "fictional-caller-t9", str(uuid4()))
+    with pytest.raises(asyncpg.exceptions.PostgresError) as excinfo:
+        await app_conn.fetchval(_CALL, ws_id)
+    assert excinfo.value.sqlstate == "42501"
+    assert await owner_conn.fetchval("SELECT count(*) FROM workspaces WHERE id=$1", ws_id) == 0
 
 
 @pytest.mark.asyncio
@@ -89,11 +131,7 @@ async def test_ensure_home_null_actor_refused(app_conn, owner_conn) -> None:
     """A session with no uc_uid bound: the actor is NULL and the function
     refuses with 42501, writing nothing."""
     ws_id = str(uuid4())
-    # Fail closed: with NO uc_uid bound at all (current_uc_uid() -> NULL) the
-    # function refuses with 42501 and writes nothing.
     with pytest.raises(asyncpg.exceptions.PostgresError) as excinfo:
-        await app_conn.execute(
-            "SELECT workspace_membership_ensure_home($1, 'Fictional Cedar Tax Group')", ws_id
-        )
+        await app_conn.fetchval(_CALL, ws_id)
     assert excinfo.value.sqlstate == "42501"
     assert await owner_conn.fetchval("SELECT count(*) FROM workspaces WHERE id=$1", ws_id) == 0

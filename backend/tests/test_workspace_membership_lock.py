@@ -438,8 +438,12 @@ async def test_c1_definers_work_with_nobypassrls_owner(app_conn, owner_conn) -> 
         OTHER_UID,
     )
     # Occupied: the caller already owns it; idempotent, no error.
-    await app_conn.execute(
-        "SELECT workspace_membership_ensure_home($1, 'Fictional Birch LLC')", new_ws
+    assert (
+        await app_conn.fetchval(
+            "SELECT workspace_membership_ensure_home($1, 'Fictional Birch LLC', NULL)",
+            new_ws,
+        )
+        is False
     )
     rows = await owner_conn.fetch(
         "SELECT user_uc_uid, role FROM workspace_membership WHERE workspace_id = $1",

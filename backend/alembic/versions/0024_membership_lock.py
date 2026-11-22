@@ -47,7 +47,7 @@ RUNTIME_ROLE = "tax_planning_ops_app"
 
 _FUNCTIONS = (
     "workspace_membership_create_workspace(text, text, uuid)",
-    "workspace_membership_ensure_home(uuid, text)",
+    "workspace_membership_ensure_home(uuid, text, uuid)",
     "workspace_membership_add_member(uuid, text, text)",
     "workspace_membership_accept_invitation(uuid, text, text)",
     "workspace_membership_remove_member(uuid, text, text)",
@@ -85,45 +85,44 @@ def _create_write_functions() -> None:
     )
     op.execute(
         """
-        -- Self-serve home row: claim an UNOCCUPIED workspace id as the actor's
-        -- home. create_workspace mints a fresh uuid, but the self-serve home is
-        -- derived (uuid5 of the subject) and the caller must get a row in THAT
-        -- workspace. The guard is the only claim: an owner membership for the
-        -- actor is inserted only when NO membership row of ANY user exists for
-        -- p_workspace_id — it can never join a workspace someone else has.
-        -- If the actor already has a row (idempotent re-call) it does nothing;
-        -- if anyone else has one it does nothing, no error.
+        -- Self-serve home: CREATE-AND-CLAIM only. The workspaces row and the
+        -- caller's owner membership are written in one statement pair, and
+        -- the membership is written ONLY when this call itself inserted the
+        -- workspaces row (ON CONFLICT DO NOTHING + FOUND): an existing
+        -- workspace is never claimed, whether or not anyone is a member of
+        -- it. The id must be the session's active workspace (the same bound
+        -- 0001's workspaces policy enforces on the app role). The API calls
+        -- this before any other write to a self-serve workspace, so the home
+        -- row is always created here. Returns true when it claimed.
         CREATE OR REPLACE FUNCTION workspace_membership_ensure_home(
-            p_workspace_id uuid, p_name text
-        ) RETURNS void
+            p_workspace_id uuid, p_name text, p_org_id uuid
+        ) RETURNS boolean
         LANGUAGE plpgsql
         SECURITY DEFINER
         SET search_path = public, pg_temp
         AS $$
         DECLARE
             v_uc_uid text := current_uc_uid();
-            v_claimable boolean;
         BEGIN
-            IF v_uc_uid IS NULL THEN
+            IF v_uc_uid IS NULL OR p_workspace_id IS NULL
+               OR p_workspace_id IS DISTINCT FROM current_workspace_id() THEN
                 RAISE EXCEPTION 'workspace_membership_ensure_home: actor not authorized'
                     USING ERRCODE = '42501';
-            END IF;
-            SELECT NOT EXISTS (
-                SELECT 1 FROM workspace_membership WHERE workspace_id = p_workspace_id
-            ) INTO v_claimable;
-            IF NOT v_claimable THEN
-                RETURN;
             END IF;
             IF p_name IS NULL OR p_name = '' THEN
                 RAISE EXCEPTION 'workspace_membership_ensure_home: workspace name required'
                     USING ERRCODE = '22023';
             END IF;
-            INSERT INTO workspaces (id, name)
-            VALUES (p_workspace_id, p_name)
+            INSERT INTO workspaces (id, name, org_id)
+            VALUES (p_workspace_id, p_name, p_org_id)
             ON CONFLICT (id) DO NOTHING;
+            IF NOT FOUND THEN
+                RETURN false;
+            END IF;
             INSERT INTO workspace_membership
                 (id, user_uc_uid, workspace_id, workspace_name, role)
             VALUES (gen_random_uuid(), v_uc_uid, p_workspace_id, p_name, 'owner');
+            RETURN true;
         END
         $$
         """

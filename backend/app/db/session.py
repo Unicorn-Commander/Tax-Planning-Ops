@@ -123,6 +123,18 @@ async def get_tenant_db(
     async with async_session_maker() as session:
         await bind_session_context(session, str(ctx.workspace_id), ctx.uc_uid, settings)
         workspace_name = ctx.claims.get("workspace_name") or ctx.claims.get("tenant_name")
+        # A self-serve workspace is created AND claimed by its owner in one
+        # definer call, before ensure_workspace could create an unowned row.
+        from app.services.workspaces import ensure_home_membership
+
+        await ensure_home_membership(
+            session,
+            uc_uid=ctx.uc_uid,
+            claims=ctx.claims,
+            workspace_id=ctx.workspace_id,
+            name=workspace_name or f"Workspace {str(ctx.workspace_id)[:8]}",
+            org_id=ctx.org_id,
+        )
         await ensure_workspace(
             session,
             str(ctx.workspace_id),

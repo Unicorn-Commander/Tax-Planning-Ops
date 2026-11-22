@@ -87,18 +87,21 @@ async def ensure_home_membership(
     claims: dict[str, Any],
     workspace_id: uuid.UUID,
     name: str,
-) -> None:
-    """Make sure the user's self-serve workspace shows up in their switcher.
+    org_id: uuid.UUID | None = None,
+) -> bool:
+    """Create-and-claim the caller's self-serve workspace.
 
-    Writes the (uc_uid, workspace_id) owner row ONLY when workspace_id is the
-    caller's own self-serve workspace (uuid5 of sub, no explicit workspace
-    claim) and that workspace id is still UNOCCUPIED (no membership row of any
-    user). For any claimed workspace — the token's workspace_id, a PAT's
-    workspace_scope, or a header selection — this writes NOTHING and changes
-    no role. Idempotent: a repeat call finds the existing row and does
-    nothing. The write runs through the 0024 definer
-    ``workspace_membership_ensure_home``, which re-checks the actor against
-    current_uc_uid() and itself claims the id only when unoccupied.
+    Acts ONLY when workspace_id is the caller's own self-serve workspace (uuid5
+    of sub, no explicit workspace claim); for any claimed workspace (the
+    token's workspace_id, a PAT's workspace_scope, a header selection) it
+    writes NOTHING and changes no role.
+
+    The 0024 definer ``workspace_membership_ensure_home`` inserts the
+    workspaces row and, only if THIS call inserted it, the caller's owner
+    membership. An existing workspace is never claimed, so it has to run
+    before anything else provisions the row: ``get_tenant_db`` calls this
+    ahead of ``ensure_workspace``. Repeat calls are no-ops. Returns True when
+    it claimed.
 
     ``claims`` must be the request's VERIFIED claims (``ctx.claims``): the
     self-serve workspace the auth middleware actually resolves is
@@ -106,19 +109,17 @@ async def ensure_home_membership(
     so deriving from ``uc_uid`` alone would never match when the two differ
     (the production shape) and the home row would never be written."""
     if not uc_uid:
-        return
+        return False
     from app.core.auth import derive_self_serve_workspace
 
     if derive_self_serve_workspace(claims) != workspace_id:
-        return
-    # The 0024 definer: the actor must equal current_uc_uid() and the workspace
-    # id must be unoccupied; bind the request's active workspace + uc_uid GUCs
-    # explicitly (the request's active workspace is this one, but be explicit).
+        return False
+    # The definer binds the claim to the active workspace + uc_uid GUCs.
     await bind_session_context(db, str(workspace_id), uc_uid)
     try:
-        await db.execute(
-            text("SELECT workspace_membership_ensure_home(:ws, :name)"),
-            {"ws": workspace_id, "name": name},
+        claimed = await db.scalar(
+            text("SELECT workspace_membership_ensure_home(:ws, :name, :org)"),
+            {"ws": workspace_id, "name": name, "org": org_id},
         )
     except SAProgrammingError as exc:
         pgerr = getattr(exc, "orig", None)
@@ -126,6 +127,7 @@ async def ensure_home_membership(
             raise PermissionError(str(pgerr)) from exc
         raise
     db.expire_all()
+    return bool(claimed)
 
 
 async def create_workspace(
