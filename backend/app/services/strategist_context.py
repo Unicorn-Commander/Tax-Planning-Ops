@@ -286,7 +286,7 @@ def goal_aware_findings(
                 category="liquidity",
                 action=(
                     f"Structuring the {_d(gain)} sale to meet §1202 (C-corp original-issue "
-                    f"stock, 5-year hold) could exclude {_d(qsbs.excluded_gain_cents)} of gain "
+                    f"stock, 5-year hold) could exclude {_d(qsbs.excluded_gain_cents)} of gain"
                     f", up to the ${qsbs.per_issuer_cap_cents // 100_000_000}M per-issuer cap."
                 ),
                 impact_cents=savings, kind="savings", citation="IRC §1202",
