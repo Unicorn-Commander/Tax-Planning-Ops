@@ -409,6 +409,7 @@ async def test_c1_owner_read_policies_scoped_and_app_has_no_write_policy(
         ("workspace_membership", "UPDATE"),
         ("workspaces", "SELECT"),
         ("workspaces", "INSERT"),
+        ("workspaces", "UPDATE"),
     }
     for r in rows:
         if owner in r["roles"]:
@@ -788,3 +789,51 @@ async def test_c7_removed_owner_is_restored_as_member(app_conn, owner_conn) -> N
         "SELECT workspace_membership_add_member($1, 'fictional-back-c7', 'n')", ws_id
     )
     assert ("fictional-back-c7", "member") in await _active(owner_conn, ws_id)
+
+
+@pytest.mark.asyncio
+async def test_c8_rename_updates_membership_name_shown_by_me(app_conn, owner_conn) -> None:
+    """C8: rename_workspace stopped updating workspace_membership.workspace_name,
+    which /me (list_my_memberships) shows. It renames both, for every member,
+    through the definer; a non-owner is refused and nothing changes."""
+    from app.db.session import engine as app_engine
+    from app.services.workspaces import list_my_memberships, rename_workspace
+
+    # rename_workspace uses the app's global pool; drop connections opened on
+    # an earlier test's event loop.
+    await app_engine.dispose()
+    ws_id = str(uuid4())
+    member_uid = f"fictional-member-c8-{uuid4()}"
+    await _seed(owner_conn, OWNER_UID, ws_id, "Fictional Cedar Tax Group")
+    await _seed_member(owner_conn, ws_id, member_uid, "member")
+
+    with pytest.raises(PermissionError):
+        await rename_workspace(uc_uid=member_uid, workspace_id=UUID(ws_id), name="Hijacked")
+    renamed = await rename_workspace(
+        uc_uid=OWNER_UID, workspace_id=UUID(ws_id), name="  Fictional Maple Partners "
+    )
+    assert renamed["name"] == "Fictional Maple Partners"
+    assert (
+        await owner_conn.fetchval("SELECT name FROM workspaces WHERE id = $1", ws_id)
+        == "Fictional Maple Partners"
+    )
+    names = await owner_conn.fetch(
+        "SELECT DISTINCT workspace_name FROM workspace_membership WHERE workspace_id = $1",
+        ws_id,
+    )
+    assert [r["workspace_name"] for r in names] == ["Fictional Maple Partners"]
+
+    # What /me lists for the member, read as the app role.
+    engine = create_async_engine(_app_async_dsn(), poolclass=NullPool)
+    try:
+        async with AsyncSession(engine) as session:
+            await session.execute(
+                text("SELECT set_config('app.uc_uid', :v, true)"), {"v": member_uid}
+            )
+            listed = await list_my_memberships(session, uc_uid=member_uid)
+    finally:
+        await engine.dispose()
+        await app_engine.dispose()
+    assert [(str(m.workspace_id), m.workspace_name) for m in listed] == [
+        (ws_id, "Fictional Maple Partners")
+    ]

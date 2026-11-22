@@ -52,6 +52,7 @@ _FUNCTIONS = (
     "workspace_membership_accept_invitation(uuid, text)",
     "workspace_invitation_create(uuid, text, text)",
     "workspace_membership_remove_member(uuid, text)",
+    "workspace_membership_rename_workspace(uuid, text)",
 )
 
 
@@ -344,6 +345,45 @@ def _create_write_functions() -> None:
         $$
         """
     )
+    op.execute(
+        """
+        -- Rename: an ACTIVE owner renames the workspace and the denormalised
+        -- workspace_name on every membership row of it (which /me and the
+        -- switcher show). Returns the number of membership rows renamed.
+        CREATE OR REPLACE FUNCTION workspace_membership_rename_workspace(
+            p_workspace uuid, p_name text
+        ) RETURNS integer
+        LANGUAGE plpgsql
+        SECURITY DEFINER
+        SET search_path = public, pg_temp
+        AS $$
+        DECLARE
+            v_uc_uid text := current_uc_uid();
+            v_count integer;
+        BEGIN
+            IF v_uc_uid IS NULL OR NOT EXISTS (
+                SELECT 1 FROM workspace_membership
+                WHERE workspace_id = p_workspace
+                  AND user_uc_uid = v_uc_uid
+                  AND role = 'owner'
+                  AND deleted_at IS NULL
+            ) THEN
+                RAISE EXCEPTION 'workspace_membership_rename_workspace: workspace owner required'
+                    USING ERRCODE = '42501';
+            END IF;
+            IF p_name IS NULL OR btrim(p_name) = '' THEN
+                RAISE EXCEPTION 'workspace_membership_rename_workspace: name required'
+                    USING ERRCODE = '22023';
+            END IF;
+            UPDATE workspaces SET name = p_name, updated_at = now() WHERE id = p_workspace;
+            UPDATE workspace_membership SET workspace_name = p_name
+            WHERE workspace_id = p_workspace;
+            GET DIAGNOSTICS v_count = ROW_COUNT;
+            RETURN v_count;
+        END
+        $$
+        """
+    )
     for signature in _FUNCTIONS:
         op.execute(f"REVOKE ALL ON FUNCTION {signature} FROM PUBLIC")
         op.execute(f"GRANT EXECUTE ON FUNCTION {signature} TO {RUNTIME_ROLE}")
@@ -401,7 +441,7 @@ def _lock_policies(owner_role: str, workspaces_owner: str) -> None:
         """
     )
     # workspaces (0001: FORCE RLS, one FOR ALL policy for the app role): the
-    # create/ensure-home definers provision the row and read it back.
+    # create/ensure-home definers provision the row; rename updates it.
     op.execute(
         f"""
         CREATE POLICY workspaces_owner_select ON workspaces
@@ -416,6 +456,15 @@ def _lock_policies(owner_role: str, workspaces_owner: str) -> None:
         WITH CHECK (true)
         """
     )
+    # The rename definer updates the name.
+    op.execute(
+        f"""
+        CREATE POLICY workspaces_owner_update ON workspaces
+        FOR UPDATE TO {workspaces_owner}
+        USING (true)
+        WITH CHECK (true)
+        """
+    )
 
 
 _OWNER_POLICIES = (
@@ -424,6 +473,7 @@ _OWNER_POLICIES = (
     ("workspace_membership_owner_update", "workspace_membership"),
     ("workspaces_owner_select", "workspaces"),
     ("workspaces_owner_insert", "workspaces"),
+    ("workspaces_owner_update", "workspaces"),
 )
 
 

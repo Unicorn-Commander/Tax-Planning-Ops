@@ -21,11 +21,11 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import select, text, update
+from sqlalchemy import select, text
 from sqlalchemy.exc import ProgrammingError as SAProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import async_session_maker, bind_session_context, ensure_workspace
+from app.db.session import async_session_maker, bind_session_context
 from app.models.membership import WorkspaceMembership
 from app.models.workspace import Workspace
 
@@ -162,19 +162,26 @@ async def create_workspace(
 
 
 async def rename_workspace(*, uc_uid: str, workspace_id: uuid.UUID, name: str) -> dict[str, Any]:
-    """Rename a workspace the caller owns. Verifies membership (raising
-    ``PermissionError`` otherwise), updates the workspaces row (bound to that id)
-    and the denormalised membership name."""
+    """Rename a workspace the caller owns.
+
+    Runs through the 0024 definer ``workspace_membership_rename_workspace``:
+    it requires an active owner (``PermissionError`` otherwise) and renames
+    both the workspaces row and the denormalised ``workspace_name`` on every
+    membership row of that workspace (what /me and the switcher show)."""
     clean = name.strip()
     if not clean:
         raise ValueError("workspace name cannot be empty")
-    if not await is_workspace_member(uc_uid, workspace_id):
-        raise PermissionError("not a member of this workspace")
     async with async_session_maker() as session:
         await bind_session_context(session, str(workspace_id), uc_uid)
-        await ensure_workspace(session, str(workspace_id), clean)
-        await session.execute(
-            update(Workspace).where(Workspace.id == workspace_id).values(name=clean)
-        )
+        try:
+            await session.execute(
+                text("SELECT workspace_membership_rename_workspace(:ws, :name)"),
+                {"ws": workspace_id, "name": clean},
+            )
+        except SAProgrammingError as exc:
+            pgerr = getattr(exc, "orig", None)
+            if pgerr is not None and getattr(pgerr, "sqlstate", None) == "42501":
+                raise PermissionError("workspace owner required") from exc
+            raise
         await session.commit()
     return {"workspace_id": workspace_id, "name": clean}
