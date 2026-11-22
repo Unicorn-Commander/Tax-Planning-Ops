@@ -71,7 +71,7 @@ ENTITY_TYPES: list[EntityType] = [
     EntityType(
         key="individual",
         label="Individual (personal taxes)",
-        description="You file a personal Form 1040 — wages, investments, maybe a rental, but no business of your own.",
+        description="You file a personal Form 1040: wages, investments, maybe a rental, but no business of your own.",
     ),
     EntityType(
         key="sole_prop",
@@ -91,12 +91,12 @@ ENTITY_TYPES: list[EntityType] = [
     EntityType(
         key="c_corp",
         label="C corporation",
-        description="A corporation that files and pays its own tax on Form 1120 — separate from your personal return.",
+        description="A corporation that files and pays its own tax on Form 1120, separate from your personal return.",
     ),
     EntityType(
         key="multi_entity",
         label="Several entities / a business owner",
-        description="You own more than one of the above — e.g. an operating S-corp plus a rental LLC — and want them planned together.",
+        description="You own more than one of the above (e.g. an operating S-corp plus a rental LLC) and want them planned together.",
     ),
     EntityType(
         key="not_sure",
@@ -122,7 +122,7 @@ DOCUMENT_CHECKLISTS: dict[str, dict[str, list[Doc]]] = {
             Doc(
                 name="Last year's federal return",
                 form_or_source="prior-year Form 1040 (with all schedules)",
-                why="It's the baseline we project this year from — carryovers, elections, and last year's effective rate all start here.",
+                why="It's the baseline we project this year from; carryovers, elections, and last year's effective rate all start here.",
             ),
             Doc(
                 name="Wage statements",
@@ -152,7 +152,7 @@ DOCUMENT_CHECKLISTS: dict[str, dict[str, list[Doc]]] = {
             Doc(
                 name="Mortgage interest & property tax",
                 form_or_source="Form 1098 + property-tax bills",
-                why="Tells us whether you itemize or take the standard deduction — the fork that governs most personal strategies.",
+                why="Tells us whether you itemize or take the standard deduction, the fork that governs most personal strategies.",
             ),
         ],
         "beneficial": [
@@ -164,7 +164,7 @@ DOCUMENT_CHECKLISTS: dict[str, dict[str, list[Doc]]] = {
             Doc(
                 name="Retirement & HSA contributions",
                 form_or_source="Form 5498 / plan & payroll statements",
-                why="Shows how much deduction room is left in IRAs, 401(k)s, and HSAs — usually the highest-leverage move available.",
+                why="Shows how much deduction room is left in IRAs, 401(k)s, and HSAs; usually the highest-leverage move available.",
             ),
             Doc(
                 name="Charitable giving records",
@@ -201,7 +201,7 @@ DOCUMENT_CHECKLISTS: dict[str, dict[str, list[Doc]]] = {
             Doc(
                 name="Business income records",
                 form_or_source="Forms 1099-NEC / 1099-K + sales/bookkeeping totals",
-                why="Establishes gross receipts — the base for self-employment tax, QBI, and any S-corp-election analysis.",
+                why="Establishes gross receipts, the base for self-employment tax, QBI, and any S-corp-election analysis.",
             ),
             Doc(
                 name="Business expense detail",
@@ -255,7 +255,7 @@ DOCUMENT_CHECKLISTS: dict[str, dict[str, list[Doc]]] = {
             Doc(
                 name="Partner K-1s issued",
                 form_or_source="Schedule K-1 (Form 1065) for each partner",
-                why="Shows how income and deductions split among partners — essential to plan at both the entity and the individual level.",
+                why="Shows how income and deductions split among partners; essential to plan at both the entity and the individual level.",
             ),
             Doc(
                 name="Year-to-date financial statements",
@@ -314,7 +314,7 @@ DOCUMENT_CHECKLISTS: dict[str, dict[str, list[Doc]]] = {
             Doc(
                 name="Shareholder K-1s issued",
                 form_or_source="Schedule K-1 (Form 1120-S) for each shareholder",
-                why="Shows the pass-through split each owner reports personally — needed to plan at both the entity and individual level.",
+                why="Shows the pass-through split each owner reports personally; needed to plan at both the entity and individual level.",
             ),
             Doc(
                 name="Officer / owner compensation",
@@ -415,7 +415,7 @@ DOCUMENT_CHECKLISTS: dict[str, dict[str, list[Doc]]] = {
             Doc(
                 name="Owner loans & related-party agreements",
                 form_or_source="loan notes / related-party contracts",
-                why="Loans to or from owners must carry adequate interest and terms, or the IRS can recast them — a planning trap to manage.",
+                why="Loans to or from owners must carry adequate interest and terms, or the IRS can recast them; a planning trap to manage.",
             ),
             Doc(
                 name="Fringe-benefit & retirement plans",
@@ -447,7 +447,7 @@ DOCUMENT_CHECKLISTS: dict[str, dict[str, list[Doc]]] = {
             Doc(
                 name="All K-1s you receive",
                 form_or_source="Schedule K-1 from every partnership and S-corp",
-                why="The K-1s show how each entity flows to you personally — the key to coordinating moves across them.",
+                why="The K-1s show how each entity flows to you personally; the key to coordinating moves across them.",
             ),
             Doc(
                 name="Year-to-date financials per entity",
@@ -467,7 +467,7 @@ DOCUMENT_CHECKLISTS: dict[str, dict[str, list[Doc]]] = {
             Doc(
                 name="Inter-company transactions",
                 form_or_source="management-fee / rent / loan agreements between entities",
-                why="Payments between your entities must be at arm's length and shift tax between them — a core multi-entity lever and trap.",
+                why="Payments between your entities must be at arm's length and shift tax between them; a core multi-entity lever and trap.",
             ),
         ],
         "beneficial": [

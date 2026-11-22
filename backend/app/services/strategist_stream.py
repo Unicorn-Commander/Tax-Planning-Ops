@@ -195,7 +195,7 @@ async def stream_strategist_run(
             title="Fill the current bracket with a Roth conversion",
             category="retirement",
             action=(
-                f"Convert {_d(roth.recommended_conversion_cents)} to Roth this year — it "
+                f"Convert {_d(roth.recommended_conversion_cents)} to Roth this year; it "
                 f"taxes at {roth.effective_rate_on_conversion:.0%} now (the top of the current "
                 f"bracket) and grows tax-free."
             ),
@@ -390,7 +390,7 @@ async def stream_strategist_run(
         # No LLM configured (or no findings) — be explicit; the findings already
         # streamed are the deliverable in that degraded mode.
         reason = (
-            "LLM not configured — see the streamed findings."
+            "LLM not configured; see the streamed findings."
             if not llm_enabled(settings)
             else "No findings to author a memo from."
         )

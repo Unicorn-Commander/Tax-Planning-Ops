@@ -48,7 +48,7 @@ from app.year_configs import (
 )
 
 _DISCLAIMER = (
-    "Advisor working memo — illustrative planning estimates, not tax advice or a "
+    "Advisor working memo: illustrative planning estimates, not tax advice or a "
     "filed return. Figures assume current-year brackets and the stated amounts; "
     "confirm eligibility, limits, reasonable compensation, and the client's full "
     "facts before acting."
@@ -134,7 +134,7 @@ def _source_documents_block(tax_year: ClientTaxYear) -> str:
     if not lines:
         return ""
     return (
-        "SOURCE DOCUMENTS (verbatim OCR from Accounting-Ops — treat values exactly "
+        "SOURCE DOCUMENTS (verbatim OCR from Accounting-Ops; treat values exactly "
         "as printed; some may be the literal string 'UNKNOWN'; do NOT invent, "
         "compute, or sum any number):\n" + "\n".join(lines)
     )
@@ -156,7 +156,7 @@ async def _author_memo(
     lines = []
     for f in findings:
         lines.append(
-            f"- [{f['category']}] {f['title']} — {f['recommended_action']} "
+            f"- [{f['category']}] {f['title']}: {f['recommended_action']} "
             f"Impact: {_d(f['estimated_impact_cents'])} ({f['impact_kind']}). "
             f"Cite: {f['citation']}. Caveat: {f['caveat']}"
         )
@@ -176,7 +176,7 @@ async def _author_memo(
         + "\n".join(context_sections)
         + "\n\n"
         "Below are findings already computed by the firm's tax engine. Use ONLY these "
-        "dollar figures — never invent, round differently, or alter a number. Write a "
+        "dollar figures; never invent, round differently, or alter a number. Write a "
         "prioritized memo (3-6 short sections) that is SPECIFIC to this client: explicitly "
         "tie each recommendation to the client's stated objectives and to where their income "
         "is heading (the trajectory). Lead with the highest-impact moves, explain the WHY in "
@@ -315,7 +315,7 @@ async def generate_strategist_memo(
             title="Fill the current bracket with a Roth conversion",
             category="retirement",
             action=(
-                f"Convert {_d(roth.recommended_conversion_cents)} to Roth this year — it "
+                f"Convert {_d(roth.recommended_conversion_cents)} to Roth this year; it "
                 f"taxes at {roth.effective_rate_on_conversion:.0%} now (the top of the current "
                 f"bracket) and grows tax-free."
             ),

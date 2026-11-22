@@ -78,6 +78,10 @@ def test_business_sale_drives_qsbs_finding() -> None:
     assert qsbs["category"] == "liquidity"
     # 100% exclusion on $5M vs a ~23.8% taxable sale → > $1M saved.
     assert qsbs["estimated_impact_cents"] > 100_000_000
+    # No " ," or " ;" from a bad f-string join.
+    assert " ," not in qsbs["recommended_action"]
+    assert " ;" not in qsbs["recommended_action"]
+    assert "of gain, up to the" in qsbs["recommended_action"]
 
 
 def test_relocation_to_no_tax_state_drives_timing_finding() -> None:
