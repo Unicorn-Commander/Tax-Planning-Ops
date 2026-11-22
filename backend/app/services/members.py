@@ -1,6 +1,6 @@
 """Workspace member management and single-use workspace invitations.
 
-Since migration 0023 the app role holds SELECT-only on
+Since migration 0024 the app role holds SELECT-only on
 ``workspace_membership``: every write path here runs through the
 SECURITY DEFINER functions created by that migration (actor checked against
 ``current_uc_uid()`` in the database, owner checks in the function).  The
@@ -66,7 +66,7 @@ def _db_error(exc: SADBAPIError) -> Exception:
 
 async def _enable_roster_read(db: AsyncSession) -> None:
     """Allow the RLS roster read for this transaction only (legacy flag; the
-    0023 select policy is user-scoped and the roster read goes through the
+    0024 select policy is user-scoped and the roster read goes through the
     same flag-gated policy restored for read paths)."""
     await db.execute(text("SELECT set_config('app.membership_read', '1', true)"))
 
@@ -179,7 +179,7 @@ async def create_invitation(
     """Persist only a hash and return the raw token exactly once.
 
     Owner-gated in the service; the workspace_invitation table keeps its own
-    (0022) grants and is not part of the 0023 lock."""
+    (0022) grants and is not part of the 0024 lock."""
     await _require_owner(db, workspace_id=workspace_id, uc_uid=actor_uc_uid)
     raw_token = generate_invitation_token()
     invitation_id = uuid4()

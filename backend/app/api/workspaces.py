@@ -75,7 +75,7 @@ async def post_workspace(
 ) -> WorkspaceMembership:
     """Create a new named workspace owned by the caller; they can switch to it
     immediately (membership authorizes the selection)."""
-    created = await create_workspace(uc_uid=ctx.uc_uid, name=payload.name)
+    created = await create_workspace(uc_uid=ctx.uc_uid, name=payload.name, org_id=ctx.org_id)
     return _out(created["workspace_id"], created["name"], created["role"], ctx.workspace_id)
 
 

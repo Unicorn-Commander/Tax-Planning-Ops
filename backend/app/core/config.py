@@ -65,9 +65,11 @@ class Settings(BaseSettings):
     STANDALONE_USER_ID: str = "standalone-user"
 
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
-    CONTROL_PLANE_BASE_URL: str = ""
-    CONTROL_PLANE_TOKEN: str = ""
     ENTITLEMENT_CHECK_ENABLED: bool = False
+    # Ops-Center origin (no path) that answers the tax_ops_access entitlement
+    # for the caller's own bearer. Set per ring at release; no default, so a
+    # dogfood ring never asks production. Empty with the check on = refuse all.
+    OPS_CENTER_URL: str = ""
 
     MAX_UPLOAD_BYTES: int = 25_000_000  # 25 MB cap on uploaded 1040 PDFs
 

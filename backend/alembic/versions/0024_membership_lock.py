@@ -27,8 +27,8 @@ This migration closes both:
 Downgrade restores the 0022 grant set (the original holes come back with it —
 only run in controlled environments).
 
-Revision ID: 0023_membership_lock
-Revises: 0022_member_invitations
+Revision ID: 0024_membership_lock
+Revises: 0023_workspace_org_binding
 Create Date: 2026-11-19
 """
 
@@ -38,15 +38,15 @@ from collections.abc import Sequence
 
 from alembic import op
 
-revision: str = "0023_membership_lock"
-down_revision: str | None = "0022_member_invitations"
+revision: str = "0024_membership_lock"
+down_revision: str | None = "0023_workspace_org_binding"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 RUNTIME_ROLE = "tax_planning_ops_app"
 
 _FUNCTIONS = (
-    "workspace_membership_create_workspace(text, text)",
+    "workspace_membership_create_workspace(text, text, uuid)",
     "workspace_membership_ensure_home(uuid, text)",
     "workspace_membership_add_member(uuid, text, text)",
     "    workspace_membership_accept_invitation(uuid, text, text)",
@@ -58,7 +58,7 @@ def _create_write_functions() -> None:
     op.execute(
         """
         CREATE OR REPLACE FUNCTION workspace_membership_create_workspace(
-            p_owner text, p_name text
+            p_owner text, p_name text, p_org_id uuid
         ) RETURNS uuid
         LANGUAGE plpgsql
         SECURITY DEFINER
@@ -74,7 +74,7 @@ def _create_write_functions() -> None:
                     USING ERRCODE = '42501';
             END IF;
             v_new_id := gen_random_uuid();
-            INSERT INTO workspaces (id, name) VALUES (v_new_id, p_name);
+            INSERT INTO workspaces (id, name, org_id) VALUES (v_new_id, p_name, p_org_id);
             INSERT INTO workspace_membership
                 (id, user_uc_uid, workspace_id, workspace_name, role)
             VALUES (gen_random_uuid(), v_uc_uid, v_new_id, p_name, 'owner');

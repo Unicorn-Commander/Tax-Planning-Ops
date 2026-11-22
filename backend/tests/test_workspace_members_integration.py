@@ -73,7 +73,7 @@ async def db() -> AsyncSession:
 async def _seed_workspace_owner(
     owner_conn: asyncpg.Connection, workspace_id: str, owner_uc_uid: str
 ) -> None:
-    """Commit the seed rows through the owner role (0023 removed the app role's
+    """Commit the seed rows through the owner role (0024 removed the app role's
     direct INSERT on workspace_membership). The owner connection uses one
     implicit transaction per statement, so the rows are committed and visible
     to the app session's read-transaction snapshot."""
@@ -93,7 +93,7 @@ async def _seed_workspace_owner(
 
 @pytest.fixture
 async def owner_conn():
-    """The migration/owner role: since 0023 the app role may no longer write
+    """The migration/owner role: since 0024 the app role may no longer write
     workspace_membership directly, so seed rows go through the owner connection
     (committed per statement, hence visible to the app session's
     read-transaction snapshot)."""
@@ -108,7 +108,7 @@ async def _add_second_owner(
     owner_conn: asyncpg.Connection, workspace_id: str, uid: str
 ) -> None:
     # A second owner seeded through the owner connection (the app role lost
-    # direct INSERT in 0023); committed per statement so the app session's
+    # direct INSERT in 0024); committed per statement so the app session's
     # read-transaction can see it. The caller keeps the GUCs bound to the
     # original owner (the actor for the following remove_member call).
     await owner_conn.execute(

@@ -1,4 +1,4 @@
-"""Migration 0023 locks workspace_membership against the app role.
+"""Migration 0024 locks workspace_membership against the app role.
 
 Writes must go through SECURITY DEFINER functions only; the app role loses
 direct INSERT/UPDATE/DELETE on the table.  Every test here runs the raw SQL an
@@ -123,7 +123,7 @@ async def _set_guc(conn: asyncpg.Connection, uc_uid: str, workspace_id: str) -> 
 @pytest.mark.asyncio
 async def test_app_cannot_insert_own_membership_anywhere(app_conn, owner_conn) -> None:
     """The 0022 hole: any session could insert a membership FOR ITSELF in ANY
-    workspace with ANY role. After 0023 the app role has no INSERT at all."""
+    workspace with ANY role. After 0024 the app role has no INSERT at all."""
     ws_id = str(uuid4())
     foreign_ws = str(uuid4())
     await _seed(owner_conn, OWNER_UID, ws_id, "Fictional Cedar Tax Group")
@@ -163,7 +163,7 @@ async def test_app_cannot_insert_another_users_membership_as_owner(
 @pytest.mark.asyncio
 async def test_app_cannot_raise_own_role(app_conn, owner_conn) -> None:
     """The 0022 hole: a user could UPDATE their OWN row to role='owner'. After
-    0023 the app role has no UPDATE at all."""
+    0024 the app role has no UPDATE at all."""
     ws_id = str(uuid4())
     await _seed(owner_conn, OWNER_UID, ws_id, "Fictional Cedar Tax Group")
     async with owner_conn.transaction():

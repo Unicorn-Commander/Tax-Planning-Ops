@@ -38,6 +38,7 @@ from app.api.workspaces import router as workspaces_router
 from app.core.auth import JWTAuthMiddleware
 from app.core.config import get_settings
 from app.db.session import close_db
+from app.integrations.control_plane import log_entitlement_config
 from app.oauth_discovery import MCPPathCORSMiddleware
 from app.oauth_discovery import router as oauth_discovery_router
 
@@ -50,6 +51,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    log_entitlement_config(settings)
     # Don't expose the full API surface (routes/models/examples) unauthenticated
     # in production for a PII-bearing tax product.
     docs_enabled = settings.ENV != "prod"
