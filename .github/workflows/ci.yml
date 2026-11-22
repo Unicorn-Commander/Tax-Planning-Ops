@@ -32,6 +32,11 @@ jobs:
       - run: ruff check app tests scripts
       - run: mypy app
       - run: pytest
+      # The MCP door's tests live outside backend/ (testpaths); run them from
+      # the repo root with the same interpreter and installs as above.
+      - name: mcp server tests
+        working-directory: .
+        run: python -m pytest mcp/test_server.py
       # Migrate a real Postgres (owner role) then run the RLS isolation test as
       # the NOBYPASSRLS app role.
       - name: migrate + RLS integration test
@@ -65,4 +70,8 @@ jobs:
           node-version: "22"
       - run: npm ci
       - run: npm run lint
+      # Frontend unit tests (node:test) import .ts sources, so they need the
+      # type-stripping flag (Node >= 22.6); no npm script or deps required.
+      - name: node:test frontend unit tests
+        run: node --experimental-strip-types --test lib/*.test.mjs
       - run: npm run build
