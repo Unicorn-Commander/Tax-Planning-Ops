@@ -11,9 +11,8 @@ its P0001.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError as SADBAPIError
@@ -22,11 +21,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import bind_session_context
 from app.models.membership import WorkspaceMembership
 from app.services.audit import append_audit_event
-from app.services.member_tokens import (
-    generate_invitation_token,
-    hash_invitation_token,
-)
+from app.services.member_tokens import generate_invitation_token
 
+# Fixed in the workspace_invitation_create definer (0024).
 INVITATION_TTL_DAYS = 7
 MEMBER_ROLE = "member"
 
@@ -37,13 +34,6 @@ class InvalidInvitationError(ValueError):
 
 class LastOwnerError(ValueError):
     """Removing the requested membership would orphan the workspace."""
-
-
-def _utc(value: datetime) -> datetime:
-    """Normalize a database/test datetime for an aware UTC comparison."""
-    if value.tzinfo is None:
-        return value.replace(tzinfo=UTC)
-    return value.astimezone(UTC)
 
 
 def _db_error(exc: SADBAPIError) -> Exception:
@@ -176,31 +166,24 @@ async def add_member(
 async def create_invitation(
     db: AsyncSession, *, workspace_id: UUID, actor_uc_uid: str
 ) -> dict[str, Any]:
-    """Persist only a hash and return the raw token exactly once.
+    """Create an invitation and return the raw token exactly once.
 
-    Owner-gated in the service; the workspace_invitation table keeps its own
-    (0022) grants and is not part of the 0024 lock."""
+    Owner-gated in the service for a clear error and again in the definer
+    ``workspace_invitation_create`` (actor = current_uc_uid(), active owner).
+    The definer hashes the token and fixes role and expiry; the app role has
+    no direct access to ``workspace_invitation``."""
     await _require_owner(db, workspace_id=workspace_id, uc_uid=actor_uc_uid)
     raw_token = generate_invitation_token()
-    invitation_id = uuid4()
-    expires_at = datetime.now(UTC) + timedelta(days=INVITATION_TTL_DAYS)
-    await db.execute(
-        text(
-            """
-            INSERT INTO workspace_invitation
-                (id, workspace_id, token_hash, role, expires_at, created_by_uc_uid)
-            VALUES (:id, :workspace_id, :token_hash, :role, :expires_at, :created_by)
-            """
-        ),
-        {
-            "id": invitation_id,
-            "workspace_id": workspace_id,
-            "token_hash": hash_invitation_token(raw_token),
-            "role": MEMBER_ROLE,
-            "expires_at": expires_at,
-            "created_by": actor_uc_uid,
-        },
-    )
+    try:
+        row = (
+            await db.execute(
+                text("SELECT o_id, o_expires_at FROM workspace_invitation_create(:ws, :token)"),
+                {"ws": workspace_id, "token": raw_token},
+            )
+        ).one()
+    except SADBAPIError as exc:
+        raise _db_error(exc) from exc
+    invitation_id, expires_at = row.o_id, row.o_expires_at
     await append_audit_event(
         db,
         workspace_id=workspace_id,
@@ -222,22 +205,16 @@ async def accept_invitation(
 ) -> WorkspaceMembership:
     """Atomically consume an invitation and add the accepting subject.
 
-    The definer function re-checks actor == current_uc_uid(), the token's
-    hash, its expiry/consumption state, and that the token's workspace matches
-    the target; the invitee must accept for themselves (the actor is bound to
-    the GUC, not to a function argument). The audit row is stamped for the
-    invitation's workspace, re-binding the GUC so the row lands there even
-    when the request's active workspace differs."""
-    # Rebind the actor so the definer function's current_uc_uid() is the
-    # invitee even if the request's active workspace was someone else's.
+    The definer hashes the raw token itself, checks expiry/consumption and the
+    target workspace, and adds current_uc_uid() (the invitee accepts for
+    themselves). The audit row is stamped for the invitation's workspace,
+    re-binding the GUC so the row lands there even when the request's active
+    workspace differs."""
     await bind_session_context(db, str(workspace_id), actor_uc_uid)
-    token_hash = hash_invitation_token(raw_token)
     try:
-        await db.execute(
-            text(
-                "SELECT workspace_membership_accept_invitation(:ws, :token, :token_hash)"
-            ),
-            {"ws": workspace_id, "token": raw_token, "token_hash": token_hash},
+        invitation_id = await db.scalar(
+            text("SELECT workspace_membership_accept_invitation(:ws, :token)"),
+            {"ws": workspace_id, "token": raw_token},
         )
     except SADBAPIError as exc:
         raise _db_error(exc) from exc
@@ -247,17 +224,6 @@ async def accept_invitation(
     )
     if member is None:
         raise InvalidInvitationError("invitation is invalid or expired")
-    consumed = await db.scalar(
-        text(
-            "SELECT id FROM workspace_invitation "
-            "WHERE token_hash = :token_hash AND consumed_at IS NOT NULL"
-        ),
-        {"token_hash": token_hash},
-    )
-    # The audit row is scoped to the active-workspace GUC (audit_journal RLS);
-    # the invitee's GUC was rebound to this workspace above, and this keeps the
-    # row in the invitation's workspace even under a foreign active workspace.
-    await bind_session_context(db, str(workspace_id), actor_uc_uid)
     await append_audit_event(
         db,
         workspace_id=workspace_id,
@@ -265,7 +231,7 @@ async def accept_invitation(
         event_type="workspace.invitation.accepted",
         aggregate_type="workspace_membership",
         aggregate_id=member.id,
-        payload={"invitation_id": str(consumed), "role": member.role},
+        payload={"invitation_id": str(invitation_id), "role": member.role},
     )
     return member
 

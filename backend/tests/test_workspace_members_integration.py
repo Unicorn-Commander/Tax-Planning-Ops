@@ -16,7 +16,6 @@ pytestmark = pytest.mark.integration
 
 asyncpg = pytest.importorskip("asyncpg")
 
-from sqlalchemy import text  # noqa: E402
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine  # noqa: E402
 from sqlalchemy.pool import NullPool  # noqa: E402
 
@@ -154,17 +153,6 @@ async def test_member_add_invite_accept_roster_and_last_owner_guard(
     await bind_session_context(db, str(workspace_id), owner)
     created = await create_invitation(db, workspace_id=workspace_id, actor_uc_uid=owner)
     raw_token = str(created["invitation_token"])
-    invitation_row = (
-        await db.execute(
-            text(
-                "SELECT token_hash FROM workspace_invitation "
-                "WHERE token_hash = :token_hash"
-            ),
-            {"token_hash": hash_invitation_token(raw_token)},
-        )
-    ).first()
-    assert invitation_row is not None
-    assert invitation_row.token_hash == hash_invitation_token(raw_token)
 
     accepted = await accept_invitation(
         db,
@@ -225,13 +213,13 @@ async def test_member_add_invite_accept_roster_and_last_owner_guard(
 
     await bind_session_context(db, str(workspace_id), owner)
     expired = await create_invitation(db, workspace_id=workspace_id, actor_uc_uid=owner)
-    await db.execute(
-        text(
-            "UPDATE workspace_invitation SET expires_at = now() - interval '1 minute' "
-            "WHERE token_hash = :token_hash"
-        ),
-        {"token_hash": hash_invitation_token(str(expired["invitation_token"]))},
+    await db.commit()
+    await owner_conn.execute(
+        "UPDATE workspace_invitation SET expires_at = now() - interval '1 minute' "
+        "WHERE token_hash = $1",
+        hash_invitation_token(str(expired["invitation_token"])),
     )
+    await bind_session_context(db, str(workspace_id), owner)
     with pytest.raises(InvalidInvitationError):
         await accept_invitation(
             db,

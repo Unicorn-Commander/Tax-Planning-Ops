@@ -49,7 +49,8 @@ _FUNCTIONS = (
     "workspace_membership_create_workspace(text, text, uuid)",
     "workspace_membership_ensure_home(uuid, text, uuid)",
     "workspace_membership_add_member(uuid, text, text)",
-    "workspace_membership_accept_invitation(uuid, text, text)",
+    "workspace_membership_accept_invitation(uuid, text)",
+    "workspace_invitation_create(uuid, text)",
     "workspace_membership_remove_member(uuid, text, text)",
 )
 
@@ -173,8 +174,57 @@ def _create_write_functions() -> None:
     )
     op.execute(
         """
+        -- Invitations are created ONLY here: the actor must be an active
+        -- owner of the workspace, the stored hash is computed from the raw
+        -- token inside the function, the role is always 'member' and the
+        -- expiry is fixed (7 days). Returns the new invitation's id/expiry.
+        CREATE OR REPLACE FUNCTION workspace_invitation_create(
+            p_workspace uuid, p_raw_token text,
+            OUT o_id uuid, OUT o_expires_at timestamptz
+        )
+        LANGUAGE plpgsql
+        SECURITY DEFINER
+        SET search_path = public, pg_temp
+        AS $$
+        DECLARE
+            v_uc_uid text := current_uc_uid();
+        BEGIN
+            IF v_uc_uid IS NULL OR NOT EXISTS (
+                SELECT 1 FROM workspace_membership
+                WHERE workspace_id = p_workspace
+                  AND user_uc_uid = v_uc_uid
+                  AND role = 'owner'
+                  AND deleted_at IS NULL
+            ) THEN
+                RAISE EXCEPTION 'workspace_invitation_create: workspace owner required'
+                    USING ERRCODE = '42501';
+            END IF;
+            IF p_raw_token IS NULL OR length(p_raw_token) < 32 THEN
+                RAISE EXCEPTION 'workspace_invitation_create: token too short'
+                    USING ERRCODE = '22023';
+            END IF;
+            o_id := gen_random_uuid();
+            o_expires_at := now() + interval '7 days';
+            INSERT INTO workspace_invitation
+                (id, workspace_id, token_hash, role, expires_at, created_by_uc_uid)
+            VALUES (
+                o_id, p_workspace,
+                encode(sha256(convert_to(p_raw_token, 'UTF8')), 'hex'),
+                'member', o_expires_at, v_uc_uid
+            );
+        END
+        $$
+        """
+    )
+    op.execute(
+        """
+        -- Accept: the raw token is hashed HERE and compared with the stored
+        -- hash (a caller cannot present a hash it read). Only 'member'
+        -- invitations are honoured. An active member keeps its stored role;
+        -- a soft-deleted one is restored as a member. Returns the consumed
+        -- invitation's id.
         CREATE OR REPLACE FUNCTION workspace_membership_accept_invitation(
-            p_workspace uuid, p_raw_token text, p_token_hash text
+            p_workspace uuid, p_raw_token text
         ) RETURNS uuid
         LANGUAGE plpgsql
         SECURITY DEFINER
@@ -184,57 +234,45 @@ def _create_write_functions() -> None:
             v_uc_uid text := current_uc_uid();
             v_invitation workspace_invitation;
             v_row workspace_membership;
-            v_now timestamptz := now();
+            v_name text;
         BEGIN
             IF v_uc_uid IS NULL THEN
                 RAISE EXCEPTION 'workspace_membership_accept_invitation: actor not authorized'
                     USING ERRCODE = '42501';
             END IF;
-            -- The hash is computed in the service with the same function it
-            -- stores on create; the raw token stays out of the persisted row.
-            IF p_token_hash IS NULL OR p_token_hash = '' THEN
-                RAISE EXCEPTION 'invitation is invalid or expired'
-                    USING ERRCODE = 'P0001';
+            IF p_raw_token IS NULL OR p_raw_token = '' THEN
+                RAISE EXCEPTION 'invitation is invalid or expired' USING ERRCODE = 'P0001';
             END IF;
             SELECT * INTO v_invitation
             FROM workspace_invitation
-            WHERE token_hash = p_token_hash
+            WHERE token_hash = encode(sha256(convert_to(p_raw_token, 'UTF8')), 'hex')
             FOR UPDATE;
-            IF v_invitation IS NULL
+            IF NOT FOUND
                OR v_invitation.consumed_at IS NOT NULL
-               OR v_invitation.expires_at <= v_now
+               OR v_invitation.expires_at <= now()
+               OR v_invitation.role IS DISTINCT FROM 'member'
                OR v_invitation.workspace_id IS DISTINCT FROM p_workspace THEN
-                RAISE EXCEPTION 'invitation is invalid or expired'
-                    USING ERRCODE = 'P0001';
+                RAISE EXCEPTION 'invitation is invalid or expired' USING ERRCODE = 'P0001';
             END IF;
-            IF NOT EXISTS (SELECT 1 FROM workspaces WHERE id = p_workspace) THEN
+            SELECT name INTO v_name FROM workspaces WHERE id = p_workspace;
+            IF NOT FOUND THEN
                 RAISE EXCEPTION 'invitation is invalid or expired' USING ERRCODE = 'P0001';
             END IF;
             SELECT * INTO v_row
             FROM workspace_membership
-            WHERE workspace_id = p_workspace AND user_uc_uid = v_uc_uid;
-            IF v_row IS NOT NULL THEN
-                UPDATE workspace_membership
-                SET deleted_at = NULL,
-                    workspace_name = (SELECT name FROM workspaces WHERE id = p_workspace),
-                    role = COALESCE(v_invitation.role, 'member')
-                WHERE id = v_row.id;
-            ELSE
+            WHERE workspace_id = p_workspace AND user_uc_uid = v_uc_uid
+            FOR UPDATE;
+            IF NOT FOUND THEN
                 INSERT INTO workspace_membership
                     (id, user_uc_uid, workspace_id, workspace_name, role)
-                VALUES (
-                    gen_random_uuid(),
-                    v_uc_uid,
-                    p_workspace,
-                    (SELECT name FROM workspaces WHERE id = p_workspace),
-                    COALESCE(v_invitation.role, 'member')
-                );
+                VALUES (gen_random_uuid(), v_uc_uid, p_workspace, v_name, 'member');
+            ELSIF v_row.deleted_at IS NOT NULL THEN
+                UPDATE workspace_membership
+                SET deleted_at = NULL, workspace_name = v_name, role = 'member'
+                WHERE id = v_row.id;
             END IF;
-            UPDATE workspace_invitation
-            SET consumed_at = v_now
-            WHERE id = v_invitation.id AND consumed_at IS NULL;
-            RETURN (SELECT id FROM workspace_membership
-                    WHERE workspace_id = p_workspace AND user_uc_uid = v_uc_uid);
+            UPDATE workspace_invitation SET consumed_at = now() WHERE id = v_invitation.id;
+            RETURN v_invitation.id;
         END
         $$
         """
@@ -381,6 +419,10 @@ def upgrade() -> None:
     # 1. Revoke every write path from the app role (and PUBLIC).
     op.execute(f"REVOKE INSERT, UPDATE, DELETE ON workspace_membership FROM {RUNTIME_ROLE}")
     op.execute("REVOKE ALL ON workspace_membership FROM PUBLIC")
+    # Invitations: no direct read (token_hash) or write for the app role; they
+    # are created and consumed only through the definers below.
+    op.execute(f"REVOKE ALL ON workspace_invitation FROM {RUNTIME_ROLE}")
+    op.execute("REVOKE ALL ON workspace_invitation FROM PUBLIC")
     # 2. Lock policies: SELECT stays user-scoped; the INSERT/UPDATE/DELETE
     #    policies name the table owner (a role with no app grants) so the
     #    definer functions — owned by the migration role — pass FORCE RLS.
@@ -427,8 +469,9 @@ def downgrade() -> None:
     # with an older accept_invitation arity downgrades cleanly too.
     for signature in _FUNCTIONS:
         _revoke_if_exists(signature)
-    for signature in list(_FUNCTIONS) + ["workspace_membership_accept_invitation(uuid, text)"]:
+    for signature in list(_FUNCTIONS) + ["workspace_membership_accept_invitation(uuid, text, text)"]:
         _drop_if_exists(signature)
+    op.execute(f"GRANT SELECT, INSERT, UPDATE ON workspace_invitation TO {RUNTIME_ROLE}")
     # Drop every 0024 policy, then recreate 0022's exact policy set (the
     # SELECT policy plus the INSERT/UPDATE/DELETE policies of
     # 0022_member_invitations) and its table grants. The original holes come

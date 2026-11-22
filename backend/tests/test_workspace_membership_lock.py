@@ -453,3 +453,91 @@ async def test_c1_definers_work_with_nobypassrls_owner(app_conn, owner_conn) -> 
         (OWNER_UID, "owner"),
         (OTHER_UID, "member"),
     }
+
+
+@pytest.mark.asyncio
+async def test_c4_app_role_has_no_direct_invitation_access(app_conn, owner_conn) -> None:
+    """C4: the app role could SELECT token_hash and INSERT/UPDATE invitations
+    (mint an owner invitation, then accept it). It now has no table grant."""
+    ws_id = str(uuid4())
+    await _seed(owner_conn, OWNER_UID, ws_id, "Fictional Cedar Tax Group")
+    await _set_guc(app_conn, OWNER_UID, ws_id)
+    privileges = await app_conn.fetch(
+        "SELECT privilege_type FROM information_schema.table_privileges "
+        "WHERE table_name = 'workspace_invitation' AND grantee = current_user"
+    )
+    assert privileges == []
+    with pytest.raises(asyncpg.exceptions.InsufficientPrivilegeError):
+        await app_conn.fetch("SELECT token_hash FROM workspace_invitation")
+    with pytest.raises(asyncpg.exceptions.InsufficientPrivilegeError):
+        await app_conn.execute(
+            "INSERT INTO workspace_invitation "
+            "(workspace_id, token_hash, role, expires_at, created_by_uc_uid) "
+            "VALUES ($1, repeat('a', 64), 'owner', now() + interval '1 day', $2)",
+            ws_id,
+            OWNER_UID,
+        )
+    with pytest.raises(asyncpg.exceptions.InsufficientPrivilegeError):
+        await app_conn.execute("UPDATE workspace_invitation SET role = 'owner'")
+
+
+@pytest.mark.asyncio
+async def test_c4_accept_hashes_raw_token_in_definer(app_conn, owner_conn) -> None:
+    """C4: acceptance used to trust a caller-supplied hash. Presenting the
+    stored HASH as the token must fail; only the raw token works."""
+    ws_id = str(uuid4())
+    await _seed(owner_conn, OWNER_UID, ws_id, "Fictional Cedar Tax Group")
+    raw = "fictional-raw-token-" + "x" * 32
+    await _set_guc(app_conn, OWNER_UID, ws_id)
+    await app_conn.fetchrow("SELECT * FROM workspace_invitation_create($1, $2)", ws_id, raw)
+    stored = await owner_conn.fetchval(
+        "SELECT token_hash FROM workspace_invitation WHERE workspace_id = $1", ws_id
+    )
+    from app.services.member_tokens import hash_invitation_token
+
+    assert stored == hash_invitation_token(raw)
+    await _set_guc(app_conn, "fictional-invitee-c4", ws_id)
+    with pytest.raises(asyncpg.exceptions.RaiseError):
+        await app_conn.fetchval(
+            "SELECT workspace_membership_accept_invitation($1, $2)", ws_id, stored
+        )
+    assert await app_conn.fetchval(
+        "SELECT workspace_membership_accept_invitation($1, $2)", ws_id, raw
+    )
+    assert (
+        await owner_conn.fetchval(
+            "SELECT role FROM workspace_membership "
+            "WHERE workspace_id = $1 AND user_uc_uid = 'fictional-invitee-c4'",
+            ws_id,
+        )
+        == "member"
+    )
+
+
+@pytest.mark.asyncio
+async def test_c4_only_active_owner_can_create_invitation(app_conn, owner_conn) -> None:
+    """C4: invitation creation goes through a definer that checks the inviter
+    is an ACTIVE owner; a member or a soft-deleted owner gets 42501."""
+    ws_id = str(uuid4())
+    await _seed(owner_conn, OWNER_UID, ws_id, "Fictional Cedar Tax Group")
+    async with owner_conn.transaction():
+        await owner_conn.execute(
+            "INSERT INTO workspace_membership "
+            "(id, user_uc_uid, workspace_id, workspace_name, role, deleted_at) VALUES "
+            "(gen_random_uuid(), 'fictional-member-c4', $1, 'n', 'member', NULL), "
+            "(gen_random_uuid(), 'fictional-gone-c4', $1, 'n', 'owner', now())",
+            ws_id,
+        )
+    for uid in ("fictional-member-c4", "fictional-gone-c4", OTHER_UID):
+        await _set_guc(app_conn, uid, ws_id)
+        with pytest.raises(asyncpg.exceptions.PostgresError) as excinfo:
+            await app_conn.fetchrow(
+                "SELECT * FROM workspace_invitation_create($1, $2)", ws_id, "y" * 43
+            )
+        assert excinfo.value.sqlstate == "42501"
+    assert (
+        await owner_conn.fetchval(
+            "SELECT count(*) FROM workspace_invitation WHERE workspace_id = $1", ws_id
+        )
+        == 0
+    )
