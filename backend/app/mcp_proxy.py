@@ -104,7 +104,7 @@ def tool_description(tool: dict[str, Any]) -> str:
     base = tool.get("description") or tool["name"].replace("_", " ").capitalize()
     parts = [base, f"Proxies {tool['route']}.", f"Required scope: {tool['scope']}."]
     if tool.get("params"):
-        parts.append(f"Params — {tool['params']}.")
+        parts.append(f"Params: {tool['params']}.")
     return " ".join(parts)
 
 
