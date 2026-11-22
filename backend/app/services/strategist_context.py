@@ -255,7 +255,7 @@ def goal_aware_findings(
                         f", saving {_d(qcd.tax_savings_cents)} versus a gift you couldn't "
                         f"itemize, and counts toward any RMD."
                         if takes_standard else
-                        " — its edge here is the lower AGI (IRMAA, SS taxability, NIIT)."
+                        "; its edge here is the lower AGI (IRMAA, SS taxability, NIIT)."
                     )
                 ),
                 impact_cents=qcd.tax_savings_cents,
@@ -287,7 +287,7 @@ def goal_aware_findings(
                 action=(
                     f"Structuring the {_d(gain)} sale to meet §1202 (C-corp original-issue "
                     f"stock, 5-year hold) could exclude {_d(qsbs.excluded_gain_cents)} of gain "
-                    f"— up to the ${qsbs.per_issuer_cap_cents // 100_000_000}M per-issuer cap."
+                    f", up to the ${qsbs.per_issuer_cap_cents // 100_000_000}M per-issuer cap."
                 ),
                 impact_cents=savings, kind="savings", citation="IRC §1202",
                 caveat=(
@@ -354,11 +354,11 @@ def goal_aware_findings(
             category="retirement",
             action=(
                 f"The gap years between retiring in {profile.retirement_target_year} and the "
-                f"start of RMDs/Social Security are typically the lowest-bracket years — the "
+                f"start of RMDs/Social Security are typically the lowest-bracket years; the "
                 f"prime window to convert traditional balances to Roth at low rates."
             ),
             impact_cents=0, kind="info", citation="IRC §408A",
-            caveat="Size conversions to fill — not overflow — the target bracket each year.",
+            caveat="Size conversions to fill the target bracket each year, not overflow it.",
             details={"retirement_target_year": profile.retirement_target_year},
         ))
 
