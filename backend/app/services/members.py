@@ -48,6 +48,8 @@ def _db_error(exc: SADBAPIError) -> Exception:
         message = str(pgerr)
         if "last owner" in message:
             return LastOwnerError(message)
+        if "member not found" in message:
+            return LookupError(message)
         if "invalid or expired" in message:
             return InvalidInvitationError(message)
         return PermissionError(message)
@@ -253,8 +255,9 @@ async def remove_member(
 ) -> WorkspaceMembership:
     """Remove a member, refusing to orphan the workspace.
 
-    The last-owner guard lives in the definer function (row-locked count);
-    the service reads the target's role first to pass the right check in."""
+    The last-owner guard lives in the definer: it reads the target's stored
+    role and counts active owners under FOR UPDATE locks. The service lookup
+    only gives a clear 404 and the audit payload."""
     await _require_owner(db, workspace_id=workspace_id, uc_uid=actor_uc_uid)
     await _enable_roster_read(db)
     target = await db.scalar(
@@ -270,14 +273,8 @@ async def remove_member(
     target_role = target.role
     try:
         await db.execute(
-            text(
-                "SELECT workspace_membership_remove_member(:ws, :member, :role)"
-            ),
-            {
-                "ws": workspace_id,
-                "member": member_uc_uid,
-                "role": target_role,
-            },
+            text("SELECT workspace_membership_remove_member(:ws, :member)"),
+            {"ws": workspace_id, "member": member_uc_uid},
         )
     except SADBAPIError as exc:
         raise _db_error(exc) from exc

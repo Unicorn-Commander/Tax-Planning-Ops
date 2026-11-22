@@ -630,3 +630,111 @@ async def test_c5_service_wrong_user_cannot_accept(app_session, owner_conn) -> N
             actor_uc_uid="fictional-other-c5s",
             raw_token=str(created["invitation_token"]),
         )
+
+
+async def _seed_member(
+    owner_conn: asyncpg.Connection, ws_id: str, uid: str, role: str, deleted: bool = False
+) -> None:
+    await owner_conn.execute(
+        "INSERT INTO workspace_membership "
+        "(id, user_uc_uid, workspace_id, workspace_name, role, deleted_at) "
+        "VALUES (gen_random_uuid(), $1, $2, 'Fictional Cedar Tax Group', $3, "
+        "CASE WHEN $4 THEN now() END)",
+        uid,
+        ws_id,
+        role,
+        deleted,
+    )
+
+
+async def _active(owner_conn: asyncpg.Connection, ws_id: str) -> set[tuple[str, str]]:
+    rows = await owner_conn.fetch(
+        "SELECT user_uc_uid, role FROM workspace_membership "
+        "WHERE workspace_id = $1 AND deleted_at IS NULL",
+        ws_id,
+    )
+    return {(r["user_uc_uid"], r["role"]) for r in rows}
+
+
+@pytest.mark.asyncio
+async def test_c6_remove_reads_stored_role_not_argument(app_conn, owner_conn) -> None:
+    """C6: the definer took the target's role as an argument, so passing
+    'member' removed the sole owner. It now has no role argument and reads the
+    stored role: the sole owner cannot remove itself."""
+    ws_id = str(uuid4())
+    await _seed(owner_conn, OWNER_UID, ws_id, "Fictional Cedar Tax Group")
+    await _set_guc(app_conn, OWNER_UID, ws_id)
+    with pytest.raises(asyncpg.exceptions.UndefinedFunctionError):
+        await app_conn.fetchval(
+            "SELECT workspace_membership_remove_member($1, $2, 'member')", ws_id, OWNER_UID
+        )
+    with pytest.raises(asyncpg.exceptions.RaiseError, match="last owner"):
+        await app_conn.fetchval(
+            "SELECT workspace_membership_remove_member($1, $2)", ws_id, OWNER_UID
+        )
+    assert await _active(owner_conn, ws_id) == {(OWNER_UID, "owner")}
+
+
+@pytest.mark.asyncio
+async def test_c6_soft_deleted_owner_is_not_an_owner(app_conn, owner_conn) -> None:
+    """C6: the actor's owner check omitted deleted_at IS NULL, so a removed
+    owner could still remove members. A soft-deleted owner row counts for
+    neither the actor check nor the owner count."""
+    ws_id = str(uuid4())
+    await _seed(owner_conn, OWNER_UID, ws_id, "Fictional Cedar Tax Group")
+    await _seed_member(owner_conn, ws_id, "fictional-exowner-c6", "owner", deleted=True)
+    await _seed_member(owner_conn, ws_id, OTHER_UID, "member")
+    await _set_guc(app_conn, "fictional-exowner-c6", ws_id)
+    with pytest.raises(asyncpg.exceptions.PostgresError) as excinfo:
+        await app_conn.fetchval(
+            "SELECT workspace_membership_remove_member($1, $2)", ws_id, OTHER_UID
+        )
+    assert excinfo.value.sqlstate == "42501"
+    # The deleted owner row does not make the live owner removable either.
+    await _set_guc(app_conn, OWNER_UID, ws_id)
+    with pytest.raises(asyncpg.exceptions.RaiseError, match="last owner"):
+        await app_conn.fetchval(
+            "SELECT workspace_membership_remove_member($1, $2)", ws_id, OWNER_UID
+        )
+    assert await _active(owner_conn, ws_id) == {(OWNER_UID, "owner"), (OTHER_UID, "member")}
+
+
+@pytest.mark.asyncio
+async def test_c6_concurrent_owner_removals_keep_one_owner(owner_conn) -> None:
+    """C6: two owners removing each other at the same time both saw two
+    owners. The owner rows are locked for the count, so the second call waits,
+    re-counts and is refused: one owner always remains."""
+    import asyncio
+
+    ws_id = str(uuid4())
+    a, b = "fictional-owner-a-c6", "fictional-owner-b-c6"
+    await _seed(owner_conn, a, ws_id, "Fictional Cedar Tax Group")
+    await _seed_member(owner_conn, ws_id, b, "owner")
+    conn_a = await asyncpg.connect(_app_dsn())
+    conn_b = await asyncpg.connect(_app_dsn())
+    try:
+        await _set_guc(conn_a, a, ws_id)
+        await _set_guc(conn_b, b, ws_id)
+        tx_a = conn_a.transaction()
+        await tx_a.start()
+        await conn_a.fetchval("SELECT workspace_membership_remove_member($1, $2)", ws_id, b)
+
+        async def b_removes_a() -> object:
+            try:
+                return await conn_b.fetchval(
+                    "SELECT workspace_membership_remove_member($1, $2)", ws_id, a
+                )
+            except asyncpg.exceptions.PostgresError as exc:
+                return exc
+
+        pending = asyncio.create_task(b_removes_a())
+        await asyncio.sleep(0.3)
+        assert not pending.done(), "second removal must wait on the owner-row lock"
+        await tx_a.commit()
+        outcome = await asyncio.wait_for(pending, timeout=10)
+    finally:
+        await conn_a.close()
+        await conn_b.close()
+    # b was removed by a; b is no longer an active owner, so b's call fails.
+    assert isinstance(outcome, asyncpg.exceptions.PostgresError)
+    assert await _active(owner_conn, ws_id) == {(a, "owner")}

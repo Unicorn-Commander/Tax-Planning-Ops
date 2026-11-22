@@ -51,7 +51,7 @@ _FUNCTIONS = (
     "workspace_membership_add_member(uuid, text, text)",
     "workspace_membership_accept_invitation(uuid, text)",
     "workspace_invitation_create(uuid, text, text)",
-    "workspace_membership_remove_member(uuid, text, text)",
+    "workspace_membership_remove_member(uuid, text)",
 )
 
 
@@ -287,8 +287,12 @@ def _create_write_functions() -> None:
     )
     op.execute(
         """
+        -- Remove (soft delete) a member. The target's role is read from its
+        -- STORED row, never from an argument. All active owner rows are
+        -- locked FOR UPDATE before the count, so two concurrent removals of
+        -- the last two owners serialize and the second sees one owner left.
         CREATE OR REPLACE FUNCTION workspace_membership_remove_member(
-            p_workspace uuid, p_member text, p_role text
+            p_workspace uuid, p_member text
         ) RETURNS uuid
         LANGUAGE plpgsql
         SECURITY DEFINER
@@ -296,34 +300,40 @@ def _create_write_functions() -> None:
         AS $$
         DECLARE
             v_uc_uid text := current_uc_uid();
-            v_owner_count integer;
+            v_owners text[];
+            v_target workspace_membership;
         BEGIN
             IF v_uc_uid IS NULL THEN
                 RAISE EXCEPTION 'workspace_membership_remove_member: actor not authorized'
                     USING ERRCODE = '42501';
             END IF;
-            IF NOT EXISTS (
-                SELECT 1 FROM workspace_membership
+            SELECT coalesce(array_agg(o.user_uc_uid), '{}') INTO v_owners
+            FROM (
+                SELECT user_uc_uid FROM workspace_membership
                 WHERE workspace_id = p_workspace
-                  AND user_uc_uid = v_uc_uid
                   AND role = 'owner'
-            ) THEN
+                  AND deleted_at IS NULL
+                ORDER BY id
+                FOR UPDATE
+            ) o;
+            IF NOT (v_uc_uid = ANY (v_owners)) THEN
                 RAISE EXCEPTION 'workspace_membership_remove_member: workspace owner required'
                     USING ERRCODE = '42501';
             END IF;
-            SELECT count(*) INTO v_owner_count
+            SELECT * INTO v_target
             FROM workspace_membership
             WHERE workspace_id = p_workspace
-              AND role = 'owner'
-              AND deleted_at IS NULL;
-            IF p_role = 'owner' AND v_owner_count <= 1 THEN
+              AND user_uc_uid = p_member
+              AND deleted_at IS NULL
+            FOR UPDATE;
+            IF NOT FOUND THEN
+                RAISE EXCEPTION 'member not found in this workspace' USING ERRCODE = 'P0002';
+            END IF;
+            IF v_target.role = 'owner' AND cardinality(v_owners) <= 1 THEN
                 RAISE EXCEPTION 'cannot remove the last owner' USING ERRCODE = 'P0001';
             END IF;
-            UPDATE workspace_membership
-            SET deleted_at = now()
-            WHERE workspace_id = p_workspace AND user_uc_uid = p_member;
-            RETURN (SELECT id FROM workspace_membership
-                    WHERE workspace_id = p_workspace AND user_uc_uid = p_member);
+            UPDATE workspace_membership SET deleted_at = now() WHERE id = v_target.id;
+            RETURN v_target.id;
         END
         $$
         """
@@ -479,7 +489,10 @@ def downgrade() -> None:
     # with an older accept_invitation arity downgrades cleanly too.
     for signature in _FUNCTIONS:
         _revoke_if_exists(signature)
-    for signature in list(_FUNCTIONS) + ["workspace_membership_accept_invitation(uuid, text, text)"]:
+    for signature in list(_FUNCTIONS) + [
+        "workspace_membership_accept_invitation(uuid, text, text)",
+        "workspace_membership_remove_member(uuid, text, text)",
+    ]:
         _drop_if_exists(signature)
     op.execute("ALTER TABLE workspace_invitation DROP COLUMN IF EXISTS invitee_uc_uid")
     op.execute(f"GRANT SELECT, INSERT, UPDATE ON workspace_invitation TO {RUNTIME_ROLE}")
