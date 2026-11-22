@@ -430,20 +430,18 @@ def downgrade() -> None:
         _revoke_if_exists(signature)
     for signature in list(_FUNCTIONS) + ["workspace_membership_accept_invitation(uuid, text)"]:
         _drop_if_exists(signature)
-    # Drop the 0023 owner-scoped write policies (they do not exist under 0022),
-    # then restore 0022's exact policy set: no write policies at all — the
-    # INSERT/UPDATE/DELETE paths come back with the granted table privileges,
-    # exactly as 0022 left them.
-    op.execute("DROP POLICY IF EXISTS workspace_membership_select ON workspace_membership")
-    op.execute("DROP POLICY IF EXISTS workspace_membership_insert ON workspace_membership")
-    op.execute("DROP POLICY IF EXISTS workspace_membership_update ON workspace_membership")
-    op.execute("DROP POLICY IF EXISTS workspace_membership_delete ON workspace_membership")
+    # Drop every 0024 policy, then recreate 0022's exact policy set (the
+    # SELECT policy plus the INSERT/UPDATE/DELETE policies of
+    # 0022_member_invitations) and its table grants. The original holes come
+    # back with it: only downgrade in controlled environments.
     for policy, table in _OWNER_POLICIES:
         op.execute(f"DROP POLICY IF EXISTS {policy} ON {table}")
+    for cmd in ("select", "insert", "update", "delete"):
+        op.execute(f"DROP POLICY IF EXISTS workspace_membership_{cmd} ON workspace_membership")
     op.execute(
-        """
+        f"""
         CREATE POLICY workspace_membership_select ON workspace_membership
-        FOR SELECT TO tax_planning_ops_app
+        FOR SELECT TO {RUNTIME_ROLE}
         USING (
             user_uc_uid = current_uc_uid()
             OR (
@@ -451,6 +449,37 @@ def downgrade() -> None:
                 AND workspace_membership_is_member(workspace_id)
             )
         )
+        """
+    )
+    op.execute(
+        f"""
+        CREATE POLICY workspace_membership_insert ON workspace_membership
+        FOR INSERT TO {RUNTIME_ROLE}
+        WITH CHECK (
+            user_uc_uid = current_uc_uid()
+            OR workspace_membership_is_owner(workspace_id)
+        )
+        """
+    )
+    op.execute(
+        f"""
+        CREATE POLICY workspace_membership_update ON workspace_membership
+        FOR UPDATE TO {RUNTIME_ROLE}
+        USING (
+            user_uc_uid = current_uc_uid()
+            OR workspace_membership_is_owner(workspace_id)
+        )
+        WITH CHECK (
+            user_uc_uid = current_uc_uid()
+            OR workspace_membership_is_owner(workspace_id)
+        )
+        """
+    )
+    op.execute(
+        f"""
+        CREATE POLICY workspace_membership_delete ON workspace_membership
+        FOR DELETE TO {RUNTIME_ROLE}
+        USING (workspace_membership_is_owner(workspace_id))
         """
     )
     op.execute(
