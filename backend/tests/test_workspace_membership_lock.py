@@ -738,3 +738,53 @@ async def test_c6_concurrent_owner_removals_keep_one_owner(owner_conn) -> None:
     # b was removed by a; b is no longer an active owner, so b's call fails.
     assert isinstance(outcome, asyncpg.exceptions.PostgresError)
     assert await _active(owner_conn, ws_id) == {(a, "owner")}
+
+
+@pytest.mark.asyncio
+async def test_c7_add_member_never_demotes_an_owner(app_conn, owner_conn) -> None:
+    """C7: add_member on an existing owner set role='member', including on
+    the sole owner (an owner could demote itself or a co-owner). Active rows
+    keep their role; the call is a no-op for them."""
+    ws_id = str(uuid4())
+    await _seed(owner_conn, OWNER_UID, ws_id, "Fictional Cedar Tax Group")
+    await _seed_member(owner_conn, ws_id, "fictional-coowner-c7", "owner")
+    await _set_guc(app_conn, OWNER_UID, ws_id)
+    for target in (OWNER_UID, "fictional-coowner-c7"):
+        await app_conn.fetchval(
+            "SELECT workspace_membership_add_member($1, $2, 'Fictional Cedar Tax Group')",
+            ws_id,
+            target,
+        )
+    assert await _active(owner_conn, ws_id) == {
+        (OWNER_UID, "owner"),
+        ("fictional-coowner-c7", "owner"),
+    }
+
+
+@pytest.mark.asyncio
+async def test_c7_soft_deleted_owner_cannot_add(app_conn, owner_conn) -> None:
+    """C7: the actor's owner check omitted deleted_at IS NULL."""
+    ws_id = str(uuid4())
+    await _seed(owner_conn, OWNER_UID, ws_id, "Fictional Cedar Tax Group")
+    await _seed_member(owner_conn, ws_id, "fictional-exowner-c7", "owner", deleted=True)
+    await _set_guc(app_conn, "fictional-exowner-c7", ws_id)
+    with pytest.raises(asyncpg.exceptions.PostgresError) as excinfo:
+        await app_conn.fetchval(
+            "SELECT workspace_membership_add_member($1, 'fictional-friend-c7', 'n')", ws_id
+        )
+    assert excinfo.value.sqlstate == "42501"
+    assert await _active(owner_conn, ws_id) == {(OWNER_UID, "owner")}
+
+
+@pytest.mark.asyncio
+async def test_c7_removed_owner_is_restored_as_member(app_conn, owner_conn) -> None:
+    """Re-adding a soft-deleted row restores it as a plain member (it is not
+    an active owner, so nothing is demoted)."""
+    ws_id = str(uuid4())
+    await _seed(owner_conn, OWNER_UID, ws_id, "Fictional Cedar Tax Group")
+    await _seed_member(owner_conn, ws_id, "fictional-back-c7", "owner", deleted=True)
+    await _set_guc(app_conn, OWNER_UID, ws_id)
+    await app_conn.fetchval(
+        "SELECT workspace_membership_add_member($1, 'fictional-back-c7', 'n')", ws_id
+    )
+    assert ("fictional-back-c7", "member") in await _active(owner_conn, ws_id)

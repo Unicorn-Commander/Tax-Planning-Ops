@@ -130,6 +130,10 @@ def _create_write_functions() -> None:
     )
     op.execute(
         """
+        -- Add a subject as a 'member'. Never changes an ACTIVE row's role
+        -- (an existing owner, the sole owner included, stays owner); a
+        -- soft-deleted row is restored as a plain member. The actor must be
+        -- an ACTIVE owner.
         CREATE OR REPLACE FUNCTION workspace_membership_add_member(
             p_workspace uuid, p_member text, p_workspace_name text
         ) RETURNS uuid
@@ -141,7 +145,7 @@ def _create_write_functions() -> None:
             v_uc_uid text := current_uc_uid();
             v_row workspace_membership;
         BEGIN
-            IF v_uc_uid IS NULL THEN
+            IF v_uc_uid IS NULL OR p_member IS NULL OR btrim(p_member) = '' THEN
                 RAISE EXCEPTION 'workspace_membership_add_member: actor not authorized'
                     USING ERRCODE = '42501';
             END IF;
@@ -150,24 +154,26 @@ def _create_write_functions() -> None:
                 WHERE workspace_id = p_workspace
                   AND user_uc_uid = v_uc_uid
                   AND role = 'owner'
+                  AND deleted_at IS NULL
             ) THEN
                 RAISE EXCEPTION 'workspace_membership_add_member: workspace owner required'
                     USING ERRCODE = '42501';
             END IF;
             SELECT * INTO v_row
             FROM workspace_membership
-            WHERE workspace_id = p_workspace AND user_uc_uid = p_member;
-            IF v_row IS NOT NULL THEN
+            WHERE workspace_id = p_workspace AND user_uc_uid = p_member
+            FOR UPDATE;
+            IF NOT FOUND THEN
+                INSERT INTO workspace_membership
+                    (id, user_uc_uid, workspace_id, workspace_name, role)
+                VALUES (gen_random_uuid(), p_member, p_workspace, p_workspace_name, 'member')
+                RETURNING * INTO v_row;
+            ELSIF v_row.deleted_at IS NOT NULL THEN
                 UPDATE workspace_membership
                 SET deleted_at = NULL, workspace_name = p_workspace_name, role = 'member'
                 WHERE id = v_row.id;
-            ELSE
-                INSERT INTO workspace_membership
-                    (id, user_uc_uid, workspace_id, workspace_name, role)
-                VALUES (gen_random_uuid(), p_member, p_workspace, p_workspace_name, 'member');
             END IF;
-            RETURN (SELECT id FROM workspace_membership
-                    WHERE workspace_id = p_workspace AND user_uc_uid = p_member);
+            RETURN v_row.id;
         END
         $$
         """
