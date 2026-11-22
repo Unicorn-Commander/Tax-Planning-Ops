@@ -374,3 +374,78 @@ async def test_remove_member_through_definer(app_session, owner_conn) -> None:
         await remove_member(
             app_session, workspace_id=UUID(ws_id), actor_uc_uid=OWNER_UID, member_uc_uid=OWNER_UID
         )
+
+
+@pytest.mark.asyncio
+async def test_c1_owner_read_policies_scoped_and_app_has_no_write_policy(
+    owner_conn,
+) -> None:
+    """C1: under FORCE RLS the NOBYPASSRLS definer owner needs SELECT (and the
+    write) policies on workspace_membership and workspaces; they name ONLY the
+    table owner. The app role keeps a single SELECT policy and no write one."""
+    rows = await owner_conn.fetch(
+        """
+        SELECT tablename, policyname, cmd, roles::text[] AS roles
+        FROM pg_policies
+        WHERE schemaname = 'public'
+          AND tablename IN ('workspace_membership', 'workspaces')
+        """
+    )
+    owner = await owner_conn.fetchval(
+        "SELECT pg_get_userbyid(relowner) FROM pg_class "
+        "WHERE oid = 'workspace_membership'::regclass"
+    )
+    app_cmds = {
+        (r["tablename"], r["cmd"]) for r in rows if "tax_planning_ops_app" in r["roles"]
+    }
+    assert ("workspace_membership", "SELECT") in app_cmds
+    assert not {c for t, c in app_cmds if t == "workspace_membership"} - {"SELECT"}
+    owner_cmds = {(r["tablename"], r["cmd"]) for r in rows if owner in r["roles"]}
+    assert owner_cmds == {
+        ("workspace_membership", "SELECT"),
+        ("workspace_membership", "INSERT"),
+        ("workspace_membership", "UPDATE"),
+        ("workspaces", "SELECT"),
+        ("workspaces", "INSERT"),
+    }
+    for r in rows:
+        if owner in r["roles"]:
+            assert r["roles"] == [owner], r
+    # Every definer runs as the (NOBYPASSRLS) table owner.
+    definer_owners = {
+        r["owner"]
+        for r in await owner_conn.fetch(
+            "SELECT pg_get_userbyid(proowner) AS owner FROM pg_proc "
+            "WHERE proname LIKE 'workspace_membership_%' AND prosecdef"
+        )
+    }
+    assert definer_owners == {owner}
+
+
+@pytest.mark.asyncio
+async def test_c1_definers_work_with_nobypassrls_owner(app_conn, owner_conn) -> None:
+    """C1: create_workspace, add_member and an occupied ensure_home ran into
+    42501 under FORCE RLS; they must succeed as the app role."""
+    await _set_guc(app_conn, OWNER_UID, str(uuid4()))
+    new_ws = await app_conn.fetchval(
+        "SELECT workspace_membership_create_workspace($1, 'Fictional Birch LLC', NULL)",
+        OWNER_UID,
+    )
+    await _set_guc(app_conn, OWNER_UID, str(new_ws))
+    await app_conn.execute(
+        "SELECT workspace_membership_add_member($1, $2, 'Fictional Birch LLC')",
+        new_ws,
+        OTHER_UID,
+    )
+    # Occupied: the caller already owns it; idempotent, no error.
+    await app_conn.execute(
+        "SELECT workspace_membership_ensure_home($1, 'Fictional Birch LLC')", new_ws
+    )
+    rows = await owner_conn.fetch(
+        "SELECT user_uc_uid, role FROM workspace_membership WHERE workspace_id = $1",
+        new_ws,
+    )
+    assert {(r["user_uc_uid"], r["role"]) for r in rows} == {
+        (OWNER_UID, "owner"),
+        (OTHER_UID, "member"),
+    }

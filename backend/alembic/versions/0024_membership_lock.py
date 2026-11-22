@@ -49,7 +49,7 @@ _FUNCTIONS = (
     "workspace_membership_create_workspace(text, text, uuid)",
     "workspace_membership_ensure_home(uuid, text)",
     "workspace_membership_add_member(uuid, text, text)",
-    "    workspace_membership_accept_invitation(uuid, text, text)",
+    "workspace_membership_accept_invitation(uuid, text, text)",
     "workspace_membership_remove_member(uuid, text, text)",
 )
 
@@ -288,17 +288,14 @@ def _create_write_functions() -> None:
         op.execute(f"GRANT EXECUTE ON FUNCTION {signature} TO {RUNTIME_ROLE}")
 
 
-def _lock_policies(owner_role: str) -> None:
+def _lock_policies(owner_role: str, workspaces_owner: str) -> None:
     op.execute("DROP POLICY IF EXISTS workspace_membership_select ON workspace_membership")
     op.execute("DROP POLICY IF EXISTS workspace_membership_insert ON workspace_membership")
     op.execute("DROP POLICY IF EXISTS workspace_membership_update ON workspace_membership")
     op.execute("DROP POLICY IF EXISTS workspace_membership_delete ON workspace_membership")
-    # SELECT keeps the 0022 shape: own rows always; the roster (flag-gated) read
-    # needs the member view. With FORCE RLS on, a definer write must pass a
-    # policy whose USING/WITH CHECK both hold for it: the write policies below
-    # name the table owner (read at migration time), a role with no direct
-    # grants, whose role check passes for every definer write; authorization
-    # against current_uc_uid() happens in the function bodies, not in policies.
+    # The app role keeps the 0022 SELECT shape (own rows always; the roster
+    # read behind the transaction-local flag) and gets NO write policy and NO
+    # write grant.
     op.execute(
         f"""
         CREATE POLICY workspace_membership_select ON workspace_membership
@@ -312,38 +309,70 @@ def _lock_policies(owner_role: str) -> None:
         )
         """
     )
+    # FORCE RLS applies to the table owner too, and a NOBYPASSRLS owner is the
+    # role every SECURITY DEFINER function here (and 0022's is_member/is_owner
+    # helpers) runs as. A definer reads before it writes (owner checks, the
+    # occupied check, UPDATE ... WHERE), so it needs READ policies as well as
+    # write policies. They are scoped to the owner role only (no app/PUBLIC
+    # role is named) and to the commands the definers use: SELECT, INSERT,
+    # UPDATE (soft delete). No DELETE policy: nothing hard-deletes.
+    # Authorization against current_uc_uid() lives in the function bodies.
     op.execute(
         f"""
-        CREATE POLICY workspace_membership_insert ON workspace_membership
+        CREATE POLICY workspace_membership_owner_select ON workspace_membership
+        FOR SELECT TO {owner_role}
+        USING (true)
+        """
+    )
+    op.execute(
+        f"""
+        CREATE POLICY workspace_membership_owner_insert ON workspace_membership
         FOR INSERT TO {owner_role}
         WITH CHECK (true)
         """
     )
     op.execute(
         f"""
-        CREATE POLICY workspace_membership_update ON workspace_membership
+        CREATE POLICY workspace_membership_owner_update ON workspace_membership
         FOR UPDATE TO {owner_role}
         USING (true)
         WITH CHECK (true)
         """
     )
+    # workspaces (0001: FORCE RLS, one FOR ALL policy for the app role): the
+    # create/ensure-home definers provision the row and read it back.
     op.execute(
         f"""
-        CREATE POLICY workspace_membership_delete ON workspace_membership
-        FOR DELETE TO {owner_role}
+        CREATE POLICY workspaces_owner_select ON workspaces
+        FOR SELECT TO {workspaces_owner}
         USING (true)
+        """
+    )
+    op.execute(
+        f"""
+        CREATE POLICY workspaces_owner_insert ON workspaces
+        FOR INSERT TO {workspaces_owner}
+        WITH CHECK (true)
         """
     )
 
 
-def _owner_role() -> str:
-    """The table's actual owner, read at migration time: the definer functions
-    it owns write with that role's privileges, so under FORCE RLS they pass any
-    policy whose TO clause names it."""
+_OWNER_POLICIES = (
+    ("workspace_membership_owner_select", "workspace_membership"),
+    ("workspace_membership_owner_insert", "workspace_membership"),
+    ("workspace_membership_owner_update", "workspace_membership"),
+    ("workspaces_owner_select", "workspaces"),
+    ("workspaces_owner_insert", "workspaces"),
+)
+
+
+def _owner_role(table: str = "workspace_membership") -> str:
+    """The table's actual owner, read at migration time. The definer functions
+    are re-owned to it (below), so they run as that role and, under FORCE RLS,
+    pass exactly the policies whose TO clause names it."""
     bind = op.get_bind()
     row: tuple[str, ...] = bind.exec_driver_sql(
-        "SELECT pg_get_userbyid(relowner) FROM pg_class "
-        "WHERE oid = 'workspace_membership'::regclass"
+        f"SELECT pg_get_userbyid(relowner) FROM pg_class WHERE oid = '{table}'::regclass"
     ).one()
     return str(row[0])
 
@@ -356,9 +385,12 @@ def upgrade() -> None:
     # 2. Lock policies: SELECT stays user-scoped; the INSERT/UPDATE/DELETE
     #    policies name the table owner (a role with no app grants) so the
     #    definer functions — owned by the migration role — pass FORCE RLS.
-    _lock_policies(owner_role)
-    # 3. The only write paths: SECURITY DEFINER functions.
+    _lock_policies(owner_role, _owner_role("workspaces"))
+    # 3. The only write paths: SECURITY DEFINER functions, owned by the table
+    #    owner whatever role runs the migration (so the owner policies apply).
     _create_write_functions()
+    for signature in _FUNCTIONS:
+        op.execute(f"ALTER FUNCTION {signature} OWNER TO {owner_role}")
 
 
 def _drop_if_exists(signature: str) -> None:
@@ -406,6 +438,8 @@ def downgrade() -> None:
     op.execute("DROP POLICY IF EXISTS workspace_membership_insert ON workspace_membership")
     op.execute("DROP POLICY IF EXISTS workspace_membership_update ON workspace_membership")
     op.execute("DROP POLICY IF EXISTS workspace_membership_delete ON workspace_membership")
+    for policy, table in _OWNER_POLICIES:
+        op.execute(f"DROP POLICY IF EXISTS {policy} ON {table}")
     op.execute(
         """
         CREATE POLICY workspace_membership_select ON workspace_membership
