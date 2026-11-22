@@ -19,3 +19,17 @@ class MemberAddIn(BaseModel):
         if bool(self.uc_uid) == bool(self.invitation_token):
             raise ValueError("provide exactly one of uc_uid or invitation_token")
         return self
+
+
+class InvitationCreateIn(BaseModel):
+    """The subject (uc_uid) the invitation is for; only they can accept it."""
+
+    uc_uid: str = Field(min_length=1, max_length=255)
+
+    @field_validator("uc_uid")
+    @classmethod
+    def _strip_value(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("uc_uid is required")
+        return value

@@ -21,6 +21,8 @@ ignore = ["B008", "S101", "S104"]
 "tests/**" = ["S101", "S102", "E501", "C408"]
 # Dev/QA CLI utilities: printing is the interface.
 "scripts/**" = ["T201", "S", "E501", "UP031", "E2"]
+# Alembic migrations: DDL/DCL by nature; string SQL is the only mechanism.
+"alembic/versions/**" = ["S"]
 # Static reference catalogs: dense prose data (one-sentence `why`/`description`
 # per row) reads far better unwrapped than hard-broken at 100 cols.
 "app/document_checklists.py" = ["E501"]

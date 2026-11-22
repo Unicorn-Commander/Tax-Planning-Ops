@@ -278,9 +278,19 @@ async def test_me_self_serve_creates_own_workspace_owner_once(
     assert len(rows_after_first) == 1
     assert rows_after_first[0]["role"] == "owner"
 
+    # Idempotent across THREE calls: still exactly one membership row and no
+    # extra workspaces rows (a home row that mints a fresh workspace on every
+    # /me would be caught here).
     second = await _get_me(client, sub=sub)
     assert second["workspace_id"] == str(derived)
     assert await _membership_for(admin_conn, sub, derived) == rows_after_first
+    third = await _get_me(client, sub=sub)
+    assert third["workspace_id"] == str(derived)
+    assert await _membership_for(admin_conn, sub, derived) == rows_after_first
+    ws_count = await admin_conn.fetchval(
+        "SELECT count(*) FROM workspaces WHERE id = $1", str(derived)
+    )
+    assert ws_count == 1
 
 
 @pytest.mark.asyncio
@@ -327,10 +337,14 @@ async def test_me_self_serve_uc_uid_differs_from_sub(
     assert len(rows) == 1
     assert rows[0]["role"] == "owner"
 
-    # Idempotent: a second /me call writes nothing new.
+    # Idempotent: a second /me call writes nothing new (one row, one workspace).
     second = await _get_me(client, sub=sub, uc_uid=uc_uid)
     assert second["workspace_id"] == str(derived)
     assert await _membership_for(admin_conn, uc_uid, derived) == rows
+    ws_count = await admin_conn.fetchval(
+        "SELECT count(*) FROM workspaces WHERE id = $1", str(derived)
+    )
+    assert ws_count == 1
 
 
 @pytest.mark.asyncio
