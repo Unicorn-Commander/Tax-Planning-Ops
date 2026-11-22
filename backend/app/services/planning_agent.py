@@ -29,7 +29,7 @@ from app.models.tax_year import ClientTaxYear, TaxSituationSnapshot
 from app.services.tax_config import resolve_bracket_set, to_engine_config
 
 _DISCLAIMER = (
-    "Illustrative planning estimates only — not tax advice. Figures assume the "
+    "Illustrative planning estimates only; not tax advice. Figures assume the "
     "stated illustrative contribution amounts and current-year brackets; the "
     "advisor must confirm eligibility, contribution limits, and the client's "
     "facts before acting."
@@ -65,7 +65,7 @@ async def _narrative(
     )
     prompt = (
         "You are a tax-planning advisor drafting a brief, prioritized proposal for a "
-        f"client named {client_name}. Use ONLY the figures below — never invent, round "
+        f"client named {client_name}. Use ONLY the figures below; never invent, round "
         "differently, or alter any dollar amount or savings number. Write 2-4 short "
         "paragraphs: lead with the highest-impact moves, explain the why plainly, and "
         "note that eligibility must be confirmed. Do not promise outcomes.\n\n"
