@@ -12,20 +12,25 @@ This migration closes both:
 * REVOKE INSERT/UPDATE/DELETE on workspace_membership from the app role (and
   from PUBLIC, where they were implicit); no session may write the table at
   all, including raising its own role.
+* REVOKE ALL on workspace_invitation from the app role: no direct read of
+  token_hash and no direct insert/update (no self-minted owner invitation).
 * Writes happen ONLY through SECURITY DEFINER functions (create_workspace,
-  add_member, accept_invitation, remove_member).  Every function:
-  - checks the ACTOR in the database against current_uc_uid() (a function
-    never trusts its workspace/role arguments for authorization),
-  - uses SET search_path = public, pg_temp (no user-writable objects resolve
-    into the function's lookups),
+  ensure_home, add_member, rename_workspace, remove_member,
+  workspace_invitation_create, accept_invitation). Every function:
+  - checks the ACTOR in the database against current_uc_uid() and, where it
+    matters, that the actor is an ACTIVE owner (deleted_at IS NULL); it never
+    trusts a role argument,
+  - uses SET search_path = public, pg_temp,
   - REVOKE ALL FROM PUBLIC, GRANT EXECUTE to the app role.
-* Definer writes run with the table owner's privileges (the functions are
-  owned by the migration role), so they bypass the app role's revoked grants
-  and its RLS entirely — authorization happens in the function body against
-  current_uc_uid().
+* The functions are owned by the table owner. That owner is NOBYPASSRLS and
+  FORCE RLS applies to it, so it gets its own policies (TO the owner role
+  only): SELECT/INSERT/UPDATE on workspace_membership and
+  SELECT/INSERT/UPDATE on workspaces.
+* Invitations are bound to an invitee (invitee_uc_uid) and the raw token is
+  hashed inside the accept function.
 
-Downgrade restores the 0022 grant set (the original holes come back with it —
-only run in controlled environments).
+Downgrade restores 0022's exact catalog (policies, grants, columns): the
+original holes come back with it, so only run it in controlled environments.
 
 Revision ID: 0024_membership_lock
 Revises: 0023_workspace_org_binding
