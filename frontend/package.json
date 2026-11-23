@@ -7,7 +7,8 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --experimental-strip-types --test lib/*.test.mjs app/**/*.test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/libre-franklin": "^5.3.0",

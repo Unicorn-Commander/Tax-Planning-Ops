@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import api from "@/lib/api";
 import { useAuthStore } from "@/lib/store";
+import { cleanCallbackUrl, parseTokenParams } from "@/app/auth/sso-callback-lib";
 
 function CallbackInner() {
   const router = useRouter();
@@ -12,7 +13,8 @@ function CallbackInner() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = searchParams.get("token");
+    // Read tokens before anything navigates; the fragment form is current.
+    const { token, refreshToken } = parseTokenParams();
     if (!token) {
       setError("No token returned from Keycloak.");
       return;
@@ -20,8 +22,8 @@ function CallbackInner() {
     localStorage.setItem("access_token", token);
     // Keep the refresh token so the access token can be renewed silently
     // (see lib/api.ts) instead of bouncing to /auth/login when it expires.
-    const refreshToken = searchParams.get("refresh_token");
     if (refreshToken) localStorage.setItem("refresh_token", refreshToken);
+    cleanCallbackUrl();
     api
       .get("/me", { headers: { Authorization: `Bearer ${token}` } })
       .then((response) => {
@@ -38,7 +40,10 @@ function CallbackInner() {
         localStorage.removeItem("access_token");
         setError("Could not complete sign-in.");
       });
-  }, [router, searchParams, setUser]);
+  }, [router, setUser]);
+  // searchParams is only a Suspense boundary requirement here; the tokens are
+  // read from window.location (fragment, with the one-release query fallback).
+  void searchParams;
 
   if (error) return <p className="text-[var(--warning)]">{error}</p>;
   return <p className="text-[var(--muted)]">Completing sign-in...</p>;
