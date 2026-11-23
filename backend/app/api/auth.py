@@ -10,7 +10,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
-from sqlalchemy import update
+from sqlalchemy import delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
@@ -30,6 +30,28 @@ STATE_TTL_SECONDS = 1800
 # requirement would make the cookie unsendable, so that one gets the plain name.
 STATE_COOKIE_HOST = "__Host-tpo_oauth_state"
 STATE_COOKIE_PLAIN = "tpo_oauth_state"
+
+# How far past the TTL a dead row is kept before the per-mint sweep drops it.
+# One hour of slack keeps a clock-skewed client that is still inside its own
+# 1800 s window from ever seeing a row the server deleted; beyond that the row
+# can only be refused, so it is dead weight.
+PRUNE_AFTER_SECONDS = 3600
+
+
+async def _prune_expired_states(session: AsyncSession) -> None:
+    """Drop oauth_state rows that expired over an hour ago.
+
+    Runs on every mint (authenticated or not: /auth/keycloak is public), so
+    unauthenticated hits cannot grow the table without bound. Cheap and
+    bounded: it only matches rows already past expires_at + 1 h, a window no
+    live login can occupy.
+    """
+    now = datetime.now(UTC)
+    await session.execute(
+        delete(OAuthState).where(
+            OAuthState.expires_at < now - timedelta(seconds=PRUNE_AFTER_SECONDS)
+        )
+    )
 
 
 class RefreshRequest(BaseModel):
@@ -64,7 +86,10 @@ async def create_oauth_state(session: AsyncSession) -> tuple[str, str]:
 
     Returns (state, code_verifier). The state becomes both the cookie value
     and the authorize `state` parameter, so the callback can pair the two.
+    The same session first sweeps rows expired over an hour ago (see
+    _prune_expired_states) so the public mint endpoint cannot grow the table.
     """
+    await _prune_expired_states(session)
     now = datetime.now(UTC)
     record = OAuthState(
         state=secrets.token_urlsafe(48),

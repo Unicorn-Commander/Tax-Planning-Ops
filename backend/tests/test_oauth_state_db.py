@@ -11,7 +11,8 @@ Keycloak stub, and assert on the committed rows:
 - the same state used twice: the second is refused with NO exchange call;
 - two concurrent callbacks with one state: exactly one exchanges;
 - an expired state is refused (no exchange);
-- after a good callback the row is consumed (re-read in a NEW session).
+- after a good callback the row is consumed (re-read in a NEW session);
+- minting prunes rows expired over an hour ago, keeps fresh and spent ones.
 
 The app engine (app.db.session) is bound at import time to
 settings.DATABASE_URL, which the integration CI step points at this same
@@ -28,9 +29,10 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from app.api.auth import (
+    PRUNE_AFTER_SECONDS,
     STATE_TTL_SECONDS,
     create_oauth_state,
     keycloak_callback,
@@ -254,3 +256,81 @@ async def test_good_callback_consumes_row_visible_in_new_session(
         assert await pop_oauth_state(state) is None
     finally:
         await _clean(state)
+
+
+async def test_mint_prunes_old_rows_keeps_fresh_and_spent(
+    db_session_maker: Any
+) -> None:
+    """Every mint sweeps rows expired over an hour ago (the public
+    /auth/keycloak must not let the table grow unboundedly), but keeps fresh
+    rows and even CONSUMED recent rows (their cookie may still be in flight
+    within the 1800 s window; a replay of a consumed row is refused by
+    consumed_at, not by deletion)."""
+    from uuid import uuid4
+
+    from app.api.auth import _prune_expired_states
+
+    # Unique per run: the shared test DB may hold rows from earlier runs.
+    run_id = uuid4().hex[:10]
+    now = datetime.now(UTC)
+    dead = now - timedelta(seconds=PRUNE_AFTER_SECONDS + 600)
+    fresh = now + timedelta(seconds=STATE_TTL_SECONDS)
+    spent = now + timedelta(seconds=120)
+    tags = ("dead", "fresh", "spent")
+    seeded = [f"prune-{run_id}-{t}" for t in tags]
+    async with db_session_maker() as session:
+        for tag, name, exp, consumed in (
+            (tags[0], seeded[0], dead, False),
+            (tags[1], seeded[1], fresh, False),
+            (tags[2], seeded[2], spent, True),
+        ):
+            await session.execute(
+                text(
+                    "INSERT INTO oauth_state (state, code_verifier, expires_at, "
+                    "consumed_at) VALUES (:s, :v, :e, "
+                    "CASE WHEN :c THEN now() ELSE NULL END)"
+                ),
+                {"s": name, "v": f"v-{tag}", "e": exp, "c": consumed},
+            )
+        await session.commit()
+
+    # The real mint path runs the sweep as its first statement.
+    async with db_session_maker() as session:
+        await create_oauth_state(session)
+        await session.commit()
+
+    async with db_session_maker() as session:
+        rows = (
+            await session.execute(
+                text(
+                    "SELECT state, consumed_at IS NOT NULL AS spent "
+                    "FROM oauth_state WHERE state IN :seeded "
+                    "ORDER BY state"
+                ).bindparams(bindparam("seeded", expanding=True)),
+                {"seeded": seeded},
+            )
+        ).all()
+    states = [r[0] for r in rows]
+    assert seeded[0] not in states
+    assert seeded[1] in states
+    assert seeded[2] in states
+    spent_flags = {r[0]: r[1] for r in rows}
+    assert spent_flags[seeded[2]] is True
+    assert spent_flags[seeded[1]] is False
+
+    await asyncio.gather(*(_clean(name) for name in seeded[1:]))
+
+    # A bare prune call right after the sweep finds nothing left to drop.
+    async with db_session_maker() as session:
+        await _prune_expired_states(session)
+        leftover = (
+            await session.execute(
+                text(
+                    "SELECT count(*) FROM oauth_state "
+                    "WHERE expires_at < now() - make_interval(secs => :slack)"
+                ),
+                {"slack": PRUNE_AFTER_SECONDS},
+            )
+        ).scalar_one()
+        assert leftover == 0
+        await session.rollback()

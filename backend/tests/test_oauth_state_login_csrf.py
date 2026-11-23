@@ -14,7 +14,12 @@ from typing import Any
 
 import pytest
 
-from app.api.auth import STATE_COOKIE_HOST, STATE_TTL_SECONDS, keycloak_callback
+from app.api.auth import (
+    STATE_COOKIE_HOST,
+    STATE_TTL_SECONDS,
+    create_oauth_state,
+    keycloak_callback,
+)
 from tests.helpers.oauth_state import (
     FRONTEND,
     StateRequest,
@@ -157,7 +162,6 @@ def test_no_code_and_no_state_is_refused_not_422(
     _assert_error_redirect(response, stub_client)
 
 
-
 def test_replayed_state_is_refused_without_exchange(
     stub_client: StubTokenClient, memory_store
 ) -> None:
@@ -265,6 +269,56 @@ def test_state_cookie_name_follows_public_url() -> None:
     )
 
 
+def test_mint_prunes_expired_rows_before_storing_new_state() -> None:
+    """Every mint sweeps rows already past expires_at + 1 h (the public
+    /auth/keycloak must not let oauth_state grow without bound). The mint's
+    FIRST statement is the prune DELETE, filtered on expires_at; the new row
+    is stored afterwards. The real table effect (dead rows gone, fresh and
+    consumed rows kept) is proven by the integration test
+    test_mint_prunes_old_rows_keeps_fresh_and_spent."""
+
+    class _FakeSession:
+        def __init__(self) -> None:
+            self.statements: list[object] = []
+            self.added: list[object] = []
+
+        async def __aenter__(self) -> _FakeSession:
+            return self
+
+        async def __aexit__(self, *exc: object) -> bool:
+            del exc
+            return False
+
+        def add(self, record: object) -> None:
+            self.added.append(record)
+
+        async def flush(self) -> None:
+            return None
+
+        async def commit(self) -> None:
+            return None
+
+        async def execute(self, stmt: object, *args: object, **kwargs: object) -> None:
+            del args, kwargs
+            self.statements.append(stmt)
+            return None
+
+    session = _FakeSession()
+    state, verifier = run(create_oauth_state(session))
+
+    # Statement one is the prune sweep: a DELETE from oauth_state whose WHERE
+    # filters on expires_at (the 1 h slack is a bound parameter, not literal).
+    assert len(session.statements) == 1
+    prune_sql = str(session.statements[0].compile(compile_kwargs={"literal_binds": True}))
+    assert "DELETE FROM oauth_state" in prune_sql
+    assert "expires_at" in prune_sql
+    # Then the mint stores exactly one fresh row.
+    assert len(session.added) == 1
+    record = session.added[0]
+    assert record.state == state  # type: ignore[attr-defined]
+    assert record.code_verifier == verifier  # type: ignore[attr-defined]
+
+
 def test_login_mints_state_cookie_and_pkce_challenge(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -299,6 +353,12 @@ def test_login_mints_state_cookie_and_pkce_challenge(
             return None
 
         async def commit(self) -> None:
+            return None
+
+        async def execute(self, *args: object, **kwargs: object) -> None:
+            # The per-mint prune sweep (delete of rows expired over an hour
+            # ago) runs on this session; record nothing, delete nothing.
+            del args, kwargs
             return None
 
     monkeypatch.setattr(
