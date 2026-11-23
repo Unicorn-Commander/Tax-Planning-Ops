@@ -6,6 +6,7 @@ from app.models.entity import BusinessEntity
 from app.models.implementation import ImplementationTask, RealizedOutcome
 from app.models.membership import WorkspaceMembership
 from app.models.memo import Memo, StrategistRun
+from app.models.oauth_state import OAuthState
 from app.models.profile import ClientPlanningProfile
 from app.models.strategy import ClientStrategy, StrategyLibrary
 from app.models.tax_config import TaxBracketRow, TaxBracketSet
@@ -35,6 +36,7 @@ __all__ = [
     "ExtractedReturn",
     "ImplementationTask",
     "Memo",
+    "OAuthState",
     "QuarterlyRecord",
     "RealizedOutcome",
     "StrategistRun",

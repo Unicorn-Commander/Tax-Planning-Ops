@@ -6,73 +6,36 @@ RedirectResponse location that proxies, history and Referer headers would leak.
 """
 from __future__ import annotations
 
-import asyncio
-
 import pytest
-from fastapi import HTTPException
 
 from app.api.auth import keycloak_callback
-from app.core.config import Settings
+from tests.helpers.oauth_state import (
+    FRONTEND,
+    StateRequest,
+    StubTokenClient,
+    make_settings,
+    run,
+)
 
 ACCESS_TOKEN = "fictional-access-token"  # noqa: S105
 REFRESH_TOKEN = "fictional-refresh-token"  # noqa: S105
-FRONTEND = "http://frontend.example.com"
-TOKEN_ENDPOINT = (
-    "https://auth.example.com/realms/uchub/protocol/openid-connect/token"  # noqa: S105
-)
 
 
-class _TokenResponse:
-    status_code = 200
-
-    def __init__(self, body: dict[str, object]) -> None:
-        self._body = body
-
-    def json(self) -> dict[str, object]:
-        return self._body
-
-
-class _StubHttpClient:
-    """Replaces httpx.AsyncClient for the token exchange only."""
-
-    def __init__(self, *args: object, **kwargs: object) -> None:
-        del args, kwargs
-        self.body: dict[str, object] = {
-            "access_token": ACCESS_TOKEN,
-            "refresh_token": REFRESH_TOKEN,
-            "expires_in": 300,
-            "token_type": "Bearer",
-        }
-
-    async def __aenter__(self) -> _StubHttpClient:
-        return self
-
-    async def __aexit__(self, *exc: object) -> bool:
-        del exc
-        return False
-
-    async def post(self, url: str, *, data: dict[str, str]) -> _TokenResponse:
-        assert url == TOKEN_ENDPOINT
-        assert data["grant_type"] == "authorization_code"
-        return _TokenResponse(self.body)
-
-
-def _settings() -> Settings:
-    return Settings(
-        ENV="test",
-        KEYCLOAK_ISSUER="https://auth.example.com/realms/uchub",
-        KEYCLOAK_CLIENT_ID="tax-planning-ops",
-        FRONTEND_URL=FRONTEND,
-    )
 
 
 def test_callback_redirect_carries_tokens_in_fragment(
-    monkeypatch: pytest.MonkeyPatch,
+    stub_client: StubTokenClient,
+    memory_store,
 ) -> None:
-    stub = _StubHttpClient()
-    monkeypatch.setattr("app.api.auth.httpx.AsyncClient", lambda **kw: stub)
-    location = asyncio.run(
-        keycloak_callback(code="fictional-code", settings=_settings())
+    state = "good-state"
+    memory_store.add(state, "good-verifier")
+    location = run(
+        keycloak_callback(
+            request=StateRequest(cookies={"tpo_oauth_state": state}),
+            code="fictional-code",
+            state=state,
+            settings=make_settings(),
+        )
     ).headers["location"]
     # Fragments never leave the browser, so they cannot be logged by any proxy.
     assert location.startswith(f"{FRONTEND}/auth/sso-callback#")
@@ -83,29 +46,74 @@ def test_callback_redirect_carries_tokens_in_fragment(
 
 
 def test_callback_redirect_without_refresh_token(
-    monkeypatch: pytest.MonkeyPatch,
+    stub_client: StubTokenClient,
+    memory_store,
 ) -> None:
-    stub = _StubHttpClient()
-    stub.body = {"access_token": ACCESS_TOKEN, "expires_in": 300, "token_type": "Bearer"}
-    monkeypatch.setattr("app.api.auth.httpx.AsyncClient", lambda **kw: stub)
-    location = asyncio.run(
-        keycloak_callback(code="fictional-code", settings=_settings())
+    stub_client.body = {
+        "access_token": ACCESS_TOKEN,
+        "expires_in": 300,
+        "token_type": "Bearer",
+    }
+    state = "good-state-2"
+    memory_store.add(state, "good-verifier-2")
+    location = run(
+        keycloak_callback(
+            request=StateRequest({"tpo_oauth_state": state}),
+            code="fictional-code",
+            state=state,
+            settings=make_settings(),
+        )
     ).headers["location"]
     assert location == f"{FRONTEND}/auth/sso-callback#token={ACCESS_TOKEN}"
     assert "refresh_token" not in location
     assert "?" not in location
 
 
-def test_callback_token_endpoint_failure_is_401(
-    monkeypatch: pytest.MonkeyPatch,
+def test_callback_token_exchange_sends_pkce_verifier(
+    stub_client: StubTokenClient,
+    memory_store,
 ) -> None:
-    class _FailingClient(_StubHttpClient):
-        async def post(self, url: str, *, data: dict[str, str]) -> _TokenResponse:
-            return _TokenResponse({"error": "invalid_grant"})  # type: ignore[arg-type]
-
-    monkeypatch.setattr(
-        "app.api.auth.httpx.AsyncClient", lambda **kw: _FailingClient()
+    """The token exchange is only allowed once the stored state is consumed,
+    and it must carry the PKCE code_verifier (the S256 challenge was sent on
+    the authorize request)."""
+    state = "pkce-state"
+    verifier = "pkce-verifier"
+    memory_store.add(state, verifier)
+    run(
+        keycloak_callback(
+            request=StateRequest({"tpo_oauth_state": state}),
+            code="fictional-code",
+            state=state,
+            settings=make_settings(),
+        )
     )
+    assert len(stub_client.calls) == 1
+    call = stub_client.calls[0]
+    assert call["grant_type"] == "authorization_code"
+    assert call["code"] == "fictional-code"
+    assert call["code_verifier"] == verifier
+
+
+def test_callback_token_endpoint_failure_is_401(
+    stub_client: StubTokenClient,
+    memory_store,
+) -> None:
+    from fastapi import HTTPException
+
+    state = "fail-state"
+    memory_store.add(state, "fail-verifier")
+    stub_client.status_code = 400
+    stub_client.body = {"error": "invalid_grant"}
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(keycloak_callback(code="fictional-code", settings=_settings()))
+        run(
+            keycloak_callback(
+                request=StateRequest({"tpo_oauth_state": state}),
+                code="fictional-code",
+                state=state,
+                settings=make_settings(),
+            )
+        )
     assert exc.value.status_code == 401
+    # The exchange ran (and failed): the state WAS valid, so reaching the
+    # endpoint is correct. The failure is a Keycloak-side 400/401.
+    assert len(stub_client.calls) == 1

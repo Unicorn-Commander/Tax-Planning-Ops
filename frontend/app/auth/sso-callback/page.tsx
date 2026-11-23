@@ -6,6 +6,13 @@ import api from "@/lib/api";
 import { useAuthStore } from "@/lib/store";
 import { cleanCallbackUrl, parseTokenParams } from "@/app/auth/sso-callback-lib";
 
+// Read the fragment and strip it from the address bar AT MODULE LOAD, before
+// React renders. The tokens must not sit in the URL for a single paint (a
+// third-party asset loaded during first render could echo them in a Referer),
+// so this runs synchronously on import, not inside useEffect.
+const initialTokens = parseTokenParams();
+cleanCallbackUrl();
+
 function CallbackInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -13,8 +20,7 @@ function CallbackInner() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Read tokens before anything navigates; the fragment form is current.
-    const { token, refreshToken } = parseTokenParams();
+    const { token, refreshToken } = initialTokens;
     if (!token) {
       setError("No token returned from Keycloak.");
       return;
@@ -23,7 +29,6 @@ function CallbackInner() {
     // Keep the refresh token so the access token can be renewed silently
     // (see lib/api.ts) instead of bouncing to /auth/login when it expires.
     if (refreshToken) localStorage.setItem("refresh_token", refreshToken);
-    cleanCallbackUrl();
     api
       .get("/me", { headers: { Authorization: `Bearer ${token}` } })
       .then((response) => {
@@ -37,12 +42,16 @@ function CallbackInner() {
         router.replace("/");
       })
       .catch(() => {
+        // A failed /me means the tokens are not a valid session. Remove BOTH
+        // (a lingering refresh token would let a later renewal resurrect a
+        // dead or attacker-supplied session).
         localStorage.removeItem("access_token");
+        localStorage.removeItem("refresh_token");
         setError("Could not complete sign-in.");
       });
   }, [router, setUser]);
-  // searchParams is only a Suspense boundary requirement here; the tokens are
-  // read from window.location (fragment, with the one-release query fallback).
+  // searchParams is only a Suspense boundary requirement here; the tokens were
+  // already read from window.location (fragment) at module load.
   void searchParams;
 
   if (error) return <p className="text-[var(--warning)]">{error}</p>;

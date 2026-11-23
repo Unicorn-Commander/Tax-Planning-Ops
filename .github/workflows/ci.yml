@@ -48,6 +48,12 @@ jobs:
           TPO_TEST_OWNER_DATABASE_URL: postgresql://tax_planning_ops_owner:REMOVED@postgres:5432/tax_planning_ops
         run: |
           python -m app.db.bootstrap
+          # The SSO state-consumption tests (single-use pop, replay, race,
+          # expiry, prune) run against this real DB: a skip is a failure.
+          pytest -m integration tests/test_oauth_state_db.py -rs > sso.log \
+            || { cat sso.log; exit 1; }
+          cat sso.log
+          ! grep -q SKIPPED sso.log
           pytest -m integration
           # The entitlement door (fake Ops-Center) must really run against
           # Postgres here: a skip is a failure.
@@ -72,6 +78,9 @@ jobs:
       - run: npm run lint
       # Frontend unit tests (node:test) import .ts sources, so they need the
       # type-stripping flag (Node >= 22.6); no npm script or deps required.
+      # The sh glob `app/**/*.test.mjs` does not recurse (sh has no globstar),
+      # so the SSO hash tests under app/auth/ were silently skipped. List the
+      # SSO test by explicit path so CI really runs the parse/strip logic.
       - name: node:test frontend unit tests
-        run: node --experimental-strip-types --test lib/*.test.mjs
+        run: node --experimental-strip-types --test lib/*.test.mjs app/auth/sso-callback-lib.test.mjs
       - run: npm run build
