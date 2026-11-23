@@ -20,6 +20,7 @@ import json
 import re
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import quote
 
 DEFAULT_API_URL = "http://localhost:8000/api/v1"
 WORKSPACE_HEADER = "X-Workspace-Id"
@@ -174,7 +175,15 @@ def build_request(
         )
     consumed: set[str] = set()
     for p in needed:
-        path = path.replace("{" + p + "}", str(arguments[p]))
+        value = str(arguments[p])
+        # Path params must never escape their path segment: refuse traversal
+        # fragments outright and percent-encode everything else.
+        if "/" in value or ".." in value:
+            raise ValueError(
+                f"tool '{tool['name']}' path parameter '{p}' must not contain "
+                "'/' or '..'"
+            )
+        path = path.replace("{" + p + "}", quote(value, safe=""))
         consumed.add(p)
 
     url = join_url(base, path)
