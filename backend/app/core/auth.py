@@ -346,12 +346,14 @@ def get_user_bearer(request: Request) -> str | None:
     return str(value) if value else None
 
 
-def service_client_ids(settings: Settings) -> set[str]:
-    """The OAuth client ids / audiences this deployment knows are service (M2M)
-    principals, not end users: TPO's own Keycloak client, the Accounting-Ops
-    audience, and the Brigade exchange client."""
+def service_azp_client_ids(settings: Settings) -> set[str]:
+    """azp values this deployment knows are service (M2M) clients, not the
+    end-user login client: the Accounting-Ops audience and the Brigade
+    exchange client. KEYCLOAK_CLIENT_ID is deliberately NOT here: the
+    frontend signs users in through that same client, so a real advisor's
+    token carries azp = KEYCLOAK_CLIENT_ID and testing azp against it would
+    refuse every real user (TPO23-R3-1)."""
     configured = (
-        settings.KEYCLOAK_CLIENT_ID,
         settings.ACCOUNTING_OPS_AUDIENCE,
         settings.BRIGADE_CLIENT_ID,
     )
@@ -365,13 +367,21 @@ def caller_is_user_principal(claims: dict[str, Any], settings: Settings) -> bool
     so a client-credentials service token reaches a route looking like a user
     bearer. AO's link-verification route answers membership honestly only for a
     user token (a service token is floored to viewer on every workspace), so a
-    service principal must never be used to verify an Accounting-Ops link. A
-    token with no ``uc_uid`` claim, or whose ``azp``/``client_id`` is one of the
-    known service clients, is NOT a user here."""
+    service principal must never be used to verify an Accounting-Ops link.
+
+    A client-credentials token is told apart by: no ``uc_uid`` claim, OR a
+    ``preferred_username`` starting ``service-account-``, OR a ``client_id`` /
+    ``clientId`` claim (Keycloak stamps those on service-account tokens). The
+    ``azp`` is only ever tested against the service denylist, never against
+    the app's own login client, because users log in through that client too."""
     if not claims.get("uc_uid"):
         return False
-    principals = {claims.get("azp"), claims.get("client_id")}
-    return principals.isdisjoint(service_client_ids(settings))
+    preferred = claims.get("preferred_username")
+    if isinstance(preferred, str) and preferred.startswith("service-account-"):
+        return False
+    if claims.get("client_id") or claims.get("clientId"):
+        return False
+    return claims.get("azp") not in service_azp_client_ids(settings)
 
 
 def require_scopes(required: Iterable[str]) -> Callable[[Request], AuthContext]:
