@@ -134,6 +134,20 @@ def _state_error_redirect(settings: Settings) -> RedirectResponse:
     )
 
 
+def _state_error_redirect_keep_cookie(settings: Settings) -> RedirectResponse:
+    """State MISMATCH: same safe landing as _state_error_redirect, but the
+    state cookie is left in place. The victim's browser may still be holding a
+    live login (cookie set on /auth/keycloak) that a stray or forged callback
+    must not wipe: the mismatched query state is the attacker's, and clearing
+    the cookie would break the victim's in-flight login for no gain. The
+    cookie is cleared only after it is consumed (success) or when the state is
+    expired or unknown (nothing legitimate remains to protect)."""
+    return RedirectResponse(
+        f"{settings.FRONTEND_URL.rstrip('/')}/?auth_error=state",
+        status_code=status.HTTP_302_FOUND,
+    )
+
+
 @router.get("/keycloak")
 async def keycloak_login(settings: Settings = Depends(get_settings)) -> RedirectResponse:
     async with async_session_maker() as session:
@@ -174,14 +188,26 @@ async def keycloak_login(settings: Settings = Depends(get_settings)) -> Redirect
 @router.get("/keycloak/callback")
 async def keycloak_callback(
     request: Request,
-    code: str,
+    code: str | None = None,
     state: str | None = None,
     settings: Settings = Depends(get_settings),
 ) -> RedirectResponse:
     cookie_state = request.cookies.get(_state_cookie_name(settings))
+    if state and cookie_state and state != cookie_state:
+        # Login CSRF: the query state is someone else's (the attacker's own
+        # in-flight login). Refuse before the token exchange, and keep the
+        # cookie: it may belong to a legitimate login the victim started.
+        # No token exchange can happen without a matching state anyway.
+        return _state_error_redirect_keep_cookie(settings)
     if not state or not cookie_state or state != cookie_state:
         # Login CSRF: no matching pair means this callback belongs to someone
         # else's (or no one's) login. Refuse before the token exchange.
+        return _state_error_redirect(settings)
+    if not code:
+        # Keycloak error redirect (?error=access_denied&state=...): the user
+        # denied the login. There is no code to exchange and no session to
+        # start. Refuse with the same safe landing, never 422 JSON in a
+        # browser tab.
         return _state_error_redirect(settings)
     code_verifier = await pop_oauth_state(state)
     if code_verifier is None:
@@ -238,7 +264,6 @@ async def keycloak_callback(
         status_code=status.HTTP_302_FOUND,
         headers=headers,
     )
-
 
 
 @router.post("/refresh", response_model=RefreshResponse)

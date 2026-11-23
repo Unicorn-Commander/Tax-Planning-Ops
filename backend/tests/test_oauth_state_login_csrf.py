@@ -95,7 +95,10 @@ def test_mismatched_state_cookie_is_refused_without_exchange(
 ) -> None:
     """Login CSRF core: the attacker finishes their own login and hands the
     victim their code; the victim's browser sends ITS cookie. The two states
-    must not pair, and the victim's code must never reach Keycloak."""
+    must not pair, and the victim's code must never reach Keycloak. A stray
+    callback must also NOT clear the victim's legitimate state cookie (their
+    in-flight login survives; the cookie is cleared only after it is consumed
+    or on an expired/unknown state)."""
     memory_store.add("victim-state", "victim-verifier")
     response = run(
         keycloak_callback(
@@ -105,9 +108,54 @@ def test_mismatched_state_cookie_is_refused_without_exchange(
             settings=make_settings(),
         )
     )
-    _assert_error_redirect(response, stub_client)
+    assert response.status_code == 302
+    assert response.headers["location"] == AUTH_ERROR
+    # Refused, with NO token exchange.
+    assert stub_client.calls == []
+    # Mismatch: the cookie is preserved (no Set-Cookie clearing it at all).
+    assert response.headers.get("set-cookie", "") == ""
     # The victim's stored state must be untouched (they can log in again).
     assert "victim-state" in memory_store.records
+
+
+def test_no_code_keycloak_error_redirect_is_refused_not_422(
+    stub_client: StubTokenClient, memory_store
+) -> None:
+    """Keycloak error redirect (?error=access_denied&state=..., user denied
+    the login): the state pairs, but there is no code to exchange. The
+    callback must land the user on the frontend with ?auth_error=state,
+    never return 422 JSON to a browser, never touch the token endpoint."""
+    state = "denied-state"
+    memory_store.add(state, "denied-verifier")
+    response = run(
+        keycloak_callback(
+            request=StateRequest(cookies={COOKIE: state}),
+            code=None,
+            state=state,
+            settings=make_settings(),
+        )
+    )
+    _assert_error_redirect(response, stub_client)
+    # Nothing was exchanged, and the stored state is untouched: a denial must
+    # not spend the victim's state (they can retry the login).
+    assert state in memory_store.records
+
+
+def test_no_code_and_no_state_is_refused_not_422(
+    stub_client: StubTokenClient, memory_store
+) -> None:
+    """No code AND no state (a stray navigation to the callback URL): same
+    safe landing, no 422, no exchange."""
+    response = run(
+        keycloak_callback(
+            request=StateRequest(cookies={COOKIE: "some-state"}),
+            code=None,
+            state=None,
+            settings=make_settings(),
+        )
+    )
+    _assert_error_redirect(response, stub_client)
+
 
 
 def test_replayed_state_is_refused_without_exchange(
