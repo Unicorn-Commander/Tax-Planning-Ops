@@ -72,6 +72,9 @@ jobs:
       - run: npm run lint
       # Frontend unit tests (node:test) import .ts sources, so they need the
       # type-stripping flag (Node >= 22.6); no npm script or deps required.
+      # The sh glob `app/**/*.test.mjs` does not recurse (sh has no globstar),
+      # so the SSO hash tests under app/auth/ were silently skipped. List the
+      # SSO test by explicit path so CI really runs the parse/strip logic.
       - name: node:test frontend unit tests
-        run: node --experimental-strip-types --test lib/*.test.mjs
+        run: node --experimental-strip-types --test lib/*.test.mjs app/auth/sso-callback-lib.test.mjs
       - run: npm run build
