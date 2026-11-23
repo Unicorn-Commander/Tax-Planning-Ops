@@ -48,10 +48,32 @@ AO_URL = "https://accounting-ops.example.com"
 WS = str(uuid4())
 BEARER = "fictional.advisor.bearer"  # noqa: S105
 SERVICE_TOKEN = "tpo.service.token"  # noqa: S105
-# A real end-user principal (carries uc_uid, no service azp/client_id).
-USER_CLAIMS: dict[str, Any] = {"uc_uid": "fictional-advisor", "sub": "fictional-advisor"}
+# A real advisor token as Keycloak actually issues it (TPO23-R3-2): users log
+# in through the app's own client, so azp IS KEYCLOAK_CLIENT_ID. It carries
+# uc_uid and must VERIFY (AO gets called).
+USER_CLAIMS: dict[str, Any] = {
+    "azp": "tax-planning-ops",
+    "uc_uid": "fictional-advisor",
+    "sub": "fictional-advisor-sub",
+    "preferred_username": "advisor@example.com",
+}
+# A client-credentials service token: no uc_uid, service-account username,
+# clientId claim. Must be refused before AO is called.
+SERVICE_CLAIMS: dict[str, Any] = {
+    "azp": "tax-planning-ops",
+    "clientId": "tax-planning-ops",
+    "sub": "svc-sub",
+    "preferred_username": "service-account-tax-planning-ops",
+}
+# A token that carries uc_uid but a service-account username: still refused.
+SERVICE_WITH_UID_CLAIMS: dict[str, Any] = {
+    "azp": "tax-planning-ops",
+    "uc_uid": "fictional-advisor",
+    "sub": "svc-sub",
+    "preferred_username": "service-account-tax-planning-ops",
+}
 # An M2M-shaped token: middleware stamps it as a user bearer, but it has no
-# uc_uid and its azp is a known service client, so it must never verify a link.
+# uc_uid, so it must never verify a link.
 M2M_CLAIMS: dict[str, Any] = {"azp": "tax-planning-ops", "sub": "svc"}  # noqa: S105
 
 
@@ -137,15 +159,38 @@ async def test_verify_without_bearer_never_calls(fake_ao) -> None:
 
 @pytest.mark.asyncio
 async def test_verify_m2m_principal_never_calls_ao(fake_ao) -> None:
-    # A service/M2M token (no uc_uid, azp is a known service client) must not
-    # verify a link: AO is never contacted, even with a bearer present.
+    # A service/M2M token (no uc_uid) must not verify a link: AO is never
+    # contacted, even with a bearer present.
     seen = fake_ao(lambda r: httpx.Response(200))
     assert await verify_caller_workspace_access(_settings(), WS, BEARER, M2M_CLAIMS) is False
     assert seen == []
 
 
 @pytest.mark.asyncio
+async def test_verify_service_principal_never_calls_ao(fake_ao) -> None:
+    # A Keycloak client-credentials token (no uc_uid, service-account
+    # username, clientId claim) is refused before AO is called.
+    seen = fake_ao(lambda r: httpx.Response(200))
+    assert await verify_caller_workspace_access(_settings(), WS, BEARER, SERVICE_CLAIMS) is False
+    assert seen == []
+
+
+@pytest.mark.asyncio
+async def test_verify_service_account_username_with_uid_refused(fake_ao) -> None:
+    # uc_uid alone is not enough: a service-account-* username is refused
+    # even when the token carries a uc_uid claim.
+    seen = fake_ao(lambda r: httpx.Response(200))
+    result = await verify_caller_workspace_access(
+        _settings(), WS, BEARER, SERVICE_WITH_UID_CLAIMS
+    )
+    assert result is False
+    assert seen == []
+
+
+@pytest.mark.asyncio
 async def test_verify_user_principal_still_calls_ao(fake_ao) -> None:
+    # A real advisor token (azp = the app's own login client, uc_uid, email
+    # username) must VERIFY: AO gets called with the caller's bearer.
     seen = fake_ao(lambda r: httpx.Response(200, json={"id": WS}))
     assert await verify_caller_workspace_access(_settings(), WS, BEARER, USER_CLAIMS) is True
     assert len(seen) == 1
