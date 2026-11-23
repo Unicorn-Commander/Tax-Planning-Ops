@@ -48,6 +48,12 @@ jobs:
           TPO_TEST_OWNER_DATABASE_URL: postgresql://tax_planning_ops_owner:REMOVED@postgres:5432/tax_planning_ops
         run: |
           python -m app.db.bootstrap
+          # The SSO state-consumption tests (single-use pop, replay, race,
+          # expiry, prune) run against this real DB: a skip is a failure.
+          pytest -m integration tests/test_oauth_state_db.py -rs > sso.log \
+            || { cat sso.log; exit 1; }
+          cat sso.log
+          ! grep -q SKIPPED sso.log
           pytest -m integration
           # The entitlement door (fake Ops-Center) must really run against
           # Postgres here: a skip is a failure.
