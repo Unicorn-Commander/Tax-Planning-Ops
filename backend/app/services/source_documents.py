@@ -135,6 +135,7 @@ async def set_accounting_ops_link(
     accounting_ops_workspace_id: UUID | None,
     accounting_ops_entity_id: UUID | None,
     caller_bearer: str | None,
+    caller_claims: dict[str, Any],
     settings: Settings,
 ) -> dict[str, Any]:
     """Link (or, with empty values, unlink) a client to its Accounting-Ops
@@ -144,15 +145,15 @@ async def set_accounting_ops_link(
     CALLER's own bearer, never TPO's service token — that the caller can see
     that AO workspace. Otherwise the link would let TPO's trusted M2M token
     (floored to viewer on any AO workspace) read another tenant's tax
-    documents through this client (confused deputy). Raises PermissionError
-    when the workspace cannot be verified; the caller's bearer is never
-    stored."""
+    documents through this client (confused deputy). A service/M2M principal
+    is refused before AO is called. Raises PermissionError when the workspace
+    cannot be verified; the caller's bearer is never stored."""
     client = await db.get(Client, client_id)
     if client is None:
         raise LookupError("client not found")
     if accounting_ops_workspace_id is not None:
         verified = await verify_caller_workspace_access(
-            settings, str(accounting_ops_workspace_id), caller_bearer
+            settings, str(accounting_ops_workspace_id), caller_bearer, caller_claims
         )
         if not verified:
             raise PermissionError("you are not a member of that Accounting-Ops workspace")

@@ -117,6 +117,7 @@ async def link_accounting_ops(
             accounting_ops_workspace_id=payload.accounting_ops_workspace_id,
             accounting_ops_entity_id=payload.accounting_ops_entity_id,
             caller_bearer=caller_bearer,
+            caller_claims=ctx.claims,
             settings=settings,
         )
     except LookupError as exc:

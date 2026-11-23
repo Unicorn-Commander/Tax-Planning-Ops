@@ -31,6 +31,7 @@ from uuid import UUID
 import httpx
 from pydantic import BaseModel
 
+from app.core.auth import caller_is_user_principal
 from app.core.config import Settings
 
 
@@ -234,7 +235,10 @@ def _canonical_workspace_id(accounting_ops_workspace_id: str) -> str:
 
 
 async def verify_caller_workspace_access(
-    settings: Settings, workspace_id: str, bearer: str | None
+    settings: Settings,
+    workspace_id: str,
+    bearer: str | None,
+    claims: dict[str, Any] | None = None,
 ) -> bool:
     """Ask Accounting-Ops, AS THE CALLER (their own bearer — never TPO's
     service token), whether that AO workspace is visible to them.
@@ -242,8 +246,22 @@ async def verify_caller_workspace_access(
     This is what makes a link safe: AO floors a trusted M2M caller (TPO's
     service token) to viewer on ANY workspace, so only the caller's own token
     answers honestly about membership. True only on HTTP 200; every other
-    answer (non-200, unreachable, no bearer at all) fails closed to False."""
+    answer (non-200, unreachable, no bearer at all) fails closed to False.
+
+    Contract this relies on (verified on Accounting-Ops main): the AO route
+    ``GET /api/workspaces/{workspace_id}`` (app/api/workspaces.py) depends on
+    ``resolve_workspace`` -> ``_resolve_membership``, which 403s when the
+    caller's uc_uid has no ACTIVE workspace_membership row. This check MUST
+    stay on that route (resolve_workspace), never the federation rail
+    (``resolve_workspace_for_federation``), which floors a trusted M2M caller
+    to viewer on any workspace and would answer "yes" for every tenant.
+
+    A service/M2M principal must never verify a link: when ``claims`` is given
+    and is not a user principal, refuse before touching AO (the bearer would
+    only be TPO's own service token, which AO floors to viewer everywhere)."""
     if not bearer or not settings.ACCOUNTING_OPS_URL:
+        return False
+    if claims is not None and not caller_is_user_principal(claims, settings):
         return False
     ws_id = _canonical_workspace_id(workspace_id)
     url = f"{settings.ACCOUNTING_OPS_URL.rstrip('/')}/api/workspaces/{ws_id}"

@@ -346,6 +346,34 @@ def get_user_bearer(request: Request) -> str | None:
     return str(value) if value else None
 
 
+def service_client_ids(settings: Settings) -> set[str]:
+    """The OAuth client ids / audiences this deployment knows are service (M2M)
+    principals, not end users: TPO's own Keycloak client, the Accounting-Ops
+    audience, and the Brigade exchange client."""
+    configured = (
+        settings.KEYCLOAK_CLIENT_ID,
+        settings.ACCOUNTING_OPS_AUDIENCE,
+        settings.BRIGADE_CLIENT_ID,
+    )
+    return {item.strip() for item in configured if isinstance(item, str) and item.strip()}
+
+
+def caller_is_user_principal(claims: dict[str, Any], settings: Settings) -> bool:
+    """True only for a real end-user principal, never a service/M2M token.
+
+    ``JWTAuthMiddleware`` stamps ``user_bearer`` on ANY verified JWT (auth.py),
+    so a client-credentials service token reaches a route looking like a user
+    bearer. AO's link-verification route answers membership honestly only for a
+    user token (a service token is floored to viewer on every workspace), so a
+    service principal must never be used to verify an Accounting-Ops link. A
+    token with no ``uc_uid`` claim, or whose ``azp``/``client_id`` is one of the
+    known service clients, is NOT a user here."""
+    if not claims.get("uc_uid"):
+        return False
+    principals = {claims.get("azp"), claims.get("client_id")}
+    return principals.isdisjoint(service_client_ids(settings))
+
+
 def require_scopes(required: Iterable[str]) -> Callable[[Request], AuthContext]:
     required_set = set(required)
 

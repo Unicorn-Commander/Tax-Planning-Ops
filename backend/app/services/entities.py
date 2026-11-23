@@ -61,15 +61,20 @@ async def create_entity(
     client_tax_year_id: UUID,
     payload: BusinessEntityIn,
     caller_bearer: str | None,
+    caller_claims: dict[str, Any],
     settings: Settings,
 ) -> BusinessEntity:
     """Create a business entity. An Accounting-Ops link on it is stored ONLY
     after AO confirms — to the CALLER's own bearer — that the caller can see
     that AO workspace (confused-deputy guard; raises PermissionError
-    otherwise). The caller's bearer is never stored."""
+    otherwise). A service/M2M principal is refused before AO is called. The
+    caller's bearer is never stored."""
     if payload.accounting_ops_workspace_id is not None:
         verified = await verify_caller_workspace_access(
-            settings, str(payload.accounting_ops_workspace_id), caller_bearer
+            settings,
+            str(payload.accounting_ops_workspace_id),
+            caller_bearer,
+            caller_claims,
         )
         if not verified:
             raise PermissionError("you are not a member of that Accounting-Ops workspace")

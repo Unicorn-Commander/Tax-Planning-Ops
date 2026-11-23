@@ -59,6 +59,7 @@ async def post_entity(
             client_tax_year_id=tax_year_id,
             payload=payload,
             caller_bearer=caller_bearer,
+            caller_claims=ctx.claims,
             settings=settings,
         )
     except PermissionError as exc:

@@ -48,6 +48,11 @@ AO_URL = "https://accounting-ops.example.com"
 WS = str(uuid4())
 BEARER = "fictional.advisor.bearer"  # noqa: S105
 SERVICE_TOKEN = "tpo.service.token"  # noqa: S105
+# A real end-user principal (carries uc_uid, no service azp/client_id).
+USER_CLAIMS: dict[str, Any] = {"uc_uid": "fictional-advisor", "sub": "fictional-advisor"}
+# An M2M-shaped token: middleware stamps it as a user bearer, but it has no
+# uc_uid and its azp is a known service client, so it must never verify a link.
+M2M_CLAIMS: dict[str, Any] = {"azp": "tax-planning-ops", "sub": "svc"}  # noqa: S105
 
 
 def _settings(**overrides: Any) -> Settings:
@@ -130,6 +135,22 @@ async def test_verify_without_bearer_never_calls(fake_ao) -> None:
     assert seen == []
 
 
+@pytest.mark.asyncio
+async def test_verify_m2m_principal_never_calls_ao(fake_ao) -> None:
+    # A service/M2M token (no uc_uid, azp is a known service client) must not
+    # verify a link: AO is never contacted, even with a bearer present.
+    seen = fake_ao(lambda r: httpx.Response(200))
+    assert await verify_caller_workspace_access(_settings(), WS, BEARER, M2M_CLAIMS) is False
+    assert seen == []
+
+
+@pytest.mark.asyncio
+async def test_verify_user_principal_still_calls_ao(fake_ao) -> None:
+    seen = fake_ao(lambda r: httpx.Response(200, json={"id": WS}))
+    assert await verify_caller_workspace_access(_settings(), WS, BEARER, USER_CLAIMS) is True
+    assert len(seen) == 1
+
+
 # --- (b) set-link: verified stores provenance; refused stores nothing ---------
 
 
@@ -178,6 +199,7 @@ async def test_set_link_refused_stores_nothing(fake_ao) -> None:
             accounting_ops_workspace_id=UUID(WS),
             accounting_ops_entity_id=None,
             caller_bearer=BEARER,
+            caller_claims=USER_CLAIMS,
             settings=_settings(),
         )
     assert client.accounting_ops_workspace_id is None
@@ -201,6 +223,7 @@ async def test_set_link_verified_stores_provenance(fake_ao) -> None:
         accounting_ops_workspace_id=UUID(WS),
         accounting_ops_entity_id=None,
         caller_bearer=BEARER,
+        caller_claims=USER_CLAIMS,
         settings=_settings(),
     )
     assert client.accounting_ops_workspace_id == WS
@@ -226,6 +249,7 @@ async def test_unlink_clears_link_and_provenance(fake_ao) -> None:
         accounting_ops_workspace_id=None,
         accounting_ops_entity_id=None,
         caller_bearer=BEARER,
+        caller_claims=USER_CLAIMS,
         settings=_settings(),
     )
     assert client.accounting_ops_workspace_id is None
@@ -284,7 +308,7 @@ async def test_fetch_pl_builds_url_from_canonical_uuid(fake_ao) -> None:
 def _ctx() -> AuthContext:
     ws = uuid4()
     return AuthContext(
-        claims={}, uc_uid="fictional-advisor", workspace_id=ws,
+        claims=dict(USER_CLAIMS), uc_uid="fictional-advisor", workspace_id=ws,
         authorized_workspace_ids={ws}, scopes={"taxplan:advisor"},
     )
 
@@ -323,3 +347,33 @@ async def test_entity_route_403_for_unvisible_workspace(fake_ao) -> None:
         )
     assert exc.value.status_code == 403
     assert "not a member of that Accounting-Ops workspace" in exc.value.detail
+
+
+def _m2m_ctx() -> AuthContext:
+    ws = uuid4()
+    return AuthContext(
+        claims=dict(M2M_CLAIMS), uc_uid="svc", workspace_id=ws,
+        authorized_workspace_ids={ws}, scopes={"taxplan:advisor"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_link_route_m2m_principal_cannot_verify(fake_ao) -> None:
+    # An M2M-shaped token (middleware treats it as a user bearer) must not be
+    # able to verify a link: refused 403 and AO is never called.
+    seen = fake_ao(lambda r: httpx.Response(200))
+    client = _FakeClient()
+    db = _FakeDb(client)
+    db.rows[Client] = client
+    with pytest.raises(HTTPException) as exc:
+        await link_accounting_ops(
+            client.id,
+            AccountingOpsLinkIn(accounting_ops_workspace_id=UUID(WS)),
+            _m2m_ctx(),
+            db,
+            _settings(),
+            BEARER,
+        )
+    assert exc.value.status_code == 403
+    assert client.accounting_ops_workspace_id is None
+    assert seen == []
