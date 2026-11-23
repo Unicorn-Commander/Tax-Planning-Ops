@@ -60,6 +60,14 @@ const plexMono = localFont({
 export const metadata: Metadata = {
   title: "Tax-Planning-Ops",
   description: "Sovereign, agent-first tax planning & advisory for Unicorn Commander.",
+  // Security: the SSO callback page loads third-party assets (fonts, etc.)
+  // before the tokens are stripped from the URL. no-referrer keeps any
+  // token-carrying URL out of Referer headers on those requests.
+  // (metadataBase is intentionally absent: it would force an absolute URL
+  // onto the <link> tags, breaking the local font paths.)
+  other: {
+    "referrer-policy": "no-referrer",
+  },
 };
 
 /* Set the theme before first paint (no flash). Light is the default; honors a

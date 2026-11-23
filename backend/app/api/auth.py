@@ -74,13 +74,17 @@ async def keycloak_callback(
         )
     # Forward the refresh token too so the SPA can silently renew the (short-lived)
     # access token instead of bouncing the user to /auth/login every few minutes.
-    # router.replace() on the callback page strips this URL from history immediately.
+    # The tokens go in the URL FRAGMENT, never the query: fragments are not sent
+    # to any server, so they cannot reach reverse-proxy (Traefik/nginx) access
+    # logs, browser history, or Referer headers on third-party assets the
+    # callback page loads. A leaked refresh token = a long-lived session.
+    # history.replaceState on the callback page strips the fragment immediately.
     params = {"token": token}
     refresh = payload.get("refresh_token")
     if refresh:
         params["refresh_token"] = refresh
     return RedirectResponse(
-        f"{settings.FRONTEND_URL.rstrip('/')}/auth/sso-callback?{urlencode(params)}"
+        f"{settings.FRONTEND_URL.rstrip('/')}/auth/sso-callback#{urlencode(params)}"
     )
 
 
