@@ -17,12 +17,24 @@ from app.schemas.pdf import BrandingIn
 from app.services.audit import append_audit_event
 
 
+def check_logo_blob_key_scope(workspace_id: UUID, logo_blob_key: str | None) -> None:
+    """A branding logo must live under the caller's OWN workspace prefix in
+    the shared Garage bucket — the same ``{workspace_id}/...`` prefix uploads
+    build (see services/extraction.py). A key pointing anywhere else is
+    another tenant's object; refuse it (ValueError → 422 at the route)."""
+    if logo_blob_key is None:
+        return
+    if not logo_blob_key.startswith(f"{workspace_id}/"):
+        raise ValueError("logo_blob_key must start with your own workspace prefix")
+
+
 async def upsert_branding(
     db: AsyncSession,
     *,
     workspace_id: UUID,
     payload: BrandingIn,
 ) -> WorkspaceBranding:
+    check_logo_blob_key_scope(workspace_id, payload.logo_blob_key)
     branding = await db.scalar(
         select(WorkspaceBranding).where(WorkspaceBranding.workspace_id == workspace_id)
     )
@@ -54,6 +66,12 @@ async def generate_plan_pdf(
     )
     if branding is None:
         branding = WorkspaceBranding(workspace_id=workspace_id, firm_name="Tax Planning Firm")
+    # Defense in depth: a legacy branding row may carry an out-of-scope logo
+    # key (set before the write check existed). Never render another tenant's
+    # object into this workspace's PDF.
+    logo_blob_key = branding.logo_blob_key
+    if logo_blob_key and not logo_blob_key.startswith(f"{workspace_id}/"):
+        logo_blob_key = None
     snapshots = (
         await db.execute(
             select(TaxSituationSnapshot)
@@ -79,7 +97,7 @@ async def generate_plan_pdf(
     payload = assemble_plan_pdf_payload(
         branding=BrandingPayload(
             firm_name=branding.firm_name or "Tax Planning Firm",
-            logo_blob_key=branding.logo_blob_key,
+            logo_blob_key=logo_blob_key,
             primary_color=(
                 branding.primary_color
                 or BrandingPayload.model_fields["primary_color"].default
