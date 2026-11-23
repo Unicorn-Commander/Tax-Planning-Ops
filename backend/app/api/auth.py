@@ -10,7 +10,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
@@ -79,29 +79,37 @@ async def create_oauth_state(session: AsyncSession) -> tuple[str, str]:
 async def pop_oauth_state(state: str) -> str | None:
     """Consume the stored state, single-use, BEFORE any token exchange.
 
-    Returns the code_verifier to send in the exchange, or None when the state
-    is missing, already consumed (replay) or expired. A row consumed here is
-    marked, so a later replay of the same state still finds the consumed mark.
+    ONE atomic statement in its own committed transaction:
+    ``UPDATE oauth_state SET consumed_at = now() WHERE state = :s AND
+    consumed_at IS NULL AND expires_at > now() RETURNING code_verifier``.
+    PostgreSQL rows are exclusive, so of N concurrent pops exactly one
+    matches; every other pop sees consumed_at already set (or the row missing
+    or expired) and matches zero rows. Zero rows = refused, and the refusal
+    paths (missing, replay, expired) are indistinguishable by design. The
+    transaction is committed BEFORE the caller starts the token exchange, so
+    the consumed mark is durable: a crash mid-exchange still leaves the state
+    unusable.
     """
     async with async_session_maker() as session:
         now = datetime.now(UTC)
         result = await session.execute(
-            select(OAuthState).where(
+            update(OAuthState)
+            .where(
                 OAuthState.state == state,
                 OAuthState.consumed_at.is_(None),
+                OAuthState.expires_at > now,
             )
+            .values(consumed_at=now)
+            .returning(OAuthState.code_verifier)
         )
-        record = result.scalar_one_or_none()
-        if record is None:
+        row = result.first()
+        if row is None:
             # Either never minted, already consumed (replay), or expired. All
-            # three must refuse identically, and a replay of a consumed state
-            # still finds the consumed mark on re-lookup.
+            # three must refuse identically; the committed consumed mark means
+            # a later replay of the same state still finds it spent.
             return None
-        if record.expires_at <= now:
-            return None
-        record.consumed_at = now
-        await session.flush()
-        return record.code_verifier
+        await session.commit()
+        return row[0]
 
 
 def _state_error_redirect(settings: Settings) -> RedirectResponse:
