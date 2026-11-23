@@ -65,9 +65,7 @@ export const metadata: Metadata = {
   // token-carrying URL out of Referer headers on those requests.
   // (metadataBase is intentionally absent: it would force an absolute URL
   // onto the <link> tags, breaking the local font paths.)
-  other: {
-    "referrer-policy": "no-referrer",
-  },
+  referrer: "no-referrer",
 };
 
 /* Set the theme before first paint (no flash). Light is the default; honors a
