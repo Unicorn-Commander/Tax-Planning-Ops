@@ -9,7 +9,9 @@ from pydantic import BaseModel, ConfigDict
 EntityKind = Literal["schedule_c", "partnership_k1", "s_corp_k1", "schedule_e", "c_corp"]
 
 
-class BusinessEntityIn(BaseModel):
+class BusinessEntityFields(BaseModel):
+    """Stored business-entity fields shared by input and output schemas."""
+
     kind: EntityKind
     name: str = ""
     # net profit / K-1 box-1 ordinary income / net rental / C-corp pre-NOL taxable income
@@ -23,20 +25,29 @@ class BusinessEntityIn(BaseModel):
     is_qbi: bool = False  # rental only — whether it rises to a §199A trade/business
     dividends_cents: int = 0  # C-corp only — distributed to owner (qualified dividends)
     nol_available_cents: int = 0  # C-corp only — NOL carryforward available
-    accounting_ops_workspace_id: str | None = None  # link to AO workspace P&L
-    accounting_ops_entity_id: str | None = None  # scope the pull to one AO entity
     # Net Schedule M-1 book-to-tax adjustment applied to a (book) synced figure
     # to reach corporate taxable income. 0 → book used as-is (flagged estimate).
     book_to_tax_adjustment_cents: int = 0
 
 
-class BusinessEntityOut(BusinessEntityIn):
+class BusinessEntityIn(BusinessEntityFields):
+    # AO ids are UUIDs: typed so a traversal fragment or foreign slug is a 422
+    # before it can be stored or interpolated into an AO URL.
+    accounting_ops_workspace_id: UUID | None = None  # link to AO workspace P&L
+    accounting_ops_entity_id: UUID | None = None  # scope the pull to one AO entity
+
+
+class BusinessEntityOut(BusinessEntityFields):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
     workspace_id: UUID
     client_tax_year_id: UUID
     accounting_ops_synced_at: datetime | None = None  # set by the AO sync
+    # Output stays lenient (str): legacy rows may hold a pre-fix free-form id;
+    # they are treated as unverified (never synced) rather than rejected here.
+    accounting_ops_workspace_id: str | None = None
+    accounting_ops_entity_id: str | None = None
 
 
 class BookToTaxAdjustmentIn(BaseModel):

@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth import require_scopes
+from app.core.auth import get_user_bearer, require_scopes
 from app.core.config import Settings, get_settings
 from app.db.session import get_tenant_db
 from app.integrations.accounting_ops import (
@@ -45,14 +45,24 @@ async def post_entity(
     payload: BusinessEntityIn,
     ctx: AuthContext = Depends(require_scopes(("taxplan:advisor",))),
     db: AsyncSession = Depends(get_tenant_db),
+    settings: Settings = Depends(get_settings),
+    caller_bearer: str | None = Depends(get_user_bearer),
 ) -> BusinessEntity:
-    return await create_entity(
-        db,
-        workspace_id=ctx.workspace_id,
-        actor_uc_uid=ctx.uc_uid,
-        client_tax_year_id=tax_year_id,
-        payload=payload,
-    )
+    """Create a business entity. An Accounting-Ops link is verified against AO
+    with the caller's own bearer before it is stored; a workspace the caller
+    cannot see is refused (403)."""
+    try:
+        return await create_entity(
+            db,
+            workspace_id=ctx.workspace_id,
+            actor_uc_uid=ctx.uc_uid,
+            client_tax_year_id=tax_year_id,
+            payload=payload,
+            caller_bearer=caller_bearer,
+            settings=settings,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
 @router.delete("/{tax_year_id}/business-entities/{entity_id}", status_code=204)

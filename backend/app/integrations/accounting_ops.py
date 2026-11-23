@@ -26,6 +26,7 @@ from __future__ import annotations
 import time
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
+from uuid import UUID
 
 import httpx
 from pydantic import BaseModel
@@ -216,6 +217,44 @@ async def _get_federation_token(settings: Settings, workspace_id: str) -> str:
     return token
 
 
+def _canonical_workspace_id(accounting_ops_workspace_id: str) -> str:
+    """The canonical UUID text for an AO workspace id.
+
+    The id is interpolated into AO URL *paths*, so anything that is not a UUID
+    (e.g. a legacy free-form value or a ``../`` traversal attempt) is refused
+    here instead of reaching AO's router. Raises the not-found error (mapped to
+    404 / a clear relink message) rather than sending it."""
+    try:
+        return str(UUID(str(accounting_ops_workspace_id)))
+    except (ValueError, TypeError) as exc:
+        raise AccountingOpsWorkspaceNotFoundError(
+            "the stored Accounting-Ops workspace id is not a valid UUID; "
+            "relink this client/entity to a verified workspace"
+        ) from exc
+
+
+async def verify_caller_workspace_access(
+    settings: Settings, workspace_id: str, bearer: str | None
+) -> bool:
+    """Ask Accounting-Ops, AS THE CALLER (their own bearer — never TPO's
+    service token), whether that AO workspace is visible to them.
+
+    This is what makes a link safe: AO floors a trusted M2M caller (TPO's
+    service token) to viewer on ANY workspace, so only the caller's own token
+    answers honestly about membership. True only on HTTP 200; every other
+    answer (non-200, unreachable, no bearer at all) fails closed to False."""
+    if not bearer or not settings.ACCOUNTING_OPS_URL:
+        return False
+    ws_id = _canonical_workspace_id(workspace_id)
+    url = f"{settings.ACCOUNTING_OPS_URL.rstrip('/')}/api/workspaces/{ws_id}"
+    try:
+        async with httpx.AsyncClient(timeout=settings.ACCOUNTING_OPS_TIMEOUT_SECONDS) as client:
+            resp = await client.get(url, headers={"Authorization": f"Bearer {bearer}"})
+    except httpx.HTTPError:
+        return False
+    return resp.status_code == 200
+
+
 async def fetch_pl(
     accounting_ops_workspace_id: str,
     settings: Settings,
@@ -232,10 +271,11 @@ async def fetch_pl(
     if not settings.ACCOUNTING_OPS_ENABLED or not settings.ACCOUNTING_OPS_URL:
         raise AccountingOpsDisabledError("Accounting-Ops integration is not enabled")
 
-    token = await _get_federation_token(settings, accounting_ops_workspace_id)
+    ws_id = _canonical_workspace_id(accounting_ops_workspace_id)
+    token = await _get_federation_token(settings, ws_id)
     url = (
         f"{settings.ACCOUNTING_OPS_URL.rstrip('/')}"
-        f"/api/workspaces/{accounting_ops_workspace_id}/reports/pl"
+        f"/api/workspaces/{ws_id}/reports/pl"
     )
     params: dict[str, str] = {}
     if entity_id:
@@ -346,10 +386,11 @@ async def fetch_tax_documents(
     if not settings.ACCOUNTING_OPS_ENABLED or not settings.ACCOUNTING_OPS_URL:
         raise AccountingOpsDisabledError("Accounting-Ops integration is not enabled")
 
-    token = await _get_federation_token(settings, accounting_ops_workspace_id)
+    ws_id = _canonical_workspace_id(accounting_ops_workspace_id)
+    token = await _get_federation_token(settings, ws_id)
     url = (
         f"{settings.ACCOUNTING_OPS_URL.rstrip('/')}"
-        f"/api/workspaces/{accounting_ops_workspace_id}/tax-documents"
+        f"/api/workspaces/{ws_id}/tax-documents"
     )
     params: dict[str, str] = {}
     if entity_id:

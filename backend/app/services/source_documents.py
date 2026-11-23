@@ -19,7 +19,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.integrations.accounting_ops import fetch_tax_documents
+from app.integrations.accounting_ops import fetch_tax_documents, verify_caller_workspace_access
 from app.models.client import Client
 from app.models.tax_year import ClientTaxYear
 from app.services.audit import append_audit_event
@@ -61,7 +61,10 @@ async def sync_tax_documents_from_accounting_ops(
     isn't linked, and the AccountingOps* hierarchy on the AO call (mapped to
     status codes by the route)."""
     cty, client = await _load_year_and_client(db, tax_year_id)
-    if not client.accounting_ops_workspace_id:
+    # A link only counts when it was VERIFIED at set-time (the linker proved
+    # membership of that AO workspace with their own bearer). A legacy row with
+    # an id but no provenance is treated as NOT linked: never call AO with it.
+    if not client.accounting_ops_workspace_id or not client.accounting_ops_linked_at:
         raise ValueError(
             "this client is not linked to an Accounting-Ops workspace "
             "(set accounting_ops_workspace_id / accounting_ops_entity_id first)"
@@ -129,16 +132,40 @@ async def set_accounting_ops_link(
     workspace_id: UUID,
     actor_uc_uid: str,
     client_id: UUID,
-    accounting_ops_workspace_id: str | None,
-    accounting_ops_entity_id: str | None,
+    accounting_ops_workspace_id: UUID | None,
+    accounting_ops_entity_id: UUID | None,
+    caller_bearer: str | None,
+    settings: Settings,
 ) -> dict[str, Any]:
     """Link (or, with empty values, unlink) a client to its Accounting-Ops
-    document vault (the AO workspace + personal entity)."""
+    document vault (the AO workspace + personal entity).
+
+    A new link is stored ONLY after Accounting-Ops confirms — answering to the
+    CALLER's own bearer, never TPO's service token — that the caller can see
+    that AO workspace. Otherwise the link would let TPO's trusted M2M token
+    (floored to viewer on any AO workspace) read another tenant's tax
+    documents through this client (confused deputy). Raises PermissionError
+    when the workspace cannot be verified; the caller's bearer is never
+    stored."""
     client = await db.get(Client, client_id)
     if client is None:
         raise LookupError("client not found")
-    client.accounting_ops_workspace_id = accounting_ops_workspace_id or None
-    client.accounting_ops_entity_id = accounting_ops_entity_id or None
+    if accounting_ops_workspace_id is not None:
+        verified = await verify_caller_workspace_access(
+            settings, str(accounting_ops_workspace_id), caller_bearer
+        )
+        if not verified:
+            raise PermissionError("you are not a member of that Accounting-Ops workspace")
+    client.accounting_ops_workspace_id = (
+        str(accounting_ops_workspace_id) if accounting_ops_workspace_id else None
+    )
+    client.accounting_ops_entity_id = (
+        str(accounting_ops_entity_id) if accounting_ops_entity_id else None
+    )
+    client.accounting_ops_linked_at = (
+        datetime.now(UTC) if accounting_ops_workspace_id else None
+    )
+    client.accounting_ops_linked_by = actor_uc_uid if accounting_ops_workspace_id else None
     await db.flush()
     await append_audit_event(
         db,

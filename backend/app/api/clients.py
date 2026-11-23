@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth import require_scopes
+from app.core.auth import get_user_bearer, require_scopes
 from app.core.config import Settings, get_settings
 from app.db.session import get_tenant_db
 from app.integrations.accounting_ops import (
@@ -32,10 +32,14 @@ router = APIRouter(prefix="/clients", tags=["clients"])
 
 
 class AccountingOpsLinkIn(BaseModel):
-    """Link a client to its Accounting-Ops document vault. Empty values unlink."""
+    """Link a client to its Accounting-Ops document vault. Empty values unlink.
 
-    accounting_ops_workspace_id: str | None = None
-    accounting_ops_entity_id: str | None = None
+    Both ids are AO UUIDs: typed here so anything else (a ``../`` traversal
+    fragment, a foreign slug) is a 422 before it can ever be stored or
+    interpolated into an AO URL."""
+
+    accounting_ops_workspace_id: UUID | None = None
+    accounting_ops_entity_id: UUID | None = None
 
 
 @router.get("/{client_id}/overview")
@@ -93,9 +97,17 @@ async def link_accounting_ops(
     payload: AccountingOpsLinkIn,
     ctx: AuthContext = Depends(require_scopes(("taxplan:advisor",))),
     db: AsyncSession = Depends(get_tenant_db),
+    settings: Settings = Depends(get_settings),
+    caller_bearer: str | None = Depends(get_user_bearer),
 ) -> dict[str, Any]:
     """Link a client to its Accounting-Ops document vault (the AO workspace +
-    personal entity) so source tax documents can be pulled over federation."""
+    personal entity) so source tax documents can be pulled over federation.
+
+    The link is VERIFIED before it is stored: AO is asked, with the CALLER's
+    own bearer, whether they can see that AO workspace. A workspace the caller
+    cannot see is refused (403) and nothing is stored — otherwise TPO's service
+    token (which AO floors to viewer on any workspace) would read that other
+    tenant's books through this link (confused deputy)."""
     try:
         return await set_accounting_ops_link(
             db,
@@ -104,9 +116,13 @@ async def link_accounting_ops(
             client_id=client_id,
             accounting_ops_workspace_id=payload.accounting_ops_workspace_id,
             accounting_ops_entity_id=payload.accounting_ops_entity_id,
+            caller_bearer=caller_bearer,
+            settings=settings,
         )
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
 @router.get("/tax-years/{tax_year_id}/tax-documents")

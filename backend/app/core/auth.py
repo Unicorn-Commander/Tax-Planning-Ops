@@ -277,6 +277,11 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN, detail=NOT_ENTITLED_DETAIL
                     )
+            # The caller's own user bearer (None for PAT callers): kept on the
+            # request so routes that must ask another service "may THIS caller
+            # see X?" (e.g. the Accounting-Ops link check) can present it
+            # instead of TPO's own service token (confused-deputy guard).
+            request.state.user_bearer = user_bearer or None
             uc_uid = str(claims.get("uc_uid") or claims.get("sub") or "")
             try:
                 workspace_id, authorized = resolve_workspace_id(claims, header_ws)
@@ -331,6 +336,14 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 headers=headers,
             )
         return await call_next(request)
+
+
+def get_user_bearer(request: Request) -> str | None:
+    """The caller's own user bearer, or None (PAT callers have none). Routes
+    that verify something AGAINST another suite service on the caller's behalf
+    must present this, never TPO's service token."""
+    value = getattr(request.state, "user_bearer", None)
+    return str(value) if value else None
 
 
 def require_scopes(required: Iterable[str]) -> Callable[[Request], AuthContext]:

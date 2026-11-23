@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from sqlalchemy import Index, String, Text
+from datetime import datetime
+
+from sqlalchemy import DateTime, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -23,3 +25,10 @@ class Client(IdMixin, WorkspaceScopedMixin, TimestampMixin, Base):
     # TPO consumes. Both null until linked.
     accounting_ops_workspace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     accounting_ops_entity_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Verification provenance: when the link was confirmed against Accounting-Ops
+    # with the LINKER's own bearer (they are a member of that AO workspace), and
+    # who did it. Null on legacy rows = UNVERIFIED: syncs refuse to call AO.
+    accounting_ops_linked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    accounting_ops_linked_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
