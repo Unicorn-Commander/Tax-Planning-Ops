@@ -10,6 +10,7 @@ cents.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import uuid4
 
@@ -313,3 +314,34 @@ def test_multiple_c_corps_summed() -> None:
     # Pool = ($100k + $50k) + ($50k + $20k) = $220k.
     assert out.optimization is not None
     assert out.optimization.comp_pool_cents == 22_000_000
+
+
+def test_unverified_ao_link_is_not_from_accounting_ops() -> None:
+    # A legacy link (workspace id but no verified provenance) must NOT be
+    # reported as book income sourced from Accounting-Ops.
+    corp = _c_corp(
+        amount_cents=30_000_000, shareholder_w2_wages_cents=10_000_000,
+        dividends_cents=5_000_000, accounting_ops_workspace_id=str(uuid4()),
+    )
+    out = build_corporate_analysis(
+        client_tax_year_id=uuid4(), tax_year=2025, filing_status="single", state=None,
+        client_name="Acme", c_corps=[corp], base_inputs=Form1040Inputs(filing_status="single"),
+        config=_config(),
+    )
+    assert out.source is None
+
+
+def test_verified_ao_link_is_from_accounting_ops() -> None:
+    corp = _c_corp(
+        amount_cents=30_000_000, shareholder_w2_wages_cents=10_000_000,
+        dividends_cents=5_000_000, accounting_ops_workspace_id=str(uuid4()),
+        accounting_ops_linked_at=datetime.now(UTC),
+    )
+    out = build_corporate_analysis(
+        client_tax_year_id=uuid4(), tax_year=2025, filing_status="single", state=None,
+        client_name="Acme", c_corps=[corp], base_inputs=Form1040Inputs(filing_status="single"),
+        config=_config(),
+    )
+    assert out.source is not None
+    assert out.source.from_accounting_ops is True
+    assert out.source.book_net_income_cents == 30_000_000
