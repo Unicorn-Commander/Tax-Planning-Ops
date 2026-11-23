@@ -377,3 +377,18 @@ async def test_link_route_m2m_principal_cannot_verify(fake_ao) -> None:
     assert exc.value.status_code == 403
     assert client.accounting_ops_workspace_id is None
     assert seen == []
+
+
+# --- schema: link provenance is exposed for the UI ----------------------------
+
+
+def test_entity_out_exposes_linked_at() -> None:
+    from app.schemas.entity import BusinessEntityOut
+
+    fields = BusinessEntityOut.model_fields
+    assert "accounting_ops_linked_at" in fields
+    unverified = BusinessEntityOut(
+        id=uuid4(), workspace_id=uuid4(), client_tax_year_id=uuid4(),
+        kind="schedule_c", accounting_ops_workspace_id=WS,
+    )
+    assert unverified.accounting_ops_linked_at is None

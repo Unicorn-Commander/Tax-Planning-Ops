@@ -66,8 +66,8 @@ async def sync_tax_documents_from_accounting_ops(
     # an id but no provenance is treated as NOT linked: never call AO with it.
     if not client.accounting_ops_workspace_id or not client.accounting_ops_linked_at:
         raise ValueError(
-            "this client is not linked to an Accounting-Ops workspace "
-            "(set accounting_ops_workspace_id / accounting_ops_entity_id first)"
+            "Accounting-Ops link not verified: re-link it with an account "
+            "that is a member of that workspace"
         )
 
     result = await fetch_tax_documents(

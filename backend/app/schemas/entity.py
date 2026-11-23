@@ -44,6 +44,10 @@ class BusinessEntityOut(BusinessEntityFields):
     workspace_id: UUID
     client_tax_year_id: UUID
     accounting_ops_synced_at: datetime | None = None  # set by the AO sync
+    # Provenance of the link: set only when AO confirmed the linker's own
+    # membership at set-time. None on a legacy/unverified link (the UI shows a
+    # re-link prompt instead of "linked", and the pulls refuse it).
+    accounting_ops_linked_at: datetime | None = None
     # Output stays lenient (str): legacy rows may hold a pre-fix free-form id;
     # they are treated as unverified (never synced) rather than rejected here.
     accounting_ops_workspace_id: str | None = None

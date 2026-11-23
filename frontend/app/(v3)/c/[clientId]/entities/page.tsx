@@ -67,6 +67,7 @@ interface BusinessEntity {
   is_sstb: boolean;
   is_qbi: boolean;
   accounting_ops_workspace_id: string | null;
+  accounting_ops_linked_at: string | null;
   accounting_ops_synced_at: string | null;
   book_to_tax_adjustment_cents: number;
 }
@@ -345,8 +346,13 @@ export default function EntitiesPage() {
         })()
       : null;
 
-  /* ---- AO panel: entities with an AO workspace linked ---- */
-  const aoEntities = ents.filter((e) => e.accounting_ops_workspace_id);
+  /* ---- AO panel: entities with a VERIFIED AO workspace linked ---- */
+  const aoEntities = ents.filter(
+    (e) => e.accounting_ops_workspace_id && e.accounting_ops_linked_at,
+  );
+  const aoUnverified = ents.filter(
+    (e) => e.accounting_ops_workspace_id && !e.accounting_ops_linked_at,
+  );
 
   /* ---- provenance helpers ---- */
   const seProv: Provenance = {
@@ -721,6 +727,14 @@ export default function EntitiesPage() {
                 <span className="dot dot-live ml-auto" />
               ) : null}
             </PanelHead>
+            {aoUnverified.length > 0 ? (
+              <div className="px-5 pt-3">
+                <p className="rounded-[8px] border border-[var(--g-hairline)] bg-[var(--g-bg)] px-3 py-2 text-[12px] text-[var(--g-ink-2)]">
+                  Accounting-Ops link not verified: re-link it with an account that is a
+                  member of that workspace
+                </p>
+              </div>
+            ) : null}
             {aoEntities.length > 0 ? (
               <div className="px-5 py-3">
                 {aoEntities.map((e) => (

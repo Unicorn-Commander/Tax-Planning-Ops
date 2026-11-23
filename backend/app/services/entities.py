@@ -141,7 +141,10 @@ async def sync_entity_from_accounting_ops(
     # membership of that AO workspace with their own bearer). A legacy row with
     # an id but no provenance is treated as NOT linked: never call AO with it.
     if not entity.accounting_ops_workspace_id or not entity.accounting_ops_linked_at:
-        raise ValueError("entity is not linked to an Accounting-Ops workspace")
+        raise ValueError(
+            "Accounting-Ops link not verified: re-link it with an account "
+            "that is a member of that workspace"
+        )
 
     # Scope the pull to the linked AO entity (if set, so a multi-book workspace
     # doesn't bleed across) and to the client's tax year, so a C-corp's plan
