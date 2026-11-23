@@ -314,7 +314,7 @@ def build_corporate_analysis(
         pre_salary_operating_income_total += pre_nol + e.shareholder_w2_wages_cents
         nol_available_total += e.nol_available_cents
         adjustment_total += e.book_to_tax_adjustment_cents or 0
-        if e.accounting_ops_workspace_id:
+        if e.accounting_ops_workspace_id and e.accounting_ops_linked_at:
             book_income_total += e.amount_cents
             if e.accounting_ops_synced_at is not None:
                 ao_synced_ats.append(e.accounting_ops_synced_at)
@@ -414,7 +414,7 @@ def build_corporate_analysis(
         )
 
     # --- Source/provenance: book-vs-tax + freshness ("the honest notes") -----
-    ao_linked = [e for e in c_corps if e.accounting_ops_workspace_id]
+    ao_linked = [e for e in c_corps if e.accounting_ops_workspace_id and e.accounting_ops_linked_at]
     source: CorporateSource | None = None
     if ao_linked:
         latest = max(ao_synced_ats) if ao_synced_ats else None

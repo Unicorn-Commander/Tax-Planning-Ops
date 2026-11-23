@@ -26,6 +26,7 @@ interface BusinessEntity {
   is_sstb: boolean;
   is_qbi: boolean;
   accounting_ops_workspace_id: string | null;
+  accounting_ops_linked_at: string | null;
 }
 
 const KIND_LABEL: Record<EntityKind, string> = {
@@ -201,7 +202,15 @@ export default function BusinessTab() {
                       {e.kind !== "schedule_e" && e.is_sstb ? <Badge tone="warning">SSTB</Badge> : null}
                       {e.kind === "partnership_k1" && e.is_general_partner ? <Badge tone="neutral">General partner</Badge> : null}
                       {e.kind === "schedule_e" ? <Badge tone={e.is_qbi ? "positive" : "neutral"}>{e.is_qbi ? "§199A QBI" : "Not QBI"}</Badge> : null}
-                      {e.accounting_ops_workspace_id ? <Badge tone="primary">Accounting-Ops linked</Badge> : null}
+                      {e.accounting_ops_workspace_id ? (
+                        e.accounting_ops_linked_at ? (
+                          <Badge tone="primary">Accounting-Ops linked</Badge>
+                        ) : (
+                          <Badge tone="warning">
+                            Accounting-Ops link not verified: re-link it with an account that is a member of that workspace
+                          </Badge>
+                        )
+                      ) : null}
                     </div>
                     <p className="mt-1.5 text-[12.5px] text-muted tabular">
                       {e.kind === "schedule_e" ? "Net rental income" : amountLabel(e.kind)} {centsToUSD(e.amount_cents)}

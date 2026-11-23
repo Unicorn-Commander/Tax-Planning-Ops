@@ -186,6 +186,30 @@ def test_build_request_missing_path_param_raises():
         raise AssertionError("expected ValueError for missing memo_id")
 
 
+def test_build_request_refuses_traversal_path_param():
+    """A path param carrying '..' or '/' is refused, not interpolated raw."""
+    for bad in ("../x", "..%2f", "a/b", ".."):
+        try:
+            server.build_request(_tool("save_memo"), {"tax_year_id": bad}, base_url=BASE)
+        except ValueError as exc:
+            assert "tax_year_id" in str(exc)
+        else:  # pragma: no cover
+            raise AssertionError(f"expected ValueError for path param {bad!r}")
+
+
+def test_build_request_quotes_path_param():
+    """A normal id passes through; a value with reserved chars is quoted."""
+    req = server.build_request(
+        _tool("save_memo"), {"tax_year_id": "ty 7", "body_md": "x"}, base_url=BASE
+    )
+    assert req["url"] == f"{BASE}/clients/tax-years/ty%207/memo"
+    uuid_id = "11111111-2222-4333-8444-555555555555"
+    req = server.build_request(
+        _tool("save_memo"), {"tax_year_id": uuid_id, "body_md": "x"}, base_url=BASE
+    )
+    assert req["url"] == f"{BASE}/clients/tax-years/{uuid_id}/memo"
+
+
 def test_call_tool_makes_no_real_network_call(monkeypatch=None):
     """tools/call path: stub execute_request and assert call_tool wires the
     built request through it — proving no real HTTP egress in tests."""

@@ -277,6 +277,11 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN, detail=NOT_ENTITLED_DETAIL
                     )
+            # The caller's own user bearer (None for PAT callers): kept on the
+            # request so routes that must ask another service "may THIS caller
+            # see X?" (e.g. the Accounting-Ops link check) can present it
+            # instead of TPO's own service token (confused-deputy guard).
+            request.state.user_bearer = user_bearer or None
             uc_uid = str(claims.get("uc_uid") or claims.get("sub") or "")
             try:
                 workspace_id, authorized = resolve_workspace_id(claims, header_ws)
@@ -331,6 +336,52 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 headers=headers,
             )
         return await call_next(request)
+
+
+def get_user_bearer(request: Request) -> str | None:
+    """The caller's own user bearer, or None (PAT callers have none). Routes
+    that verify something AGAINST another suite service on the caller's behalf
+    must present this, never TPO's service token."""
+    value = getattr(request.state, "user_bearer", None)
+    return str(value) if value else None
+
+
+def service_azp_client_ids(settings: Settings) -> set[str]:
+    """azp values this deployment knows are service (M2M) clients, not the
+    end-user login client: the Accounting-Ops audience and the Brigade
+    exchange client. KEYCLOAK_CLIENT_ID is deliberately NOT here: the
+    frontend signs users in through that same client, so a real advisor's
+    token carries azp = KEYCLOAK_CLIENT_ID and testing azp against it would
+    refuse every real user (TPO23-R3-1)."""
+    configured = (
+        settings.ACCOUNTING_OPS_AUDIENCE,
+        settings.BRIGADE_CLIENT_ID,
+    )
+    return {item.strip() for item in configured if isinstance(item, str) and item.strip()}
+
+
+def caller_is_user_principal(claims: dict[str, Any], settings: Settings) -> bool:
+    """True only for a real end-user principal, never a service/M2M token.
+
+    ``JWTAuthMiddleware`` stamps ``user_bearer`` on ANY verified JWT (auth.py),
+    so a client-credentials service token reaches a route looking like a user
+    bearer. AO's link-verification route answers membership honestly only for a
+    user token (a service token is floored to viewer on every workspace), so a
+    service principal must never be used to verify an Accounting-Ops link.
+
+    A client-credentials token is told apart by: no ``uc_uid`` claim, OR a
+    ``preferred_username`` starting ``service-account-``, OR a ``client_id`` /
+    ``clientId`` claim (Keycloak stamps those on service-account tokens). The
+    ``azp`` is only ever tested against the service denylist, never against
+    the app's own login client, because users log in through that client too."""
+    if not claims.get("uc_uid"):
+        return False
+    preferred = claims.get("preferred_username")
+    if isinstance(preferred, str) and preferred.startswith("service-account-"):
+        return False
+    if claims.get("client_id") or claims.get("clientId"):
+        return False
+    return claims.get("azp") not in service_azp_client_ids(settings)
 
 
 def require_scopes(required: Iterable[str]) -> Callable[[Request], AuthContext]:

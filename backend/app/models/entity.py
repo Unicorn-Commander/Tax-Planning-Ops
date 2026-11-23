@@ -47,6 +47,13 @@ class BusinessEntity(IdMixin, WorkspaceScopedMixin, TimestampMixin, Base):
     # Optional link to an Accounting-Ops workspace whose P&L net income feeds
     # this entity's `amount_cents` on a "Pull from Accounting-Ops" sync.
     accounting_ops_workspace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Verification provenance: when the link was confirmed against Accounting-Ops
+    # with the linker's own bearer, and who did it. Null on legacy rows =
+    # UNVERIFIED: syncs refuse to call AO.
+    accounting_ops_linked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    accounting_ops_linked_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Optional: scope the P&L pull to ONE entity within that AO workspace (a
     # workspace can hold several books). Unset → workspace-level consolidated.
     accounting_ops_entity_id: Mapped[str | None] = mapped_column(String(64), nullable=True)

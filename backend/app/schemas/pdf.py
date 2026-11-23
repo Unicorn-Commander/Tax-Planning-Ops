@@ -14,6 +14,11 @@ class BrandingIn(BaseModel):
 
 class PlanDocumentOut(BaseModel):
     id: UUID
+    # Kept: the frontend fetches the rendered PDF from Garage by this key
+    # (frontend/app/(app)/clients/[clientId]/pdf/page.tsx, (v3)/.../plan/page.tsx).
+    # It is scope-safe: server-generated as `{workspace_id}/...` and the listing
+    # is RLS-scoped to the caller's workspace, so it can only ever name the
+    # caller's own objects.
     garage_key: str
     version: int
     payload_hash: str

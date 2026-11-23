@@ -34,7 +34,7 @@ from app.engines.passthrough import (
 )
 from app.engines.qbi import QBIBusiness, calculate_qbi_aggregate
 from app.engines.se_tax import SETaxInput, calculate_se_tax
-from app.integrations.accounting_ops import fetch_pl
+from app.integrations.accounting_ops import fetch_pl, verify_caller_workspace_access
 from app.models.entity import BusinessEntity
 from app.models.tax_year import ClientTaxYear
 from app.schemas.entity import BusinessEntityIn
@@ -60,12 +60,32 @@ async def create_entity(
     actor_uc_uid: str,
     client_tax_year_id: UUID,
     payload: BusinessEntityIn,
+    caller_bearer: str | None,
+    caller_claims: dict[str, Any],
+    settings: Settings,
 ) -> BusinessEntity:
+    """Create a business entity. An Accounting-Ops link on it is stored ONLY
+    after AO confirms — to the CALLER's own bearer — that the caller can see
+    that AO workspace (confused-deputy guard; raises PermissionError
+    otherwise). A service/M2M principal is refused before AO is called. The
+    caller's bearer is never stored."""
+    if payload.accounting_ops_workspace_id is not None:
+        verified = await verify_caller_workspace_access(
+            settings,
+            str(payload.accounting_ops_workspace_id),
+            caller_bearer,
+            caller_claims,
+        )
+        if not verified:
+            raise PermissionError("you are not a member of that Accounting-Ops workspace")
     entity = BusinessEntity(
         workspace_id=workspace_id,
         client_tax_year_id=client_tax_year_id,
-        **payload.model_dump(),
+        **payload.model_dump(mode="json"),
     )
+    if payload.accounting_ops_workspace_id is not None:
+        entity.accounting_ops_linked_at = datetime.now(UTC)
+        entity.accounting_ops_linked_by = actor_uc_uid
     db.add(entity)
     await db.flush()
     await append_audit_event(
@@ -117,8 +137,14 @@ async def sync_entity_from_accounting_ops(
     entity = await db.get(BusinessEntity, entity_id)
     if entity is None:
         raise LookupError("business entity not found")
-    if not entity.accounting_ops_workspace_id:
-        raise ValueError("entity is not linked to an Accounting-Ops workspace")
+    # A link only counts when it was VERIFIED at creation (the creator proved
+    # membership of that AO workspace with their own bearer). A legacy row with
+    # an id but no provenance is treated as NOT linked: never call AO with it.
+    if not entity.accounting_ops_workspace_id or not entity.accounting_ops_linked_at:
+        raise ValueError(
+            "Accounting-Ops link not verified: re-link it with an account "
+            "that is a member of that workspace"
+        )
 
     # Scope the pull to the linked AO entity (if set, so a multi-book workspace
     # doesn't bleed across) and to the client's tax year, so a C-corp's plan

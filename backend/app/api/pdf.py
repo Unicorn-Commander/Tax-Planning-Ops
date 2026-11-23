@@ -23,7 +23,10 @@ async def put_branding(
     ctx: AuthContext = Depends(require_scopes(("taxplan:admin",))),
     db: AsyncSession = Depends(get_tenant_db),
 ) -> dict[str, str]:
-    branding = await upsert_branding(db, workspace_id=ctx.workspace_id, payload=payload)
+    try:
+        branding = await upsert_branding(db, workspace_id=ctx.workspace_id, payload=payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"id": str(branding.id)}
 
 
