@@ -30,16 +30,16 @@ test("fragment form parses token and refresh_token", () => {
   assert.equal(refreshToken, "frag-refresh");
 });
 
-test("query fallback (one release) still parses legacy redirect", () => {
+test("tokens are never read from the query string (leak is ignored)", () => {
   const win = windowWith(
     "http://app.example.com/auth/sso-callback?token=query-access&refresh_token=query-refresh",
   );
   const { token, refreshToken } = parseTokenParams(win);
-  assert.equal(token, "query-access");
-  assert.equal(refreshToken, "query-refresh");
+  assert.equal(token, null);
+  assert.equal(refreshToken, null);
 });
 
-test("fragment wins when both are present", () => {
+test("fragment wins; a query token alongside is still ignored", () => {
   const win = windowWith(
     "http://app.example.com/auth/sso-callback?token=query-access#token=frag-access",
   );
@@ -72,13 +72,19 @@ test("cleanCallbackUrl strips hash, query, and leaves no tokens behind", () => {
   }
 });
 
-test("cleanCallbackUrl on legacy query form removes the query too", () => {
+test("cleanCallbackUrl strips a leaked query token too", () => {
   const win = windowWith(
     "http://app.example.com/auth/sso-callback?token=secret-access&refresh_token=secret-refresh",
   );
   const cleaned = cleanCallbackUrl(win);
   assert.equal(cleaned, "http://app.example.com/auth/sso-callback");
   assert.ok(!cleaned.includes("token="));
+  // And nothing token-like was ever handed to replaceState.
+  for (const [state, , url] of win.history.calls) {
+    void state;
+    assert.ok(!url.includes("secret-access"));
+    assert.ok(!url.includes("secret-refresh"));
+  }
 });
 
 test("SSR/window undefined: parseTokenParams returns nulls without throwing", () => {
