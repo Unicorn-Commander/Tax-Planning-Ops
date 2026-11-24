@@ -121,13 +121,40 @@ def test_http_door_refuses_traversal_with_no_outbound_call(
     seen: list[dict[str, Any]] = []
     client = _app(monkeypatch, seen)
 
-    for probe in PROBE_LIST:
+    for probe in TRAVERSALS + DOT_ONLY:
         result = _call(client, "save_memo", {"tax_year_id": probe, "body_md": "x"})
         assert result["isError"] is True, f"probe {probe!r} was not refused"
         text = result["content"][0]["text"]
         assert "path parameter" in text and "tax_year_id" in text, text
         assert "must not contain" in text
     assert seen == [], f"stubbed client saw {len(seen)} outbound call(s)"
+
+
+def test_http_door_quotes_non_refused_probes_in_path_param(
+    monkeypatch: Any,
+) -> None:
+    """PROBE_LIST probes the door does NOT refuse must reach the API
+    percent-quoted: '?' and '#' smuggle no query string or fragment, and the
+    encoded / backslash / NUL / CR-LF forms never hit the wire unquoted. A
+    normal uuid still works (TPO-MCPP-2)."""
+    seen: list[dict[str, Any]] = []
+    client = _app(monkeypatch, seen)
+
+    for probe in SMUGGLING + ("%2e", "%2e%2e", "%2f", "%5c", "\\", "\x00", "\r", "\n"):
+        result = _call(client, "save_memo", {"tax_year_id": probe, "body_md": "x"})
+        assert result["isError"] is False, f"probe {probe!r} was refused"
+        url = seen[-1]["url"]
+        assert url.startswith(f"{BASE_URL}/clients/tax-years/")
+        # No smuggled query string, fragment, control char or raw backslash.
+        assert "?" not in url and "#" not in url, url
+        assert "\\" not in url, url
+        assert "\r" not in url and "\n" not in url, url
+    assert len(seen) == len(SMUGGLING) + 8
+
+    uuid_id = str(uuid4())
+    result = _call(client, "save_memo", {"tax_year_id": uuid_id, "body_md": "# m"})
+    assert result["isError"] is False
+    assert seen[-1]["url"] == f"{BASE_URL}/clients/tax-years/{uuid_id}/memo"
 
 
 def test_http_door_refuses_dots_only_with_no_outbound_call(
