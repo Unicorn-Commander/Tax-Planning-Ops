@@ -1,20 +1,25 @@
-"""TPO-MCPP-2: the HTTP MCP door (/api/v1/mcp) must quote path params and
-refuse traversal.
+"""TPO-MCPP-2 / TPO28-R2: the HTTP MCP door (/api/v1/mcp) must quote path
+params and refuse traversal and dot-only segments.
 
 The stdio twin (mcp/server.py) got the refusal + quote(value, safe='') fix in
-commit f64a1d3 but the vendored HTTP copy (app/mcp_proxy.py) still filled path
-params raw, so a tools/call over HTTP could smuggle '../../x' into a different
-route or '1?y=z' into a query string against the loopback API. These tests
-drive tools/call through the real HTTP door with the loopback client stubbed,
-assert every probe is refused with an isError MCP result and that the stubbed
-client saw NOTHING (no outbound call), and that a normal uuid still reaches the
-API. All subjects and hosts are fictional.
+commit f64a1d3 and the dots-only refusal in TPO28-R2-1, but the vendored HTTP
+copy (app/mcp_proxy.py) still filled path params raw, so a tools/call over
+HTTP could smuggle '../../x' into a different route, '1?y=z' into a query
+string, or a lone '.' into a route segment the HTTP stack silently drops.
+These tests drive tools/call through the real HTTP door with the loopback
+client stubbed, assert every probe is refused with an isError MCP result and
+that the stubbed client saw NOTHING (no outbound call), and that a normal
+uuid still reaches the API. All subjects and hosts are fictional.
 """
 from __future__ import annotations
 
+import importlib
+import sys
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import get_settings
@@ -26,18 +31,36 @@ BASE_URL = "http://mcp-door.test/api/v1"
 # no outbound call (the stdio twin refuses the same four, commit f64a1d3).
 TRAVERSALS = ("../x", "..%2f", "a/b", "/api/v1/admin")
 
+# Dots-only probes: TPO28-R2-1. quote('.') is '.', and httpx normalises
+# .../tax-years/./memo to .../tax-years/memo = a different route under the
+# caller's token. Each must be refused by both doors.
+DOT_ONLY = (".", "%2e", "%2e%2e", "...")
+
 # Smuggling probes: no '/' or '..' in them, so the (shared) refusal rule lets
 # them through; they must instead be percent-quoted so the '?', '=' and '#'
 # never reach the wire as a query string or fragment.
 SMUGGLING = ("1?x=1", "1#f")
 
-# The full probe list both doors are compared on.
-PROBE_LIST = TRAVERSALS + SMUGGLING
+# The full probe list both doors are compared on (TPO28-R2-2).
+PROBE_LIST = (
+    TRAVERSALS
+    + DOT_ONLY
+    + SMUGGLING
+    + ("%2f", "%5c", "\\", "\x00", "\r", "\n")
+)
 
-# The auth middleware resolves the workspace from the token claims, not the
-# X-Workspace-Id header (a header for a workspace the claims do not cover
-# 403s without any DB lookup). Drive the door the same way
-# test_mcp_oauth.py does: no workspace header at all.
+
+@pytest.fixture(name="stdio_server")
+def stdio_server_fixture() -> Any:
+    """Import the canonical stdio server from <repo>/mcp, restoring sys.path
+    on teardown (no permanent sys.path mutation from a backend test)."""
+    repo_root = Path(__file__).resolve().parents[2]
+    mcp_dir = str(repo_root / "mcp")
+    sys.path.insert(0, mcp_dir)
+    try:
+        return importlib.import_module("server")
+    finally:
+        sys.path.remove(mcp_dir)
 
 
 def _app(
@@ -95,7 +118,7 @@ def test_http_door_refuses_traversal_with_no_outbound_call(
     seen: list[dict[str, Any]] = []
     client = _app(monkeypatch, seen)
 
-    for probe in TRAVERSALS:
+    for probe in PROBE_LIST:
         result = _call(client, "save_memo", {"tax_year_id": probe, "body_md": "x"})
         assert result["isError"] is True, f"probe {probe!r} was not refused"
         text = result["content"][0]["text"]
@@ -135,20 +158,20 @@ def test_http_door_quotes_reserved_chars_in_path_param(
 
 
 def test_http_and_stdio_doors_behave_identically_on_probe_list(
-    monkeypatch: Any,
+    stdio_server: Any,
 ) -> None:
-    """Guard the SYNC CONTRACT: the vendored HTTP copy and the canonical
-    stdio server must agree on refusal vs quoting for the whole probe list.
+    """Guard the SYNC CONTRACT (TPO28-R2-2): the vendored HTTP copy and the
+    canonical stdio server must agree on refusal vs quoting for the full
+    probe list, including the dots-only, percent-encoded, backslash, NUL and
+    CR/LF probes.
     """
-    import sys
-    from pathlib import Path
-
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "mcp"))
-    import server as stdio_server  # noqa: E402
-
     import app.mcp_proxy as http_proxy
 
-    tool = {"name": "save_memo", "route": "PUT /api/v1/clients/tax-years/{tax_year_id}/memo", "scope": "taxplan:advisor"}
+    tool = {
+        "name": "save_memo",
+        "route": "PUT /api/v1/clients/tax-years/{tax_year_id}/memo",
+        "scope": "taxplan:advisor",
+    }
 
     def outcome(module: Any, value: str) -> tuple[str, str]:
         try:
