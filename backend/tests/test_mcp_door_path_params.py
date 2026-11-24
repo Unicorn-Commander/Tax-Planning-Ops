@@ -33,8 +33,11 @@ TRAVERSALS = ("../x", "..%2f", "a/b", "/api/v1/admin")
 
 # Dots-only probes: TPO28-R2-1. quote('.') is '.', and httpx normalises
 # .../tax-years/./memo to .../tax-years/memo = a different route under the
-# caller's token. Each must be refused by both doors.
-DOT_ONLY = (".", "%2e", "%2e%2e", "...")
+# caller's token. Each must be refused by both doors. ('%2e' and '%2e%2e'
+# live in PROBE_LIST for parity, not here: the doors quote them to %252e
+# and %252e%252e, so they reach the API as the literal text '%2e' and
+# '%2e%2e', not as dots.)
+DOT_ONLY = (".", "...")
 
 # Smuggling probes: no '/' or '..' in them, so the (shared) refusal rule lets
 # them through; they must instead be percent-quoted so the '?', '=' and '#'
@@ -119,6 +122,25 @@ def test_http_door_refuses_traversal_with_no_outbound_call(
     client = _app(monkeypatch, seen)
 
     for probe in PROBE_LIST:
+        result = _call(client, "save_memo", {"tax_year_id": probe, "body_md": "x"})
+        assert result["isError"] is True, f"probe {probe!r} was not refused"
+        text = result["content"][0]["text"]
+        assert "path parameter" in text and "tax_year_id" in text, text
+        assert "must not contain" in text
+    assert seen == [], f"stubbed client saw {len(seen)} outbound call(s)"
+
+
+def test_http_door_refuses_dots_only_with_no_outbound_call(
+    monkeypatch: Any,
+) -> None:
+    """TPO28-R2-1: dots-only values ('.', '...') must be refused outright
+    (not quoted away, where httpx would drop the segment and change the
+    route) with no outbound call. This test FAILS on the PR head 5585bcac
+    (the probe '.' was sent)."""
+    seen: list[dict[str, Any]] = []
+    client = _app(monkeypatch, seen)
+
+    for probe in DOT_ONLY:
         result = _call(client, "save_memo", {"tax_year_id": probe, "body_md": "x"})
         assert result["isError"] is True, f"probe {probe!r} was not refused"
         text = result["content"][0]["text"]
