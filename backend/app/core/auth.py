@@ -252,7 +252,13 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 if pat.workspace_scope:
                     # An explicit workspace claim => managed (non-self-serve)
                     # path, exactly like a Keycloak token carrying workspace_id.
+                    # Claim EVERY declared workspace, not just [0]: the fence
+                    # below authorizes the selected workspace against the full
+                    # declared set (TPO-CLIENT-1).
                     claims["workspace_id"] = str(pat.workspace_scope[0])
+                    claims["workspaces"] = [
+                        {"workspaceId": str(w)} for w in pat.workspace_scope
+                    ]
                 # Let the mint endpoint 403 a PAT-mints-PAT attempt.
                 request.state.auth_via_pat = True
                 # Fire-and-forget last_used bump; never block auth on it.
@@ -261,9 +267,23 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 # With the check on, a PAT caller has no user bearer to present
                 # and is refused (fail closed).
                 user_bearer = ""
+                # TPO-CLIENT-1: a PAT must reach only the workspaces its row
+                # declares. An empty/missing declared scope is refused up front
+                # (fail closed): without it the claim synthesis below would
+                # self-serve into the owner's derived workspace, which is not
+                # a declared entry.
+                if not pat.workspace_scope:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="workspace selector is not authorized for this token",
+                    )
+                # All declared entries fence the selection below; the owner's
+                # other memberships never widen a PAT's reach.
+                pat_scope = frozenset(pat.workspace_scope)
             else:
                 claims = await self.verifier.verify(token)
                 user_bearer = token
+                pat_scope = None
             header_ws = request.headers.get(WORKSPACE_HEADER)
             # The door. Asked BEFORE the workspace selection is authorized
             # (no membership lookup) and before any route runs (so a refused
@@ -290,8 +310,16 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 # claims don't cover is allowed ONLY if the user is a member of
                 # it (authorized against workspace_membership under RLS). Any
                 # other 403 (and all 401s) propagate unchanged.
+                #
+                # TPO-CLIENT-1: for a PAT principal the fallback authorizes
+                # the selection against the PAT's declared workspace_scope
+                # (all entries) AND the owner's membership, never against the
+                # owner's memberships alone. A PAT without a declared scope
+                # has pat_scope = None and is refused (fail closed).
                 if exc.status_code == status.HTTP_403_FORBIDDEN and header_ws and uc_uid:
                     selected = UUID(str(header_ws))
+                    if pat_scope is not None and selected not in pat_scope:
+                        raise
                     if await is_workspace_member(uc_uid, selected):
                         _, claims_authorized = _claim_workspace_ids(claims)
                         workspace_id, authorized = selected, claims_authorized | {selected}
@@ -299,6 +327,22 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                         raise
                 else:
                     raise
+            # TPO-CLIENT-1: the success path admits on the claims alone; for a
+            # PAT principal the resolved workspace must also be a declared one
+            # AND the owner must still be a member of it (a row is not a
+            # substitute for membership). Humans and service tokens keep the
+            # claim-based admission above, unchanged.
+            if pat_scope is not None:
+                if workspace_id not in pat_scope:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="workspace selector is not authorized for this token",
+                    )
+                if not await is_workspace_member(uc_uid, workspace_id):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="workspace selector is not authorized for this token",
+                    )
             if org_id is not None and workspace_id != target:
                 # Never let an answer for one workspace's org admit another.
                 raise HTTPException(
