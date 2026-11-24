@@ -227,6 +227,11 @@ def _make_middleware(monkeypatch, pat_row: PATRow | None):
 
     monkeypatch.setattr(authmod, "_touch_pat_last_used", _touch)
 
+    async def _member(uc_uid, workspace_id):
+        return True
+
+    monkeypatch.setattr(authmod, "is_workspace_member", _member)
+
     settings = Settings()  # ENTITLEMENT_CHECK_ENABLED defaults False -> entitled
     return authmod.JWTAuthMiddleware(
         app=lambda *a, **k: None, settings=settings, verifier=_StubVerifier()
