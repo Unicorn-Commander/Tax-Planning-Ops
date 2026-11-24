@@ -187,8 +187,9 @@ def test_build_request_missing_path_param_raises():
 
 
 def test_build_request_refuses_traversal_path_param():
-    """A path param carrying '..' or '/' is refused, not interpolated raw."""
-    for bad in ("../x", "..%2f", "a/b", ".."):
+    """A path param carrying '..', '/' or a dot-only segment is refused, not
+    interpolated raw."""
+    for bad in ("../x", "..%2f", "a/b", "..", ".", "..."):
         try:
             server.build_request(_tool("save_memo"), {"tax_year_id": bad}, base_url=BASE)
         except ValueError as exc:

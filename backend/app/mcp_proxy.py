@@ -18,8 +18,10 @@ from __future__ import annotations
 
 import json
 import re
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import quote
 
 DEFAULT_API_URL = "http://localhost:8000/api/v1"
 WORKSPACE_HEADER = "X-Workspace-Id"
@@ -28,6 +30,17 @@ WORKSPACE_HEADER = "X-Workspace-Id"
 RESERVED_ARG_KEYS = {"query", "body"}
 
 _PATH_PARAM_RE = re.compile(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}")
+
+
+@lru_cache(maxsize=1)
+def _is_dot_only(value: str) -> bool:
+    """True when a path-param value is made only of dots ('.', '..', '...').
+
+    Such a segment would be normalised away by the HTTP stack (httpx drops the
+    single-dot segment, e.g. .../tax-years/./memo -> .../tax-years/memo),
+    silently changing the route. Both doors refuse it outright.
+    """
+    return bool(value) and set(value) == {"."}
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +187,15 @@ def build_request(
         )
     consumed: set[str] = set()
     for p in needed:
-        path = path.replace("{" + p + "}", str(arguments[p]))
+        value = str(arguments[p])
+        # Path params must never escape their path segment: refuse traversal
+        # fragments and dot-only segments outright and percent-encode the rest.
+        if "/" in value or ".." in value or _is_dot_only(value):
+            raise ValueError(
+                f"tool '{tool['name']}' path parameter '{p}' must not contain "
+                "'/' or '..' or be a dot-only segment"
+            )
+        path = path.replace("{" + p + "}", quote(value, safe=""))
         consumed.add(p)
 
     url = join_url(base, path)
