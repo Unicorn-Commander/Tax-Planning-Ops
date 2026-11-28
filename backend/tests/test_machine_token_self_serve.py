@@ -79,12 +79,14 @@ def bound_orgs(monkeypatch: pytest.MonkeyPatch) -> dict[UUID, UUID]:
 
 
 @pytest.fixture(autouse=True)
-def ops_center(monkeypatch: pytest.MonkeyPatch) -> None:
+def ops_center(monkeypatch: pytest.MonkeyPatch) -> list[httpx.Request]:
     """A fake Ops-Center that always entitles the caller (the machine token
-    must be refused by the identity gate, not by the door)."""
+    must be refused by the identity gate, not by the door). Returns the list
+    of requests it actually received."""
+    seen: list[httpx.Request] = []
 
     def recording(request: httpx.Request) -> httpx.Response:
-        del request
+        seen.append(request)
         return httpx.Response(200, json=_body())
 
     real = httpx.AsyncClient
@@ -94,6 +96,7 @@ def ops_center(monkeypatch: pytest.MonkeyPatch) -> None:
         return real(*args, **kwargs)
 
     monkeypatch.setattr(control_plane.httpx, "AsyncClient", factory)
+    return seen
 
 
 def _settings() -> Settings:
@@ -198,6 +201,18 @@ def test_machine_token_self_serve_refused_with_door_flag_off() -> None:
     resp, reached = _dispatch(_machine_claims(), enabled=False)
     assert resp.status_code == 403
     assert reached == {}
+
+
+def test_machine_refusal_happens_before_the_ops_center_call(
+    ops_center: list[httpx.Request],
+) -> None:
+    """F4 ordering: with the door ON, a machine bearer that the identity gate
+    will refuse must never be presented to Ops-Center — the gate runs first
+    and the refusal writes nothing."""
+    resp, reached = _dispatch(_machine_claims())
+    assert resp.status_code == 403
+    assert reached == {}
+    assert ops_center == []
 
 
 def test_machine_token_onboarding_url_env_override(monkeypatch: pytest.MonkeyPatch) -> None:

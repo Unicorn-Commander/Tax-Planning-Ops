@@ -306,6 +306,32 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 claims = await self.verifier.verify(token)
                 user_bearer = token
                 pat_scope = None
+            # TPO-MACH-1: the self-serve flow (a token with NO workspace
+            # claim — `derived is not None`) provisions a tenant for the
+            # caller: a uuid5(sub) workspace plus an owner membership, and
+            # the baseline `taxplan:advisor` scope below. A service/M2M
+            # principal must never enter that flow AT ALL — not through the
+            # derived workspace, and not through the membership fallback with
+            # an X-Workspace-Id header either (a machine `sub` can hold a
+            # membership row, and entering under it would still grant the
+            # self-serve scopes, which the create-workspace writers then use
+            # to provision NEW tenants for the machine). So the whole flow
+            # requires a user principal, decided once here from the claims —
+            # BEFORE the entitlement door, so a refused machine bearer is not
+            # even presented to Ops-Center. A managed workspace (explicit
+            # claim) is not self-serve and is unchanged, as is a human token
+            # (uc_uid, login-client azp).
+            derived = derive_self_serve_workspace(claims)
+            if derived is not None and not caller_is_user_principal(claims, self.settings):
+                logger.warning(
+                    "self-serve refused: non-user principal sub=%s azp=%s",
+                    claims.get("sub"),
+                    claims.get("azp"),
+                )
+                raise SelfServeMachineHTTPException(
+                    NO_USER_PRINCIPAL_DETAIL,
+                    os.environ.get(ONBOARDING_URL_ENV, ONBOARDING_URL_DEFAULT),
+                )
             header_ws = request.headers.get(WORKSPACE_HEADER)
             # The door. Asked BEFORE the workspace selection is authorized
             # (no membership lookup) and before any route runs (so a refused
@@ -369,30 +395,6 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 # Never let an answer for one workspace's org admit another.
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN, detail=NOT_ENTITLED_DETAIL
-                )
-            # TPO-MACH-1: the self-serve flow (a token with NO workspace
-            # claim — `derived is not None`) provisions a tenant for the
-            # caller: a uuid5(sub) workspace plus an owner membership, and
-            # the baseline `taxplan:advisor` scope below. A service/M2M
-            # principal must never enter that flow AT ALL — not through the
-            # derived workspace, and not through the membership fallback with
-            # an X-Workspace-Id header either (a machine `sub` can hold a
-            # membership row, and entering under it would still grant the
-            # self-serve scopes, which the create-workspace writers then use
-            # to provision NEW tenants for the machine). So the whole flow
-            # requires a user principal, decided once here from the claims.
-            # A managed workspace (explicit claim) is not self-serve and is
-            # unchanged, as is a human token (uc_uid, login-client azp).
-            derived = derive_self_serve_workspace(claims)
-            if derived is not None and not caller_is_user_principal(claims, self.settings):
-                logger.warning(
-                    "self-serve refused: non-user principal sub=%s azp=%s",
-                    claims.get("sub"),
-                    claims.get("azp"),
-                )
-                raise SelfServeMachineHTTPException(
-                    NO_USER_PRINCIPAL_DETAIL,
-                    os.environ.get(ONBOARDING_URL_ENV, ONBOARDING_URL_DEFAULT),
                 )
             scopes = _scopes_from_claims(claims)
             # Self-serve: a UC user with no explicit workspace claim is the
