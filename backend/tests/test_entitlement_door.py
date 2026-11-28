@@ -185,7 +185,9 @@ def _dispatch(
 
 
 def _self_serve_claims(sub: str = "fictional-signup-001") -> dict[str, Any]:
-    return {"sub": sub, "scope": "openid profile"}
+    # A production human token carries uc_uid (realm default mapper); a
+    # machine token does not, and self-serve now requires it (TPO-MACH-1).
+    return {"sub": sub, "uc_uid": sub, "scope": "openid profile"}
 
 
 def test_entitled_self_serve_caller_gets_own_workspace(ops_center) -> None:
