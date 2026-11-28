@@ -29,6 +29,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from app.core import auth as authmod
+from app.core.auth import WORKSPACE_HEADER
 from app.core.config import Settings
 from app.integrations import control_plane
 
@@ -129,6 +130,7 @@ def _dispatch(
     *,
     enabled: bool = True,
     token: str = "fictional.keycloak.jwt",  # noqa: S107
+    headers: dict[str, str] | None = None,
 ) -> tuple[Response, dict[str, Any]]:
     mw = authmod.JWTAuthMiddleware(
         app=lambda *a, **k: None, settings=_settings(), verifier=_StubVerifier(claims)
@@ -146,7 +148,8 @@ def _dispatch(
         reached["ctx"] = req.state.auth_context
         return Response(status_code=200)
 
-    return asyncio.run(mw.dispatch(_request(token), call_next)), reached
+    req = _request(token, headers)
+    return asyncio.run(mw.dispatch(req, call_next)), reached
 
 
 def _machine_claims() -> dict[str, Any]:
@@ -241,3 +244,96 @@ def test_human_token_already_self_served_is_unchanged(bound_orgs: dict[UUID, UUI
     assert second.status_code == 200
     assert reached_second["ctx"].workspace_id == derived
     assert "taxplan:advisor" in reached_second["ctx"].scopes
+
+
+# --- F1: the gate covers the WHOLE self-serve flow, not just the derived ws ----
+
+
+def test_machine_token_header_plus_membership_is_403(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F1: a machine token with NO workspace claim must not enter the
+    self-serve flow through the membership fallback either. Precondition the
+    reviewer proved reachable: the machine's `sub` already has a membership
+    row (an owner added a service-account-* uc_uid, or the machine created
+    workspaces before this fix). Sending X-Workspace-Id for that workspace
+    used to skip the old `workspace_id == derived` gate and mint an
+    AuthContext with `taxplan:advisor` for the machine — the scope the
+    create-workspace writers need. The whole flow is now user-only."""
+
+    async def _member(uc_uid: str, workspace_id: UUID) -> bool:
+        assert uc_uid == "service-account-fictional-m2m-client"
+        return True
+
+    monkeypatch.setattr(authmod, "is_workspace_member", _member)
+    resp, reached = _dispatch(
+        _machine_claims(),
+        enabled=False,
+        headers={WORKSPACE_HEADER: str(FIRM_WS)},
+    )
+    assert resp.status_code == 403
+    assert reached == {}
+    body = json.loads(resp.body.decode())
+    assert body["detail"] == authmod.NO_USER_PRINCIPAL_DETAIL
+
+
+def test_human_token_header_plus_membership_unchanged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The same header+membership path for a HUMAN (uc_uid, login-client azp)
+    is unchanged: 200, the selected workspace, self-serve scopes."""
+
+    async def _member(uc_uid: str, workspace_id: UUID) -> bool:
+        return True
+
+    monkeypatch.setattr(authmod, "is_workspace_member", _member)
+    resp, reached = _dispatch(
+        _human_claims("fictional-signup-003"),
+        enabled=False,
+        headers={WORKSPACE_HEADER: str(FIRM_WS)},
+    )
+    assert resp.status_code == 200
+    assert reached["ctx"].workspace_id == FIRM_WS
+    assert "taxplan:advisor" in reached["ctx"].scopes
+
+
+# --- F1: the create-workspace writers refuse a machine principal ---------------
+
+
+def _no_db(monkeypatch: pytest.MonkeyPatch, module: Any) -> None:
+    """Any DB session opened by `module` fails the test: a refused caller
+    must not get anywhere near a workspace/membership write."""
+
+    def _boom() -> Any:
+        raise AssertionError("a refused principal must not open a DB session")
+
+    monkeypatch.setattr(module, "async_session_maker", _boom)
+
+
+def test_create_workspace_refuses_machine_principal(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services import workspaces as workspaces_mod
+    from app.services.workspaces import create_workspace
+
+    _no_db(monkeypatch, workspaces_mod)
+    with pytest.raises(PermissionError):
+        asyncio.run(
+            create_workspace(
+                uc_uid="service-account-fictional-m2m-client",
+                name="Machine Tenant",
+                claims=_machine_claims(),
+            )
+        )
+
+
+def test_load_demo_workspace_refuses_machine_principal(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services import demo_seed as demo_seed_mod
+    from app.services.demo_seed import load_demo_workspace
+
+    _no_db(monkeypatch, demo_seed_mod)
+    with pytest.raises(PermissionError):
+        asyncio.run(
+            load_demo_workspace(
+                uc_uid="service-account-fictional-m2m-client",
+                claims=_machine_claims(),
+            )
+        )

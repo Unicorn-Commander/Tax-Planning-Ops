@@ -131,7 +131,11 @@ async def ensure_home_membership(
 
 
 async def create_workspace(
-    *, uc_uid: str, name: str, org_id: uuid.UUID | None = None
+    *,
+    uc_uid: str,
+    name: str,
+    org_id: uuid.UUID | None = None,
+    claims: dict[str, Any],
 ) -> dict[str, Any]:
     """Create a brand-new named workspace owned by this user.
 
@@ -140,7 +144,18 @@ async def create_workspace(
     server-generated id, and records the caller as owner. The session's GUCs
     are bound to the CALLER's context first (the function never trusts its
     arguments for authorization). ``org_id`` (the org the creating request was
-    entitled in) binds the new workspace to that Ops-Center org."""
+    entitled in) binds the new workspace to that Ops-Center org.
+
+    ``claims`` are the caller's VERIFIED token claims: creating a workspace is
+    self-serve tenant provisioning, so a non-user (service/M2M) principal is
+    refused here as well as in the middleware (TPO-MACH-1, defense in depth)
+    — this writer must hold the line even when reached from another route."""
+    # Late import: app.core.auth imports this module at module level.
+    from app.core.auth import caller_is_user_principal
+    from app.core.config import get_settings
+
+    if not caller_is_user_principal(claims, get_settings()):
+        raise PermissionError("workspace creation requires an end-user principal")
     clean = name.strip() or "Untitled workspace"
     async with async_session_maker() as session:
         # Bind the uc_uid GUC (workspace unknown yet); the function derives the

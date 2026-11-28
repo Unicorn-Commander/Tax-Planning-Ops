@@ -381,14 +381,23 @@ async def _clear_demo_data(session: AsyncSession) -> None:
 
 
 async def load_demo_workspace(
-    *, uc_uid: str, org_id: UUID | None = None
+    *, uc_uid: str, org_id: UUID | None = None, claims: dict[str, Any]
 ) -> dict[str, Any]:
     """Create (or reuse) the user's "Sample Firm (demo)" workspace and seed it.
 
     Idempotent-ish: if the user already has a demo workspace (detected by the
     recognizable membership name), it is returned as-is WITHOUT creating a
     duplicate or re-seeding — use :func:`reset_demo_workspace` to refresh it.
-    """
+
+    ``claims`` are the caller's VERIFIED token claims: loading the demo can
+    create a workspace plus an owner membership, so a non-user (service/M2M)
+    principal is refused here before ANY write (TPO-MACH-1, defense in depth;
+    :func:`create_workspace` guards again)."""
+    # Late import: app.core.auth imports app.services.workspaces at module level.
+    from app.core.auth import caller_is_user_principal
+
+    if not caller_is_user_principal(claims, get_settings()):
+        raise PermissionError("demo workspace loading requires an end-user principal")
     existing_id = await _find_demo_workspace_id(uc_uid=uc_uid)
     if existing_id is not None:
         client_count = await _count_clients(workspace_id=existing_id, uc_uid=uc_uid)
@@ -398,7 +407,9 @@ async def load_demo_workspace(
             "client_count": client_count,
         }
 
-    created = await create_workspace(uc_uid=uc_uid, name=DEMO_WORKSPACE_NAME, org_id=org_id)
+    created = await create_workspace(
+        uc_uid=uc_uid, name=DEMO_WORKSPACE_NAME, org_id=org_id, claims=claims
+    )
     workspace_id = created["workspace_id"]
     async with async_session_maker() as session:
         await bind_session_context(session, str(workspace_id), uc_uid)

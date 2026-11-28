@@ -370,26 +370,30 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN, detail=NOT_ENTITLED_DETAIL
                 )
-            # TPO-MACH-1: the self-serve path provisions a tenant for the
-            # caller — a uuid5(sub) workspace plus an owner membership,
-            # written by get_tenant_db when the route runs. A service/M2M
-            # principal has no uc_uid (its principal fell back to sub), so it
-            # must never reach that JIT write: refuse here, before the route
-            # runs, so NO workspace or membership row is ever written. A
-            # managed workspace (explicit claim) is not self-serve and is
+            # TPO-MACH-1: the self-serve flow (a token with NO workspace
+            # claim — `derived is not None`) provisions a tenant for the
+            # caller: a uuid5(sub) workspace plus an owner membership, and
+            # the baseline `taxplan:advisor` scope below. A service/M2M
+            # principal must never enter that flow AT ALL — not through the
+            # derived workspace, and not through the membership fallback with
+            # an X-Workspace-Id header either (a machine `sub` can hold a
+            # membership row, and entering under it would still grant the
+            # self-serve scopes, which the create-workspace writers then use
+            # to provision NEW tenants for the machine). So the whole flow
+            # requires a user principal, decided once here from the claims.
+            # A managed workspace (explicit claim) is not self-serve and is
             # unchanged, as is a human token (uc_uid, login-client azp).
             derived = derive_self_serve_workspace(claims)
-            if derived is not None and workspace_id == derived:
-                if not caller_is_user_principal(claims, self.settings):
-                    logger.warning(
-                        "self-serve refused: non-user principal sub=%s azp=%s",
-                        claims.get("sub"),
-                        claims.get("azp"),
-                    )
-                    raise SelfServeMachineHTTPException(
-                        NO_USER_PRINCIPAL_DETAIL,
-                        os.environ.get(ONBOARDING_URL_ENV, ONBOARDING_URL_DEFAULT),
-                    )
+            if derived is not None and not caller_is_user_principal(claims, self.settings):
+                logger.warning(
+                    "self-serve refused: non-user principal sub=%s azp=%s",
+                    claims.get("sub"),
+                    claims.get("azp"),
+                )
+                raise SelfServeMachineHTTPException(
+                    NO_USER_PRINCIPAL_DETAIL,
+                    os.environ.get(ONBOARDING_URL_ENV, ONBOARDING_URL_DEFAULT),
+                )
             scopes = _scopes_from_claims(claims)
             # Self-serve: a UC user with no explicit workspace claim is the
             # advisor of their own derived workspace (RLS-isolated). Managed /

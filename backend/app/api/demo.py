@@ -30,7 +30,12 @@ async def post_load_demo(
     Idempotent: if the user already has a demo workspace it is returned as-is
     (no duplicate, no re-seed). Returns ``{workspace_id, name, client_count}``.
     """
-    return await load_demo_workspace(uc_uid=ctx.uc_uid, org_id=ctx.org_id)
+    try:
+        return await load_demo_workspace(
+            uc_uid=ctx.uc_uid, org_id=ctx.org_id, claims=ctx.claims
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
 @router.post("/reset")

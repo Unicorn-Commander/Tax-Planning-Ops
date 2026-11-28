@@ -299,7 +299,11 @@ def test_membership_header_for_b_is_checked_against_b(
 
     monkeypatch.setattr(authmod, "is_workspace_member", _member)
     resp, reached = _dispatch(
-        {"sub": "fictional-advisor-782", "scope": "taxplan:advisor"},
+        {
+            "sub": "fictional-advisor-782",
+            "uc_uid": "fictional-advisor-782",
+            "scope": "taxplan:advisor",
+        },
         headers={"X-Workspace-Id": str(FIRM_B_WS)},
     )
     assert resp.status_code == 403
@@ -326,7 +330,11 @@ def test_mcp_bearer_acting_for_b_is_checked_against_b(
 
     monkeypatch.setattr(authmod, "is_workspace_member", _member)
     resp, reached = _dispatch(
-        {"sub": "fictional-mcp-user-783", "scope": "taxplan:advisor"},
+        {
+            "sub": "fictional-mcp-user-783",
+            "uc_uid": "fictional-mcp-user-783",
+            "scope": "taxplan:advisor",
+        },
         headers={"X-UC-Door": "mcp", "X-Workspace-Id": str(FIRM_B_WS)},
     )
     assert seen[0].url.params["org_id"] == ORG_B
@@ -358,7 +366,11 @@ def test_allowed_in_a_then_b_within_60s_asks_again_for_b(
         return True
 
     monkeypatch.setattr(authmod, "is_workspace_member", _member)
-    claims = {"sub": "fictional-advisor-785", "scope": "taxplan:advisor"}
+    claims = {
+        "sub": "fictional-advisor-785",
+        "uc_uid": "fictional-advisor-785",
+        "scope": "taxplan:advisor",
+    }
     resp_a, reached_a = _dispatch(claims, headers={"X-Workspace-Id": str(FIRM_WS)})
     assert resp_a.status_code == 200
     assert str(reached_a["ctx"].org_id) == ORG_A
@@ -398,7 +410,11 @@ def test_refused_header_selection_skips_membership_lookup(
 
     monkeypatch.setattr(authmod, "is_workspace_member", _no_db)
     resp, reached = _dispatch(
-        {"sub": "fictional-advisor-779", "scope": "taxplan:advisor"},
+        {
+            "sub": "fictional-advisor-779",
+            "uc_uid": "fictional-advisor-779",
+            "scope": "taxplan:advisor",
+        },
         headers={"X-Workspace-Id": str(FIRM_WS)},
     )
     assert resp.status_code == 403
