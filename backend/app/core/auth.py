@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections.abc import Callable, Iterable
 from typing import Any
 from uuid import UUID, uuid5
@@ -43,6 +44,27 @@ _SELF_SERVE_SCOPES = frozenset({"taxplan:advisor"})
 
 # 403 body for a caller whose Ops-Center org lacks tax_ops_access.
 NOT_ENTITLED_DETAIL = "Tax-Planning-Ops is not included in your plan"
+
+# 403 body for a verified token with NO end-user identity (a service/M2M
+# principal) that tried to enter the self-serve path (TPO-MACH-1). Same
+# {"detail": ...} shape as the app's other middleware 403s, plus an
+# onboarding link so the caller's operator learns how to get a real tenant.
+NO_USER_PRINCIPAL_DETAIL = (
+    "self-serve provisioning requires an end-user token; "
+    "machine (service) tokens cannot provision a tenant"
+)
+# Onboarding link for that 403, from the environment with a safe default.
+ONBOARDING_URL_ENV = "TPO_ONBOARDING_URL"
+ONBOARDING_URL_DEFAULT = "https://unicorncommander.ai"
+
+
+class SelfServeMachineHTTPException(HTTPException):
+    """403 for a non-user principal on the self-serve path, carrying the
+    onboarding link the middleware adds to the JSON body."""
+
+    def __init__(self, detail: str, onboarding_url: str) -> None:
+        super().__init__(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+        self.onboarding_url = onboarding_url
 
 
 def _scopes_from_claims(claims: dict[str, Any]) -> set[str]:
@@ -284,6 +306,32 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 claims = await self.verifier.verify(token)
                 user_bearer = token
                 pat_scope = None
+            # TPO-MACH-1: the self-serve flow (a token with NO workspace
+            # claim — `derived is not None`) provisions a tenant for the
+            # caller: a uuid5(sub) workspace plus an owner membership, and
+            # the baseline `taxplan:advisor` scope below. A service/M2M
+            # principal must never enter that flow AT ALL — not through the
+            # derived workspace, and not through the membership fallback with
+            # an X-Workspace-Id header either (a machine `sub` can hold a
+            # membership row, and entering under it would still grant the
+            # self-serve scopes, which the create-workspace writers then use
+            # to provision NEW tenants for the machine). So the whole flow
+            # requires a user principal, decided once here from the claims —
+            # BEFORE the entitlement door, so a refused machine bearer is not
+            # even presented to Ops-Center. A managed workspace (explicit
+            # claim) is not self-serve and is unchanged, as is a human token
+            # (uc_uid, login-client azp).
+            derived = derive_self_serve_workspace(claims)
+            if derived is not None and not caller_is_user_principal(claims, self.settings):
+                logger.warning(
+                    "self-serve refused: non-user principal sub=%s azp=%s",
+                    claims.get("sub"),
+                    claims.get("azp"),
+                )
+                raise SelfServeMachineHTTPException(
+                    NO_USER_PRINCIPAL_DETAIL,
+                    os.environ.get(ONBOARDING_URL_ENV, ONBOARDING_URL_DEFAULT),
+                )
             header_ws = request.headers.get(WORKSPACE_HEADER)
             # The door. Asked BEFORE the workspace selection is authorized
             # (no membership lookup) and before any route runs (so a refused
@@ -352,7 +400,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             # Self-serve: a UC user with no explicit workspace claim is the
             # advisor of their own derived workspace (RLS-isolated). Managed /
             # firm workspaces still require an explicitly granted taxplan role.
-            if derive_self_serve_workspace(claims) is not None:
+            if derived is not None:
                 scopes = scopes | _SELF_SERVE_SCOPES
             request.state.auth_context = AuthContext(
                 claims=claims,
@@ -374,9 +422,13 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                     }
                 else:
                     headers = {"WWW-Authenticate": "Bearer"}
+            content: dict[str, Any] = {"detail": exc.detail}
+            onboarding_url = getattr(exc, "onboarding_url", None)
+            if onboarding_url:
+                content["onboarding_url"] = str(onboarding_url)
             return JSONResponse(
                 status_code=exc.status_code,
-                content={"detail": exc.detail},
+                content=content,
                 headers=headers,
             )
         return await call_next(request)

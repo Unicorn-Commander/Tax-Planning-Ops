@@ -81,6 +81,9 @@ def _claims(**overrides: object) -> dict[str, object]:
     body: dict[str, object] = {
         "iss": ISSUER,
         "sub": "fictional-advisor-001",
+        # A production human token carries uc_uid (realm default mapper);
+        # self-serve requires it (TPO-MACH-1).
+        "uc_uid": "fictional-advisor-001",
         "aud": "tax-planning-ops",
         "azp": "tax-planning-ops",
         "iat": now,

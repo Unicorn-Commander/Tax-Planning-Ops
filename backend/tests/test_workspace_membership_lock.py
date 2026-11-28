@@ -274,7 +274,11 @@ async def test_create_workspace_definer_mints_owner_row(app_session, owner_conn)
     work for the app role — server-generated id, actor becomes owner."""
     from app.services.workspaces import create_workspace
 
-    created = await create_workspace(uc_uid=OTHER_UID, name="Fictional New Co")
+    created = await create_workspace(
+        uc_uid=OTHER_UID,
+        name="Fictional New Co",
+        claims={"sub": OTHER_UID, "uc_uid": OTHER_UID},
+    )
     assert created["role"] == "owner"
     new_ws: str = created["workspace_id"]
     assert UUID(new_ws) is not None
