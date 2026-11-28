@@ -178,6 +178,24 @@ class Settings(BaseSettings):
             raise ValueError("STANDALONE_MODE=true is not allowed in prod")
         return self
 
+    @model_validator(mode="after")
+    def fail_closed_brigade_client_id(self) -> Settings:
+        # BRIGADE_CLIENT_ID joins the service-principal azp denylist that
+        # caller_is_user_principal (TPO-MACH-1) checks before self-serve.
+        # Users log in through KEYCLOAK_CLIENT_ID, so setting the exchange
+        # client to that same id would classify every real human token as a
+        # service principal and 403 every self-serve login. The exchange
+        # already defaults to TPO's KC client when BRIGADE_CLIENT_ID is
+        # unset, so refusing here costs nothing and catches the misconfig
+        # at startup instead of at the login wall.
+        if self.BRIGADE_CLIENT_ID and self.BRIGADE_CLIENT_ID == self.KEYCLOAK_CLIENT_ID:
+            raise ValueError(
+                "BRIGADE_CLIENT_ID must not equal KEYCLOAK_CLIENT_ID: the login "
+                "client's azp would be treated as a service principal and every "
+                "human self-serve login would be refused (TPO-MACH-1)"
+            )
+        return self
+
 
 @lru_cache
 def get_settings() -> Settings:

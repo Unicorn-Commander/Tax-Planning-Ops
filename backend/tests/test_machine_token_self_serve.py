@@ -25,6 +25,7 @@ from uuid import UUID
 
 import httpx
 import pytest
+from pydantic import ValidationError
 from starlette.requests import Request
 from starlette.responses import Response
 
@@ -352,3 +353,28 @@ def test_load_demo_workspace_refuses_machine_principal(monkeypatch: pytest.Monke
                 claims=_machine_claims(),
             )
         )
+
+
+# --- F2: BRIGADE_CLIENT_ID must never equal the login client -------------------
+
+
+def test_brigade_client_id_equal_to_login_client_refused_at_startup() -> None:
+    """F2: BRIGADE_CLIENT_ID joins the service-principal azp denylist that
+    caller_is_user_principal checks before self-serve. Users log in through
+    KEYCLOAK_CLIENT_ID, so an operator setting the exchange client to that
+    same id would 403 every real human self-serve login. The app must refuse
+    to start that way instead of breaking login at runtime."""
+    with pytest.raises(ValidationError, match="BRIGADE_CLIENT_ID"):
+        Settings(
+            KEYCLOAK_CLIENT_ID="tax-planning-ops",
+            BRIGADE_CLIENT_ID="tax-planning-ops",
+        )
+
+
+def test_brigade_client_id_distinct_or_unset_allowed() -> None:
+    """A distinct exchange client, and the unset default (the exchange falls
+    back to TPO's KC client), both start fine."""
+    assert Settings(BRIGADE_CLIENT_ID="brigade-exchange").BRIGADE_CLIENT_ID == (
+        "brigade-exchange"
+    )
+    assert Settings().BRIGADE_CLIENT_ID == ""
